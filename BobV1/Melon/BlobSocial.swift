@@ -131,6 +131,8 @@ struct SocialBook {
     var block: BuddyBlock?
     var bondNextAt: Float = 0, bondMoments = 0, buddyAssigned: Float = 0, buddyArrivedAt: Float = -1
     var housemates: Set<Int> = [], housemateBoost = false
+    /// Friendship points with each best friend present (by body id), for "the closer friends go first".
+    var bestPoints: [Int: Float] = [:]
     var lastKind: SocialKind?
     /// The last 3 pair kinds started with each partner (by steerID), oldest first: the pick drops them (no-repeat per pair).
     var recentWith: [Int: [SocialKind]] = [:]

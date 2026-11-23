@@ -15,19 +15,21 @@ extension GameCare {
     @discardableResult
     func syncBestFriends(homes: [(slot: Int, actor: JellyActor)], visitors: [(vid: Int, actor: JellyActor)]) -> [(home: JellyActor, visitor: JellyActor)] {
         var sets: [Int: Set<Int>] = [:]
+        var pts: [Int: [Int: Float]] = [:]
         var pairs: [(home: JellyActor, visitor: JellyActor)] = []
         for h in homes {
             guard let prof = jelly(h.slot), let best = ParkBestFriend.of(character: prof.character, in: parkBook.visitors) else { continue }
             for v in visitors where parkBook.visitor(v.vid)?.id == best.0.id && v.actor.id != h.actor.id {
                 sets[h.actor.id, default: []].insert(v.actor.id); sets[v.actor.id, default: []].insert(h.actor.id)
+                pts[h.actor.id, default: [:]][v.actor.id] = best.1; pts[v.actor.id, default: [:]][h.actor.id] = best.1
                 pairs.append((h.actor, v.actor))
             }
         }
         if EmoteSpot.logOn { let now = Set(pairs.map { $0.home.id * 100 + $0.visitor.id }); if now != Self.bondLogged { Self.bondLogged = now; NSLog("[bond] best-friend pairs (home body, visitor body): %@", pairs.map { "\($0.home.id)-\($0.visitor.id)" }.joined(separator: " ")) } }
-        for h in homes { h.actor.brain?.socialBook.bestFriends = sets[h.actor.id] ?? [] }
+        for h in homes { h.actor.brain?.socialBook.bestFriends = sets[h.actor.id] ?? []; h.actor.brain?.socialBook.bestPoints = pts[h.actor.id] ?? [:] }
         let homeIDs = Set(homes.map(\.actor.id))
         for h in homes { h.actor.brain?.socialBook.housemates = homeIDs.subtracting([h.actor.id]) }          // (round 4: the other Jelmiko at home are the housemates; a visitor has none)
-        for v in visitors { v.actor.brain?.socialBook.bestFriends = sets[v.actor.id] ?? [] }
+        for v in visitors { v.actor.brain?.socialBook.bestFriends = sets[v.actor.id] ?? []; v.actor.brain?.socialBook.bestPoints = pts[v.actor.id] ?? [:] }
         return pairs
     }
 

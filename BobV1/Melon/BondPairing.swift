@@ -63,13 +63,22 @@ nonisolated enum BondPairing {
 
 nonisolated enum BondMoment {
     static let firstGap: ClosedRange<Float> = 10...20, nextGap: ClosedRange<Float> = 35...50
-    static let awayRetry: ClosedRange<Float> = 8...12, cancelRetry: ClosedRange<Float> = 10...15
+    static let awayRetry: ClosedRange<Float> = 8...12, cancelRetry: ClosedRange<Float> = 20...25, yieldRetry: ClosedRange<Float> = 20...30
     static let waitFor: Float = 12, deadline: Float = 40, spotApart: Float = 1.4, blockMax: Float = 28
     static let travel: [SocialKind] = [.littleRace, .tag, .chase, .follow, .hopAlong]
     /// None puts two faces together (the owner's standing no-kiss rule).
     static let stay: [SocialKind] = [.swayHug, .sitTogether, .dance]
     nonisolated(unsafe) static var onBlockEnd: ((_ kinds: Int, _ seconds: Float) -> Void)?
     nonisolated(unsafe) static var nextID = 1
+    /// Round 5: more than this many bodies up in the place = crowded: no chasing kinds, one travelling kind per block at most.
+    static let crowd = 3
+    /// Crowded: the calm kinds (one of the travelling pair at most, the others stay put).
+    static let calmTravel: [SocialKind] = [.hopAlong, .follow]
+    static let calmStay: [SocialKind] = [.swayHug, .sitTogether, .dance, .peekaboo, .backToBack]
+    /// The one block in progress in a place (round 5: at most one at a time).
+    nonisolated(unsafe) static var active: BuddyBlock?
+    /// Test hook: a kind of a block started with `up` bodies up.
+    nonisolated(unsafe) static var onKind: ((_ block: Int, _ kind: SocialKind, _ up: Int) -> Void)?
 }
 
 final class BuddyBlock {
@@ -79,6 +88,9 @@ final class BuddyBlock {
     var plan: [SocialKind] = [], done: [SocialKind] = []
     var running = false, ended = false
     var stall = 0
+    var waiter: Int?
+    var allowed: [SocialKind] = []
+    var up = 0
     var startedAt: [Int: Float] = [:]
     init(id: Int, a: Int, b: Int) { self.id = id; idA = a; idB = b }
 }
@@ -102,30 +114,60 @@ extension BlobBrain {
         let friends = socialOthers().filter { $0 !== self && BondPairing.isBest(self, $0) }
         guard let o = friends.min(by: { simd_distance($0.position, position) < simd_distance($1.position, position) }) else { later(BondMoment.awayRetry); return false }
         if buddyAway || o.buddyAway || o.socialBook.block != nil || !o.socialBook.enabled || simd_distance(o.position, position) > 8 { later(BondMoment.awayRetry); return false }
-        guard let (sa, sb) = buddySpots(with: o) else { later(BondMoment.awayRetry); return false }
+        // one block at a time in a place; of two pairs due, the closer friends go (the other waits 20...30 s)
+        if let act = BondMoment.active, !act.ended, ([self] + socialOthers()).contains(where: { ($0.steerID == act.idA || $0.steerID == act.idB) && $0.socialBook.block === act }) { later(BondMoment.yieldRetry); return false }
+        let mine = socialBook.bestPoints[o.steerID] ?? 0
+        for x in socialOthers() where x !== self && x !== o && !x.socialBook.bestFriends.isEmpty && x.socialBook.block == nil && x.variety.now >= x.socialBook.bondNextAt && x.socialBook.bondNextAt != 0 {
+            let theirs = x.socialBook.bestFriends.compactMap { x.socialBook.bestPoints[$0] }.max() ?? 0
+            if theirs > mine + 0.01 { later(BondMoment.yieldRetry); return false }
+        }
+        guard let wait = buddyWaitSpot(for: o) else { later(BondMoment.awayRetry); return false }
         let blk = BuddyBlock(id: BondMoment.nextID, a: steerID, b: o.steerID); BondMoment.nextID += 1
-        blk.spot[steerID] = sa; blk.spot[o.steerID] = sb
-        blk.plan = buddyPlan(with: o)
+        blk.waiter = steerID; blk.spot[steerID] = wait
+        let up = ([self] + socialOthers().filter { $0 !== self }).filter { $0.idleState.kind != .sleep }.count
+        blk.up = up
+        blk.plan = buddyPlan(with: o, crowded: up > BondMoment.crowd)
+        blk.allowed = up > BondMoment.crowd ? BondMoment.calmTravel + BondMoment.calmStay : BondMoment.travel + BondMoment.stay
+        BondMoment.active = blk
         for b in [self, o] { b.socialBook.block = blk; b.socialBook.buddyAssigned = b.variety.now; b.socialBook.buddyArrivedAt = -1; b.socialBook.bondNextAt = b.variety.now + 1000 }
         if EmoteSpot.logOn { NSLog("[bond] block start id=%d ids=%d,%d t=%.1f plan=%@", blk.id, steerID, o.steerID, now, blk.plan.map(\.rawValue).joined(separator: ",")) }
         return buddyPickDue(sim)
     }
 
-    /// Two stand spots 1.4 apart round the midpoint of the pair, on clear floor (nil = none found).
-    private func buddySpots(with o: BlobBrain) -> (SIMD2<Float>, SIMD2<Float>)? {
-        let a = position, b = o.position
-        var u = b - a; let l = simd_length(u); u = l > 0.1 ? u / l : SIMD2(1, 0)
-        let m = (a + b) / 2, h = BondMoment.spotApart / 2
-        let others = socialOthers().filter { $0 !== self && $0 !== o }
-        for k in 0..<16 {
-            var c = m
-            if k > 0 { let ang = rand() * 2 * .pi; c = m + SIMD2(cosf(ang), sinf(ang)) * rand(0.3, 1.9) }
-            let ra = c - u * h, rb = c + u * h
-            let pa = fixed(ra), pb = fixed(rb)
-            guard simd_distance(pa, ra) < 0.2, simd_distance(pb, rb) < 0.2, simd_distance(pa, pb) >= 1.3, mixStopOK(pa), mixStopOK(pb) else { continue }
-            guard !slideFootPoint(pa), !slideFootPoint(pb), !hopCourtWithin(pa, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), !hopCourtWithin(pb, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest) else { continue }
-            guard !others.contains(where: { simd_distance($0.position, pa) < 1.3 || simd_distance($0.position, pb) < 1.3 }), reachable(a, pa), o.reachable(b, pb) else { continue }
-            return (pa, pb)
+    /// A spot clear for a body to stand on (clear visible floor, off the slide foot / hopscotch court, no third body within 1.3).
+    private func buddyClear(_ p: SIMD2<Float>, besides o: BlobBrain) -> Bool {
+        let q = fixed(p)
+        guard simd_distance(q, p) < 0.2, mixStopOK(p), !slideFootPoint(p), !hopCourtWithin(p, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest) else { return false }
+        return !socialOthers().contains { $0 !== self && $0 !== o && simd_distance($0.position, p) < 1.3 }
+    }
+    /// The first one stays: its own spot if that is clear floor with room for the partner 1.4 away, else the nearest such spot within 1.0 (nil = none).
+    private func buddyWaitSpot(for o: BlobBrain) -> SIMD2<Float>? {
+        func roomFor(_ p: SIMD2<Float>) -> Bool {
+            let toward = o.position - p, l = simd_length(toward)
+            let base = l > 0.1 ? atan2f(toward.y, toward.x) : 0
+            for da: Float in [0, 0.6, -0.6, 1.2, -1.2, 2.0, -2.0, .pi] {
+                let q = p + SIMD2(cosf(base + da), sinf(base + da)) * BondMoment.spotApart
+                if buddyClear(q, besides: o) { return true }
+            }
+            return false
+        }
+        if buddyClear(position, besides: o), roomFor(position) { return position }
+        for r: Float in [0.4, 0.7, 1.0] {
+            for k in 0..<8 {
+                let a = Float(k) / 8 * 2 * .pi + rand()
+                let p = position + SIMD2(cosf(a), sinf(a)) * r
+                if buddyClear(p, besides: o), roomFor(p), reachable(position, p) { return p }
+            }
+        }
+        return nil
+    }
+    /// The second one walks: a spot 1.4 from the waiter on the side it comes from.
+    private func buddyStandSpot(near w: SIMD2<Float>, partner o: BlobBrain) -> SIMD2<Float>? {
+        let from = position - w, l = simd_length(from)
+        let base = l > 0.1 ? atan2f(from.y, from.x) : 0
+        for da: Float in [0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9] {
+            let p = w + SIMD2(cosf(base + da), sinf(base + da)) * BondMoment.spotApart
+            if buddyClear(p, besides: o), reachable(position, p) { return p }
         }
         return nil
     }
@@ -133,13 +175,14 @@ extension BlobBrain {
     private func shuffledByRand<T>(_ a: [T]) -> [T] { var x = a; var i = x.count - 1; while i > 0 { let j = min(i, Int(rand() * Float(i + 1))); x.swapAt(i, j); i -= 1 }; return x }
 
     /// 2 or 3 kinds, never the same twice: one or two that travel and one that stays, in a random order.
-    private func buddyPlan(with o: BlobBrain) -> [SocialKind] {
+    private func buddyPlan(with o: BlobBrain, crowded: Bool) -> [SocialKind] {
         let recent = Set((socialBook.recentWith[o.steerID] ?? []) + (o.socialBook.recentWith[steerID] ?? []))
-        var tr = BondMoment.travel.filter { !recent.contains($0) }, st = BondMoment.stay.filter { !recent.contains($0) }
-        if tr.count < 2 { tr = BondMoment.travel }; if st.isEmpty { st = BondMoment.stay }
+        var tr = (crowded ? BondMoment.calmTravel : BondMoment.travel).filter { !recent.contains($0) }
+        var st = (crowded ? BondMoment.calmStay : BondMoment.stay).filter { !recent.contains($0) }
+        if tr.isEmpty { tr = crowded ? BondMoment.calmTravel : BondMoment.travel }; if st.count < 2 { st = crowded ? BondMoment.calmStay : BondMoment.stay }
         tr = shuffledByRand(tr); st = shuffledByRand(st)
         var plan = [tr[0], st[0]]
-        if rand() < 0.5, tr.count > 1 { plan.append(tr[1]) }
+        if rand() < 0.5 { if crowded { plan.append(st[1]) } else if tr.count > 1 { plan.append(tr[1]) } else { plan.append(st[1]) } }
         return shuffledByRand(plan)
     }
 
@@ -153,6 +196,10 @@ extension BlobBrain {
         if buddyAway || o.buddyAway { buddyCancel(blk, "away"); return false }
         if !blk.running {
             if now - socialBook.buddyAssigned > BondMoment.deadline { buddyCancel(blk, "late"); return false }
+            if blk.spot[steerID] == nil {          // the second one: a spot 1.4 from the waiter, on the side it comes from
+                guard let w = blk.waiter, let wb = socialBrain(w), let ws = blk.spot[w], let sp = buddyStandSpot(near: ws, partner: wb) else { buddyCancel(blk, "nospot"); return false }
+                blk.spot[steerID] = sp
+            }
             guard let spot = blk.spot[steerID] else { buddyCancel(blk, "nospot"); return false }
             if simd_distance(position, spot) > 0.3 {
                 socialBook.buddyArrivedAt = -1; blk.arrived.remove(steerID); letGo()
@@ -179,7 +226,7 @@ extension BlobBrain {
             return true
         }
         let remaining = blk.plan.filter { !blk.done.contains($0) }
-        let fallback = (BondMoment.travel + BondMoment.stay).filter { !blk.done.contains($0) && !remaining.contains($0) }
+        let fallback = blk.allowed.filter { !blk.done.contains($0) && !remaining.contains($0) && (blk.up <= BondMoment.crowd || !BondMoment.calmTravel.contains($0) || !blk.done.contains(where: { BondMoment.calmTravel.contains($0) }) && !remaining.contains(where: { BondMoment.calmTravel.contains($0) })) }
         for kind in remaining + fallback {
             letGo(); o.letGo()
             if socialStart(kind, with: o, sim) {
@@ -189,7 +236,8 @@ extension BlobBrain {
                 for (a, b) in [(self, o), (o, self)] { var r = a.socialBook.recentWith[b.steerID] ?? []; r.append(kind); a.socialBook.recentWith[b.steerID] = Array(r.suffix(3)) }
                 varietyNoteSocial(kind, with: o); socialBook.lastKind = kind
                 for b in [self, o] { b.socialBook.bondMoments += 1 }
-                if EmoteSpot.logOn { NSLog("[bond] block id=%d kind=%@ ids=%d,%d t=%.1f", blk.id, kind.rawValue, steerID, o.steerID, now) }
+                BondMoment.onKind?(blk.id, kind, blk.up)
+                if EmoteSpot.logOn { NSLog("[bond] block id=%d kind=%@ ids=%d,%d t=%.1f up=%d", blk.id, kind.rawValue, steerID, o.steerID, now, blk.up) }
                 return true
             }
         }
@@ -199,7 +247,7 @@ extension BlobBrain {
 
     private func buddyEnd(_ blk: BuddyBlock) {
         guard !blk.ended else { return }
-        blk.ended = true
+        blk.ended = true; if BondMoment.active === blk { BondMoment.active = nil }
         let secs = variety.now - (blk.startedAt[steerID] ?? variety.now)
         BondMoment.onBlockEnd?(blk.done.count, secs)
         if EmoteSpot.logOn { NSLog("[bond] block end id=%d t=%.1f seconds=%.1f kinds=%d", blk.id, variety.now, secs, blk.done.count) }
@@ -213,7 +261,7 @@ extension BlobBrain {
 
     private func buddyCancel(_ blk: BuddyBlock, _ why: String) {
         guard !blk.ended else { socialBook.block = nil; letGo(); return }
-        blk.ended = true
+        blk.ended = true; if BondMoment.active === blk { BondMoment.active = nil }
         if EmoteSpot.logOn { NSLog("[bond] block cancel id=%d why=%@ t=%.1f", blk.id, why, variety.now) }
         for id in [blk.idA, blk.idB] {
             guard let b = socialBrain(id) ?? (id == steerID ? self : nil) else { continue }

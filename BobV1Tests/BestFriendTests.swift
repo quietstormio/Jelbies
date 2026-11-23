@@ -234,6 +234,7 @@ final class BestFriendTests: XCTestCase {
 
     /// Two buddies (best friends of each other) in a quiet-free lab, mood set; the block is fired by hand where a test needs it.
     private func buddies(seed: UInt64, n: Int = 2) -> SocialTests.Lab {
+        BondMoment.active = nil
         let pos: [SIMD2<Float>] = [SIMD2(-1.6, 0.8), SIMD2(1.8, 1.6), SIMD2(0.2, 3.0)]
         let lab = SocialTests.Lab(n: n, positions: Array(pos.prefix(n)), quiet: false, seed: seed)
         for (i, r) in lab.rigs.enumerated() {
@@ -320,5 +321,62 @@ final class BestFriendTests: XCTestCase {
         XCTAssertEqual(BondPairing.weight(chooser: a, candidate: b), 2.4)
         _ = BondPairing.pick([h], chooser: a, roll: 0)
         XCTAssertFalse(a.socialBook.housemateBoost, "it ends with one pair moment with a housemate")
+    }
+
+    // MARK: round 5
+
+    func testTheFirstToTakeTheFlagDoesNotWalkAndTheSecondComes() {
+        for seed in [81, 82, 83] as [UInt64] {
+            let lab = buddies(seed: seed)
+            let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+            for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner); r.brain.idleState.kind = nil; r.brain.idleState.cooldown = 1e6; r.brain.socialBook.cooldown = 1e6 }
+            a.socialBook.bondNextAt = a.variety.now - 1
+            let startA = a.position, startB = b.position
+            guard a.bondUrge(lab.rigs[0].sim) else { continue }
+            guard let blk = a.socialBook.block else { return XCTFail("flagged") }
+            XCTAssertEqual(blk.waiter, a.steerID, "the one that fired takes its flag first and waits")
+            var maxA: Float = 0, movedB: Float = 0
+            for _ in 0..<(60 * 14) {
+                lab.tick(watching: false)
+                if blk.running || blk.ended { break }
+                maxA = max(maxA, simd_distance(a.position, startA)); movedB = max(movedB, simd_distance(b.position, startB))
+            }
+            XCTAssertLessThanOrEqual(maxA, 1.15, "seed \(seed): the first one stays (at most 1.0 away to clear floor)")
+            XCTAssertGreaterThan(movedB, 0.8, "seed \(seed): the second one walks to it")
+        }
+    }
+
+    func testNoChasingKindWithMoreThanThreeBodiesUpAndOneTravelKindAtMost() {
+        var seen: [Int: [SocialKind]] = [:], ups: [Int: Int] = [:]
+        BondMoment.onKind = { id, k, up in seen[id, default: []].append(k); ups[id] = up }
+        defer { BondMoment.onKind = nil }
+        for seed in [91, 92, 93] as [UInt64] {
+            let lab = lab5(seed: seed, bond: true); BondMoment.active = nil
+            for r in lab.rigs { r.brain.idleMood = .okay; r.brain.socialBook.cooldown = 3; r.brain.idleState.cooldown = 9 }
+            for _ in 0..<(60 * 120) { lab.tick(watching: false) }
+        }
+        MotionLog.write("BESTFRIEND crowded blocks: \(seen.map { "\($0.key):\($0.value.map(\.rawValue)) up \(ups[$0.key] ?? 0)" })")
+        XCTAssertFalse(seen.isEmpty, "blocks happen with five bodies")
+        for (id, ks) in seen where (ups[id] ?? 0) > BondMoment.crowd {
+            XCTAssertTrue(Set(ks).isDisjoint(with: [.littleRace, .tag, .chase]), "block \(id): no chasing kind with more than three bodies up")
+            XCTAssertLessThanOrEqual(ks.filter { BondMoment.calmTravel.contains($0) }.count, 1, "block \(id): at most one travelling kind")
+        }
+    }
+
+    func testNeverTwoBlocksAtOnce() {
+        for seed in [101, 102] as [UInt64] {
+            let lab = lab5(seed: seed, bond: true); BondMoment.active = nil
+            lab.rigs[1].brain.socialBook.bestFriends = [4]; lab.rigs[4].brain.socialBook.bestFriends = [1]          // (a second pair, Friends too)
+            for r in lab.rigs { r.brain.idleMood = .okay; r.brain.socialBook.cooldown = 3; r.brain.idleState.cooldown = 9 }
+            var worst = 0, started = 0
+            var seenIDs = Set<Int>()
+            for _ in 0..<(60 * 150) {
+                lab.tick(watching: false)
+                let live = Set(lab.rigs.compactMap { $0.brain.socialBook.block }.filter { !$0.ended }.map(\.id))
+                worst = max(worst, live.count); seenIDs.formUnion(live)
+            }
+            started = seenIDs.count
+            XCTAssertLessThanOrEqual(worst, 1, "seed \(seed): never two blocks at once (\(started) blocks ran)")
+        }
     }
 }
