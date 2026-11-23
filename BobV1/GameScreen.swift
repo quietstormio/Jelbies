@@ -656,6 +656,18 @@ struct GameScreen: View {
             care.syncDecor()
             NSLog("[placesoccer] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
         }
+        // capture aid (toy-audit-r1): -PlaceToys "drum,blocks,..." grants and places the named toys (DecorKind raw values) in that order; logs what stood there before and where each went
+        if let list = d.string(forKey: "PlaceToys"), !list.isEmpty {
+            for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
+            await sleep(2.5)
+            NSLog("[placetoys] before %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
+            for name in list.split(separator: ",") {
+                guard let k = DecorKind(rawValue: name.trimmingCharacters(in: .whitespaces)) else { NSLog("[placetoys] unknown %@", String(name)); continue }
+                if !care.store.placedDecor.contains(where: { $0.kind == k }) { care.store.grant(k.storeID); _ = care.store.place(k.storeID) }
+            }
+            care.syncDecor()
+            NSLog("[placetoys] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)#\($0.uid)@\($0.x),\($0.z)" })")
+        }
         // capture aid: -PlayDemo 1 (grant the balls, open Play mode and flick at the middle Jelbie over and over) | 2 (the toy picker, toys owned) | 3 (the picker, nothing owned) | 4 (Play mode, no auto flick)
         if d.integer(forKey: "PlayDemo") > 0 {
             for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }

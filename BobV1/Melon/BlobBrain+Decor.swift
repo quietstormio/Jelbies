@@ -30,6 +30,7 @@ extension BlobBrain {
         if uid >= 0 {
             HopscotchLine.shared.remove(uid, steerID)
             if let sf = DecorField.shared.foot(uid), sf.kind == .kickscooter { scooterParked(sf) }          // (cut short mid-ride: the scooter is parked again)
+            if EmoteSpot.logOn { NSLog("[toyend] t=%.1f id=%d uid=%d", variety.now, steerID, uid) }          // (toy-audit-r1 log)
             DecorField.shared.leave(uid, by: steerID)
             DecorField.shared.toyPlayed(uid)          // (his turn is over: the piece's pull starts to recover)
             toy.lastUID = uid
@@ -404,6 +405,7 @@ extension BlobBrain {
             if f.kind.hopSit { field.take(f.uid, seat: seat, by: steerID) } else { field.use(f.uid, by: steerID) }
             if f.kind == .playtunnel { tunnelCommit(f, stand: stand) }
             if f.kind == .hopscotch { hopscotchCommit(f) }
+            if EmoteSpot.logOn { NSLog("[toyuse] t=%.1f id=%d uid=%d kind=%@ move=%@", variety.now, steerID, f.uid, f.kind.rawValue, "\(kind)") }          // (toy-audit-r1 log)
             script = .walk(target: stand, then: .none); activity = .walking
             return true
         }
