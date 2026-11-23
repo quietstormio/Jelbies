@@ -955,6 +955,19 @@ final class PlayToss {
         let dist = simd_length(SIMD2(target.x - from.x, target.z - from.z))
         var v = TossAim.ballistic(from: from, to: target, flight: min(max(0.40 + 0.07 * dist, 0.5), 0.95) * TossTuning.slow)
         v.y = max(v.y, 1.6 / TossTuning.slow)
+        // a Jelmiko in the way (a kick from the back of the room goes through the row): the arc is lifted just enough to pass over his crown (without it the ball hit his side, a soft bounce, and went back to the wall)
+        let g = TossTuning.gravity, vh = SIMD2(v.x, v.z), sp = simd_length(vh)
+        if sp > 1e-3 {
+            for o in jellies where o.id != j.id {
+                let rel = o.pos - SIMD2(from.x, from.z)
+                let t = simd_dot(rel, vh) / (sp * sp)
+                guard t > 0.02, t < 3 else { continue }
+                let lateral = simd_length(rel - vh * t)
+                guard lateral < TossTuning.bodyRadius + ball.radius + 0.1 else { continue }
+                let need = o.headTop + ball.radius + 0.12
+                v.y = max(v.y, (need - from.y + 0.5 * g * t * t) / t)
+            }
+        }
         ball.vel = v
         ball.pos.y = max(ball.pos.y, ball.radius + 0.06)
         ball.ignoring = j.id; ball.ignoreT = 0.35

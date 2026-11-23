@@ -345,7 +345,7 @@ extension PlayTossTests {
         var planned = 0
         for seed in UInt64(1)...6 {
             let r = rigAt(SIMD2(0, 0.6)), p = PlayToss()
-            p.seed(seed); beginBall(r, p, .soccerball)
+            p.seed(seed &* 0x9E3779B97F4A7C15); beginBall(r, p, .soccerball)
             var events: [PlayEvent] = []
             p.onEvent = { events.append($0) }
             throwAtMiddle(p)
