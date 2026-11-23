@@ -390,6 +390,10 @@ extension PlayToss {
                 if let p0 = net.goalPos[j.id], simd_distance(p0, m) - simd_distance(j.pos, m) > 0.35 { net.nearLogged.insert(j.id); NSLog("[playnet] BODY WALKED TOWARD NET id=%d from %.2f,%.2f to %.2f,%.2f", j.id, p0.x, p0.y, j.pos.x, j.pos.y) }
             }
         }
+        if ball.ignoreAll {          // (the return flight is struck by nobody until the catch, or the row is passed, or it has come to rest)
+            let rowZ = jellies.filter { !$0.free }.map { $0.pos.y }.max() ?? 0
+            if phase == .inHand || phase == .catching || phase == .off || ball.pos.z > rowZ + 0.8 || clock - net.goalAt > 9 || (ball.onFloor && ball.speedXZ < 0.3 && !net.returning && !net.deadFlight) { ball.ignoreAll = false }
+        }
         if net.deadFlight, phase == .inHand || phase == .catching || phase == .off || clock - net.goalAt > 9 { net.deadFlight = false }
         netDeadTick()          // (play-net keep-out)
         for j in jellies where !j.free && netKeepOut(j.pos) && !j.brain.tossBusy && Self.canHop(j.brain) && j.brain.idleState.kind == nil && clock - (net.outT[j.id] ?? -9) > 0.8 {          // (a body that stands in the keep-out walks out of it)
@@ -421,7 +425,7 @@ extension PlayToss {
     /// A Jelmiko touched the ball (header / kick): he is the one who scores if it goes in.
     func netNoteToucher(_ id: Int) { if netUp { net.lastToucher = id } }
     /// A new throw / a rescue lob: nobody has touched it since.
-    func netThrowReset() { if netUp { net.deadFlight = false; net.lastToucher = nil; net.hold = nil; net.returning = false; ball.inNet = false; resetShot() } }
+    func netThrowReset() { if netUp { ball.ignoreAll = false; net.deadFlight = false; net.lastToucher = nil; net.hold = nil; net.returning = false; ball.inNet = false; resetShot() } }
     func resetShot() { net.first = nil; net.over = false }
 
     // MARK: the ball and the net
@@ -509,6 +513,17 @@ extension PlayToss {
         let target = SIMD2<Float>(min(max(hand.x * 0.5, -lim), lim), tz)
         let S = SIMD2(ball.pos.x, ball.pos.z)
         let bodies = jellies.filter { !$0.free }.map(\.pos)
+        // return round: a body within 1.0 of the straight line from the net to the catch point makes the return ALWAYS a high lob (never a roll, never a squeeze); it starts just outside the frame, over every head on the lane
+        if bodies.contains(where: { Self.segDist($0, S, target) < 1.0 }) {
+            ball.inNet = false; ball.ignoring = nil
+            ball.pos = SIMD3(min(max(ball.pos.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), r + 0.02, n.mouthZ + 0.45)
+            ball.vel = netArc(from: ball.pos, to: target); ball.ignoreAll = true
+            returnAim = target
+            touched = true; phase = .flying; looseT = 0; restT = 0
+            net.returning = true; net.retT = 0; net.rescuesAtGoal = rescues
+            NSLog("[playnet] return lob-high (a body on the lane) from %.2f,%.2f speed %.1f", S.x, S.y, simd_length(ball.vel))
+            return true
+        }
         func clearance(_ T: SIMD2<Float>) -> Float {
             let d = T - S, L2 = max(simd_dot(d, d), 1e-6)
             var c = Float.infinity
@@ -578,11 +593,33 @@ extension PlayToss {
                 return false          // (a body right in front of the mouth: no return; the old short roll-out)
             }
         }
-        touched = true
+        touched = true; ball.ignoreAll = true
         phase = .flying; looseT = 0; restT = 0
         net.returning = true; net.retT = 0; net.rescuesAtGoal = rescues
         NSLog("[playnet] return %@ from %.2f,%.2f speed %.1f", mode, S.x, S.y, simd_length(ball.vel))
         return true
+    }
+
+    /// Distance from a point to the segment a-b.
+    static func segDist(_ p: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+        let d = b - a, L2 = max(simd_dot(d, d), 1e-6)
+        return simd_distance(a + d * min(max(simd_dot(p - a, d) / L2, 0), 1), p)
+    }
+
+    /// A lob from `p` to the catch point whose apex over every body within 1.0 of the lane is at least a crown (`bodyTop`) plus 0.7 high; the shortest flight (1.4 to 2.4 sim s) that does it.
+    func netArc(from p: SIMD3<Float>, to T: SIMD2<Float>) -> SIMD3<Float> {
+        let g = TossTuning.gravity, S = SIMD2(p.x, p.z), d = T - S, L2 = max(simd_dot(d, d), 1e-6)
+        let near = jellies.filter { !$0.free && Self.segDist($0.pos, S, T) < 1.0 }.map(\.pos)
+        var v = TossAim.ballistic(from: p, to: SIMD3(T.x, ball.radius, T.y), flight: 2.4)
+        for flight in stride(from: Float(1.4), through: 2.4, by: 0.1) {
+            let c = TossAim.ballistic(from: p, to: SIMD3(T.x, ball.radius, T.y), flight: flight)
+            let ok = near.allSatisfy { b in
+                let t = min(max(simd_dot(b - S, d) / L2, 0), 1) * flight
+                return p.y + c.y * t - 0.5 * g * t * t >= TossTuning.bodyTop + 0.7
+            }
+            if ok { v = c; break }
+        }
+        return v
     }
 
     /// While the net's return is on the ball stays a flying return (a roll along the floor would otherwise turn into a loose ball the Jelmiko go to fetch) until `caught()` takes it.

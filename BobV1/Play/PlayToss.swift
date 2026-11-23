@@ -703,7 +703,7 @@ final class PlayToss {
 
     private func intercepts(dt: Float, before: SIMD3<Float>) {
         guard ball.ignoring == nil || ball.ignoreT < 0.2 else { return }
-        if netUp, net.deadFlight { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }          // (play-net keep-out: the net's dead-ball return flies to the player; nobody heads it back toward the goal)
+        if netUp, net.deadFlight || net.returning { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }          // (play-net keep-out: the net's dead-ball return flies to the player; nobody heads it back toward the goal)
         if footFlight, !PlayTuning.ballReturnOld, footIntercepts() { return }
         var best: (j: PlayJelly, t: Float, xz: SIMD2<Float>, d: Float)?
         for j in jellies {
@@ -1217,7 +1217,7 @@ final class PlayToss {
     /// play-net keep-out: the net's dead-ball return for a ball that lies outside the frame: the same lob as the safety net's, no walk to it (`rescue` itself is unchanged).
     func netDeadLob() {
         rescue()
-        if let a = returnAim { ball.vel = TossAim.ballistic(from: ball.pos, to: SIMD3(a.x, ball.radius, a.y), flight: 1.6 * TossTuning.slow) }          // (a higher arc than the safety lob's: the middle Jelmiko stands in the lane and a flat lob came back off his head)
+        if let a = returnAim { ball.vel = netArc(from: ball.pos, to: a); ball.ignoreAll = true }          // (play-net return round: the lob clears every head on the lane and nobody can strike it)
     }
 
     /// play-net-r1: a goal ends this flight's foot plan (the ball is held in the net; nobody goes on to kick it): the same state `caught()` clears, and a foot approach under way is let go.

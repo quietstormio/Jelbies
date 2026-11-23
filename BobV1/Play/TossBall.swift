@@ -73,6 +73,8 @@ nonisolated struct TossBall: Sendable {
     /// The Jelbie whose head the ball is on (a header in progress): the ball is not tested against him until it has left.
     var ignoring: Int?
     var ignoreT: Float = 0
+    /// play-net return round: the net's return flight is struck by nobody (every body ignored); set at the launch, cleared at the catch / past the row.
+    var ignoreAll = false
     /// play-net-r1: a goal was scored with this ball and it lies in the net (until the controller rolls it out).
     var inNet = false
 
@@ -151,7 +153,7 @@ nonisolated struct TossBall: Sendable {
         }
         if let net = w.net { net.resolve(&self, before: before, h: h, &ev) }          // (play-net-r1)
         // the Jelbies
-        for b in w.bodies where b.id != ignoring {
+        for b in w.bodies where b.id != ignoring && !ignoreAll {
             let d = SIMD2(pos.x - b.pos.x, pos.z - b.pos.y)
             let dist = simd_length(d)
             let reach = TossTuning.bodyRadius + r
