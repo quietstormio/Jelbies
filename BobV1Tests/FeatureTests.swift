@@ -314,9 +314,9 @@ final class FeatureTests: XCTestCase {
     func testWingsStayUpWithABackpackAndANeckItem() {
         let body = WearBody.shared
         let tol: Float = 0.02
-        for (back, other) in [("backpack_sky", "bowtie_pink"), ("backpack_sky", "pearls"), ("backpack_sky", "medal_gold"), ("backpack_sky", "scarf_sky"),
-                              ("backpack_sky", "bandana_mint"), ("backpack_sky", "whistle_coach"), ("backpack_sky", "cat_ears"), ("backpack_sky", "party_hat"),
-                              ("cape_hero", "bowtie_sky"), ("cape_hero", "medal_gold"), ("cape_hero", "pearls"), ("cape_hero", "frog_ears"), ("cape_hero", "tophat")] {
+        for (back, other) in [("backpack_sky", "bowtie_pink"), ("backpack_sky", "diamond_j"), ("backpack_sky", "medal_gold"), ("backpack_sky", "scarf_sky"),
+                              ("backpack_sky", "bandana_mint"), ("backpack_sky", "bandana_coral"), ("backpack_sky", "cat_ears"), ("backpack_sky", "party_hat"),
+                              ("cape_hero", "bowtie_sky"), ("cape_hero", "medal_gold"), ("cape_hero", "diamond_j"), ("cape_hero", "frog_ears"), ("cape_hero", "tophat")] {
             let fit = FeatureCompat.solve(.wings, worn: [back, other])
             XCTAssertFalse(fit.folded, "\(back) + \(other): the wings do not fold")
             XCTAssertGreaterThanOrEqual(fit.wingDY, 0.08, "\(back) + \(other): the wings ride up")

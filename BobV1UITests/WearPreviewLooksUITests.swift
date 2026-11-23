@@ -27,8 +27,8 @@ final class WearPreviewLooksUITests: XCTestCase {
         for _ in 0..<3 where !tab.isHittable { app.buttons["shop-tab-food"].swipeLeft(velocity: .fast) }
         XCTAssertTrue(tab.waitForExistence(timeout: 10)); tab.tap()
         sleep(2)
-        let looks = ["diamondJ": "diamond_j", "chainGold": "chain_gold", "pearls": "pearls", "bandanaSun": "bandana_sun", "hoodie": "hoodie", "raincoat": "raincoat", "lei": "lei", "sweatband": "sweatband", "tutuPink": "tutu_pink", "scarfPlum": "scarf_plum"]
-        let order = ["diamondJ", "chainGold", "pearls", "bandanaSun", "hoodie", "raincoat", "lei", "sweatband", "tutuPink", "scarfPlum"]
+        let looks = ["diamondJ": "diamond_j", "chainGold": "chain_gold", "bandanaSun": "bandana_sun", "hoodie": "hoodie", "raincoat": "raincoat", "sweatband": "sweatband", "tutuPink": "tutu_pink", "scarfPlum": "scarf_plum"]
+        let order = ["diamondJ", "chainGold", "bandanaSun", "hoodie", "raincoat", "sweatband", "tutuPink", "scarfPlum"]
         func readyLines() -> [String] { ((try? String(contentsOfFile: logPath, encoding: .utf8)) ?? "").split(separator: "\n").filter { $0.contains("preview-ready") }.map(String.init) }
         var report = ""
         for name in order {

@@ -980,8 +980,8 @@ struct GameScreen: View {
                 care.race.progress.records = [:]; care.race.courseTier = .puddle
                 for k in Set(Array(0..<JellyRoster.knownCount) + care.jellies.map(\.character)) { care.race.trophies.setShelf(JelbieTrophies(), character: k) }
             }
-            if m.contains("dress") {          // the user's phone: Pip in a pink beanie and heart sunglasses, Moss bare (his daisy), Lavender in pearls (her wings)
-                let outfits: [String: [WearLook]] = ["pip": [.beaniePink, .heartShades], "moss": [], "lavender": [.pearls]]
+            if m.contains("dress") {          // the user's phone: Pip in a pink beanie and heart sunglasses, Moss bare (his daisy), Lavender in the Diamond J (her wings)
+                let outfits: [String: [WearLook]] = ["pip": [.beaniePink, .heartShades], "moss": [], "lavender": [.diamondJ]]
                 for j in care.jellies {
                     for sl in WearSlot.allCases { care.store.takeOff(sl, from: j.id) }
                     for l in outfits[j.name.lowercased()] ?? [] { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? ""); _ = care.store.wear(l, on: j.id) }
@@ -1289,7 +1289,7 @@ struct GameScreen: View {
             care.store.awardMedal()
             care.bath.wallet.add(max(0, 400 - care.bath.wallet.count), silent: true)
             if d.integer(forKey: "WearSeed") == 2 {
-                let o: [[WearLook]] = [[.capTeamPink, .bibPink, .sneakerCoral], [.flowerCrown, .bowtieSky, .glitterShoes], [.crownGold, .pearls, .capeHero, .balletPink]]
+                let o: [[WearLook]] = [[.capTeamPink, .bibPink, .sneakerCoral], [.flowerCrown, .bowtieSky, .glitterShoes], [.crownGold, .diamondJ, .capeHero, .balletPink]]
                 for (i, ls) in o.enumerated() { for l in ls { care.store.wear(l, on: i) } }
             }
         }

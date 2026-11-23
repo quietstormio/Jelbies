@@ -156,8 +156,8 @@ final class WearCaptureTests: XCTestCase {
                                  [.head: .flowerCrown, .neck: .bowtieSky, .feet: .glitterShoes],
                                  [.head: .beaniePink, .neck: .bandanaCoral]]
     static let setB: [Outfit] = [[.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .hands: .wristbandsSky, .feet: .hightopRed],
-                                 [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .body: .sashSky, .feet: .sneakerLightup],
-                                 [.head: .crownGold, .neck: .pearls, .body: .capeHero, .feet: .balletPink]]
+                                 [.head: .sweatband, .neck: .bandanaCoral, .hands: .wristbandsSky, .body: .sashSky, .feet: .sneakerLightup],
+                                 [.head: .crownGold, .neck: .diamondJ, .body: .capeHero, .feet: .balletPink]]
     static let setC: [Outfit] = [[.head: .witchHat, .face: .gogglesAviator, .body: .capeHero, .feet: .rainBoots],
                                  [.head: .bucketHatPink, .neck: .scarfSky, .feet: .rainBoots],
                                  [.head: .catEars, .face: .heartShades, .body: .backpackSky, .neck: .medalGold]]
@@ -616,8 +616,7 @@ extension WearCaptureTests {
         let lab = setUpLab([SIMD2(0.2, 0.6)], seed: 5)
         let r = lab.rigs[0]
         r.brain.autonomy = false; r.brain.expr.enabled = false
-        let table: [String: Outfit] = ["bandana": [.neck: .bandanaCoral, .head: .sweatband], "scarf": [.neck: .scarfCosy, .head: .sweatband], "scarfsilk": [.neck: .scarfSilk], "pearls": [.neck: .pearls], "whistle": [.neck: .whistleCoach],
-                                       "chain": [.neck: .pearls], "diamond": [.neck: .diamondJ], "lei": [.neck: .lei], "bowtie": [.neck: .bowtiePink], "cape": [.body: .capeHero], "hoodie": [.body: .hoodie], "raincoat": [.body: .raincoat]]
+        let table: [String: Outfit] = ["bandana": [.neck: .bandanaCoral, .head: .sweatband], "scarf": [.neck: .scarfCosy, .head: .sweatband], "scarfsilk": [.neck: .scarfSilk],                                        "diamond": [.neck: .diamondJ], "bowtie": [.neck: .bowtiePink], "cape": [.body: .capeHero], "hoodie": [.body: .hoodie], "raincoat": [.body: .raincoat]]
         let outfit: Outfit = table[ProcessInfo.processInfo.environment["BAND_CAP_OUTFIT"] ?? "bandana"] ?? table["bandana"]!
         let sets = dress(lab, [outfit])
         let (ren, target) = try renderer(lab)

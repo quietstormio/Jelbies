@@ -68,12 +68,12 @@ extension FeatureCaptureTests {
         struct Row { var id: Int; var look: WearLook; var view: String; var yaw: Float; var walk = 0; var room = false }
         let panda = 6, teddy = 4, pip = 1, lav = 3
         var rows: [Row] = []
-        for (id, look) in [(panda, WearLook.diamondJ), (teddy, .diamondJ), (pip, .pearls)] {
+        for (id, look) in [(panda, WearLook.diamondJ), (teddy, .diamondJ), (pip, .diamondJ)] {
             rows += [Row(id: id, look: look, view: "front", yaw: 0), Row(id: id, look: look, view: "3/4", yaw: 0.75), Row(id: id, look: look, view: "side", yaw: .pi / 2), Row(id: id, look: look, view: "walk", yaw: 0.75, walk: 45)]
         }
         rows += [Row(id: panda, look: .diamondJ, view: "room cam, walking", yaw: 0, walk: 45, room: true),
                  Row(id: panda, look: .diamondJ, view: "3/4 back", yaw: 2.4), Row(id: lav, look: .diamondJ, view: "front", yaw: 0), Row(id: lav, look: .diamondJ, view: "3/4 back", yaw: 2.4),
-                 Row(id: pip, look: .pearls, view: "3/4 back", yaw: 2.4), Row(id: panda, look: .diamondJ, view: "back", yaw: .pi), Row(id: lav, look: .pearls, view: "3/4 back", yaw: 2.4)]
+                 Row(id: pip, look: .diamondJ, view: "3/4 back", yaw: 2.4), Row(id: panda, look: .diamondJ, view: "back", yaw: .pi), Row(id: lav, look: .diamondJ, view: "3/4 back", yaw: 2.4)]
         let only = ProcessInfo.processInfo.environment["NECK_CAP_ROWS"]?.split(separator: ",").compactMap { Int($0) }
         var cells: [UIImage] = []
         var k = 0
@@ -109,11 +109,11 @@ extension FeatureCaptureTests {
                      Row(id: id, look: .diamondJ, view: "room cam walking A", yaw: 0, walk: 40, room: true, heading: SIMD2(-1.2, 2.2)),
                      Row(id: id, look: .diamondJ, view: "room cam walking B", yaw: 0, walk: 55, room: true, heading: SIMD2(1.2, 2.2))]
         }
-        for (id, look) in [(panda, WearLook.diamondJ), (teddy, .diamondJ), (pip, .pearls)] {
+        for (id, look) in [(panda, WearLook.diamondJ), (teddy, .diamondJ), (pip, .diamondJ)] {
             rows += [Row(id: id, look: look, view: "front", yaw: 0), Row(id: id, look: look, view: "3/4", yaw: 0.75), Row(id: id, look: look, view: "side", yaw: .pi / 2), Row(id: id, look: look, view: "walk", yaw: 0.75, walk: 45)]
         }
         rows += [Row(id: panda, look: .diamondJ, view: "3/4 back", yaw: 2.4), Row(id: panda, look: .diamondJ, view: "back", yaw: .pi), Row(id: lav, look: .diamondJ, view: "3/4 back", yaw: 2.4),
-                 Row(id: pip, look: .pearls, view: "3/4 back", yaw: 2.4), Row(id: lav, look: .pearls, view: "3/4 back", yaw: 2.4), Row(id: teddy, look: .diamondJ, view: "3/4 back", yaw: 2.4)]
+                 Row(id: pip, look: .diamondJ, view: "3/4 back", yaw: 2.4), Row(id: lav, look: .diamondJ, view: "3/4 back", yaw: 2.4), Row(id: teddy, look: .diamondJ, view: "3/4 back", yaw: 2.4)]
         let only = ProcessInfo.processInfo.environment["NECK_CAP_ROWS"]?.split(separator: ",").compactMap { Int($0) }
         let cur = (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt)
         func setCurrent() { (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt) = cur; WearMeshes.clearCache() }
@@ -147,7 +147,7 @@ extension FeatureCaptureTests {
         let cur = (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt)
         func setCurrent() { (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt) = cur; WearMeshes.clearCache() }
         defer { setCurrent() }
-        let combos: [(Int, WearLook)] = [(6, .diamondJ), (4, .diamondJ), (4, .pearls)]
+        let combos: [(Int, WearLook)] = [(6, .diamondJ), (4, .diamondJ), (4, .diamondJ)]
         // (pose name, walk frames, motion, heading) - the walk goes toward the camera-left like the user's screenshot
         let poses: [(String, Int, String, SIMD2<Float>)] = [("rest", 0, "walk", SIMD2(-1.2, 2.2)), ("walk", walkF, "walk", SIMD2(-1.2, 2.2)), ("run", 40, "run", SIMD2(-1.2, 2.2)), ("hop", 85, "hop", SIMD2(-1.2, 2.2)), ("jacks", 45, "jacks", SIMD2(-1.2, 2.2))]
         let only = env["NECK_CAP_ROWS"]?.split(separator: ",").compactMap { Int($0) }
@@ -199,7 +199,7 @@ extension FeatureCaptureTests {
         let cur = (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt)
         func setCurrent() { (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt) = cur; WearLevel.tiltOn = true; WearMeshes.clearCache() }
         defer { setCurrent() }
-        let combos: [(Int, WearLook)] = [(6, .bandanaCoral), (4, .bandanaSun), (6, .diamondJ), (4, .pearls)]
+        let combos: [(Int, WearLook)] = [(6, .bandanaCoral), (4, .bandanaSun), (6, .diamondJ), (4, .diamondJ)]
         let poses: [(String, Int)] = [("rest", 0), ("walk", 40)]
         var cells: [UIImage] = []
         for (id, look) in combos { for (pn, frames) in poses {
@@ -230,7 +230,7 @@ extension FeatureCaptureTests {
             var pair: [UIImage] = []
             for after in [false, true] {
                 if after { setCurrent() } else { WearLevel.useLegacyTilt(); WearMeshes.clearCache() }
-                let im = try neckStill(id: id, outfit: [.neck: .pearls], yaw: yaw, walkFrames: frames, size: 380, heading: SIMD2(-1.2, 2.2), motion: "walk", dist: Float(ProcessInfo.processInfo.environment["NECK_CAP_DIST"] ?? "") ?? 1.7, lift: Float(ProcessInfo.processInfo.environment["NECK_CAP_LIFT"] ?? "") ?? 0.3, ty: Float(ProcessInfo.processInfo.environment["NECK_CAP_TY"] ?? "") ?? 0.0)
+                let im = try neckStill(id: id, outfit: [.neck: .diamondJ], yaw: yaw, walkFrames: frames, size: 380, heading: SIMD2(-1.2, 2.2), motion: "walk", dist: Float(ProcessInfo.processInfo.environment["NECK_CAP_DIST"] ?? "") ?? 1.7, lift: Float(ProcessInfo.processInfo.environment["NECK_CAP_LIFT"] ?? "") ?? 0.3, ty: Float(ProcessInfo.processInfo.environment["NECK_CAP_TY"] ?? "") ?? 0.0)
                 try writePNG(im, d + "/frame_pearls_\(JellyRoster.baseNames[id])_\(pn)_\(vn)_\(after ? "after" : "before").png", maxBytes: 12_000_000)
                 pair.append(tlabel(im, ["\(JellyRoster.baseNames[id]) pearls \(pn) \(vn): \(after ? "AFTER" : "BEFORE")"], bar: 26))
             }
