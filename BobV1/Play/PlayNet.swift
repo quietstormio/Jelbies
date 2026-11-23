@@ -469,8 +469,10 @@ extension PlayToss {
             var T = target
             if !exitsMouth(T) { T.x = n.centre.x }
             let L = simd_length(T - S)
-            var v = TossAim.ballistic(from: ball.pos, to: SIMD3(T.x, r, T.y), flight: min(max(0.8 + 0.06 * L, 0.9), 1.4) * TossTuning.slow)
-            v.y = max(v.y, 3.2 / TossTuning.slow)
+            // (the lob rises steeply, 5 u/s up: under the bar at the mouth (0.65 away or less: about 0.9 high), over the line's shoulders (about 2 high there), then down at the catch zone)
+            let g = TossTuning.gravity, vy: Float = 5.0
+            let flight = (vy + (vy * vy + 2 * g * max(ball.pos.y - r, 0)).squareRoot()) / g
+            let v = SIMD3<Float>((T.x - S.x) / flight, vy, (T.y - S.y) / flight)
             ball.vel = v
             returnAim = T
             mode = "lob"
