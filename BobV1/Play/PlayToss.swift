@@ -1017,7 +1017,7 @@ final class PlayToss {
         // wait for it to settle (or for the wait to run out), unless it will land on a head
         if ball.pos.y > 0.7 + r { return }
         let slow = ball.speedXZ < Self.looseWaitSpeed
-        let byFoot = footFlight && !PlayTuning.ballReturnOld          // (play-ball-s2: a ball that was to be kicked is kicked on the bounce the moment he can be there: no waiting for it to slow down)
+        let byFoot = (footFlight || PlayTuning.style(ballKind).headShare < 1) && !PlayTuning.ballReturnOld          // (a soccer / beach ball that is loose is not waited for either: the nearest free one goes at once)          // (play-ball-s2: a ball that was to be kicked is kicked on the bounce the moment he can be there: no waiting for it to slow down)
         guard slow || looseT > 1.6 || byFoot else { return }
         // who goes: the nearest Jelbie that is free (the friend the last bump was passed to goes first)
         let free = jellies.filter { !$0.brain.tossBusy }
