@@ -459,6 +459,7 @@ struct GameScreen: View {
         .onAppear { model.coverUp = covered; DayClock.shared.setOutingRate(outing) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
+        .overlay { if MoveClockOverlay.on { MoveClockView() } }          // (-MoveClockOverlay 1: the game clock of the logs, for cutting strips)
         .overlay {
             WelcomeCoverArt(running: welcomeCover).opacity(welcomeCover ? 1 : 0).allowsHitTesting(welcomeCover)          // always built, only its opacity changes: instant in, 0.25 s out
                 .animation(welcomeCover ? nil : .easeOut(duration: 0.25), value: welcomeCover)
