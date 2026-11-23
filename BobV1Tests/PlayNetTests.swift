@@ -541,7 +541,7 @@ final class PlayNetTests: XCTestCase {
     }
 
     func testABodyCannotStrikeTheBallDuringTheNetsReturnFlight() {
-        var w = TossWorld(); w.xHalf = 6; w.bodies = [TossBody(id: 0, pos: SIMD2(0, 0), top: TossTuning.bodyTop)]
+        var w = TossWorld(); w.xHalf = { _ in 6 }; w.bodies = [TossBody(id: 0, pos: SIMD2(0, 0), top: TossTuning.bodyTop)]
         func lowest(ignoreAll: Bool) -> (Float, Bool) {
             var b = TossBall(pos: SIMD3(0, 2.0, 0), radius: 0.18); b.vel = SIMD3(0, -1, 0); b.ignoreAll = ignoreAll
             var hit = false, low: Float = 9
