@@ -47,7 +47,8 @@ nonisolated enum MoveMix {
     nonisolated(unsafe) static var soccerDbg: [String: Int] = [:]
     nonisolated(unsafe) static var ballBadSince: Float = -1
     /// A pass found no clear line from where the ball lies: the next solo kick dribbles it out to the middle of the floor first.
-    nonisolated(unsafe) static var ballNeedsRoom = false
+    nonisolated(unsafe) static var ballNeedsRoom = false 
+    nonisolated(unsafe) static var ballNeedsRoomSince: Float = 0
     static let ballBadAfter: Float = 8
     static let soccerGap: ClosedRange<Float> = 45...70, soccerSoloSkip: Float = 0.5
     static let passChance: Float = 0.85, passKicksMin = 3, passKicksMax = 6
@@ -398,7 +399,7 @@ extension BlobBrain {
                 if !cands.isEmpty {
                     let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]
                     if o.socialFree {
-                        if !socialStart(.pass, with: o, sim) { MoveMix.ballNeedsRoom = true; MoveMix.soccerDbg["passNoLine", default: 0] += 1; why = "noLine"; mix.soccerPassTries = 99 } else { mix.soccerPassTries = 0; varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passStarted", default: 0] += 1; return true }
+                        if !socialStart(.pass, with: o, sim) { if !MoveMix.ballNeedsRoom { MoveMix.ballNeedsRoomSince = variety.now }; MoveMix.ballNeedsRoom = true; MoveMix.soccerDbg["passNoLine", default: 0] += 1; why = "noLine"; mix.soccerPassTries = 99 } else { mix.soccerPassTries = 0; varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passStarted", default: 0] += 1; return true }
                     } else if o.socialBeckonStop() {          // (he is out on a leg: asked to stop; the pass starts when he has, like the other pairs)
                         mix.soccerPassTries = 0
                         socialBook.invite = (.pass, o.steerID, 0); varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passInvited", default: 0] += 1; return true
@@ -456,14 +457,19 @@ extension BlobBrain {
         guard let sb = f.feet.first(where: { $0.kind == .soccerball }), f.occupant[sb.uid] == nil, sb.uid != f.held, f.anim[sb.uid]?.moving != true else { MoveMix.ballBadSince = -1; return }
         let c = f.position(sb), now = variety.now
         // a ball at rest where no Jelmiko may stand (outside the walkable floor, at the wall, or under a HUD button)
-        let bad = !rf.contains(c) || rf.halfWidth(at: c.y) - abs(c.x) < 0.3 || !rf.stopOK(c)
+        let pocket = MoveMix.ballNeedsRoom && now - MoveMix.ballNeedsRoomSince > 12          // (no pass line from here and no kicker could dribble it out: a dead pocket beside the goal / a piece)
+        let bad = !rf.contains(c) || rf.halfWidth(at: c.y) - abs(c.x) < 0.3 || !rf.stopOK(c) || pocket
         guard bad else { MoveMix.ballBadSince = -1; return }
+        if pocket { MoveMix.ballBadSince = min(MoveMix.ballBadSince < 0 ? now : MoveMix.ballBadSince, now - MoveMix.ballBadAfter - 0.1) }
         if MoveMix.ballBadSince < 0 { MoveMix.ballBadSince = now; return }
         guard now - MoveMix.ballBadSince > MoveMix.ballBadAfter, now - mix.soccerNudgeAt > 6 else { return }
         mix.soccerNudgeAt = now; MoveMix.ballBadSince = -1
         // the nearest spot that is allowed, inside the floor, open and clear of the walls: the ball rolls there
         var target: SIMD2<Float>?
-        outer: for r in [Float(0.9), 1.5, 2.2, 3.0, 3.8] { for k in 0..<16 { let a = Float(k) * .pi / 8; let p = c + SIMD2(sinf(a), cosf(a)) * r; if rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 0.8, rf.stopOK(p), f.openFloor(p) { target = p; break outer } } }
+        if pocket { MoveMix.ballNeedsRoom = false }
+        let mid = SIMD2<Float>(0, (rf.minZ + rf.maxZ) / 2 + 0.5)
+        if pocket { var bp: (SIMD2<Float>, Float)?; for r in [Float(2.0), 3.0, 4.0, 4.6] { for k in 0..<16 { let a = Float(k) * .pi / 8; let p = c + SIMD2(sinf(a), cosf(a)) * r; if rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 1.6, rf.stopOK(p), f.openFloor(p) { let sc = -simd_distance(p, mid); if bp == nil || sc > bp!.1 { bp = (p, sc) } } } }; target = bp?.0 }
+        if target == nil { outer: for r in [Float(0.9), 1.5, 2.2, 3.0, 3.8] { for k in 0..<16 { let a = Float(k) * .pi / 8; let p = c + SIMD2(sinf(a), cosf(a)) * r; if rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 0.8, rf.stopOK(p), f.openFloor(p) { target = p; break outer } } } }
         let tgt = target ?? SIMD2(0, (rf.minZ + rf.maxZ) / 2)
         let d = tgt - c, L = simd_length(d)
         let dir = L > 0.05 ? d / L : SIMD2<Float>(0, -1)
