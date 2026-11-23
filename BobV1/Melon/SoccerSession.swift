@@ -118,6 +118,7 @@ final class SoccerSession {
         let field = DecorField.shared
         let ball = field.feet.first { $0.kind == .soccerball }
         let now = b.variety.now
+        if now < 0.5, clock > 3 { return }          // (a second, hidden brain with no clock of its own also ticks the social layer: it never drives a room)
         stamp[b.steerID] = now
         if ball == nil, !active, seenUID == nil, !firstTick { return }          // (nothing to do and nothing to undo: the cheap exit)
         let lead = stamp.filter { $0.value >= now - 0.5 }.keys.min() ?? b.steerID
