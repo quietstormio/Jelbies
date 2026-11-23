@@ -23,9 +23,12 @@ nonisolated enum WearLevel {
     nonisolated(unsafe) static var bulge = ProcessInfo.processInfo.environment["WEARBAND_MODE"] != "pass"
     /// Half-width of the bulge (rad of azimuth) and its vertical reach (m): the smooth window every limb clearance is spread over.
     static let window: Float = 0.62, reachY: Float = 0.16
+    /// wear-audit-r1 2026-11-22: these two are env-overridable for sweeps (WEARBAND_BULGEFULL / WEARBAND_BULGENONE). 0.16 / 0.30 was tried: pearls 9.7 -> 3.2 cm inside an arm, Diamond J 11 -> 7, bandana 6 -> 1.3,
+    /// but the bulge then flips by up to 17 cm in one frame (testBandsDoNotPop 7.7 -> 16.8 cm), chain links stretch to 1.9x and a hoodie sinks 9 cm into Pip's tail: REJECTED, shipped values unchanged.
     /// Radius (m) over which the skin radius is dilated and averaged; a clearance up to `bulgeFull` is bulged around fully, beyond `bulgeNone` the limb is left to pass (an arm
     /// pointing straight out would need a tent as long as the arm): the amount fades smoothly between them.
-    static let neighbourhood: Float = 0.06, bulgeFull: Float = 0.07, bulgeNone: Float = 0.15
+    static let neighbourhood: Float = 0.06
+    nonisolated(unsafe) static var bulgeFull: Float = envF("WEARBAND_BULGEFULL", 0.07), bulgeNone: Float = envF("WEARBAND_BULGENONE", 0.15)
 
     // MARK: the necklace tilt
     /// Necklace-class pieces (chains, pearl strings, the Diamond J) are kept on a TILTED loop in the body frame instead of a level one. The front centre keeps its authored height
