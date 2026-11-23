@@ -64,21 +64,6 @@ nonisolated enum BondPairing {
         }
         return t
     }
-    /// Where a sleepover guest lies down near the friend's Jelmiko that is already asleep: the nearest fair spot on rings round it (nil = none: he lies where he is, as before).
-    @MainActor static func bedSpot(for guest: BlobBrain, near friend: BlobBrain) -> SIMD2<Float>? {
-        let c = friend.position
-        var r: Float = 1.2
-        while r <= 2.6 {
-            for i in 0..<16 {
-                let a = Float(i) / 16 * 2 * .pi + Float(guest.steerID)
-                let p = c + SIMD2(cosf(a), sinf(a)) * r
-                guard guest.sleepFairAnywhere(p, strict: true), guest.mixStopOK(p), guest.reachable(guest.position, p) else { continue }
-                return p
-            }
-            r += 0.2
-        }
-        return nil
-    }
 }
 
 // MARK: - the best-friend moment (round 2)
@@ -93,7 +78,8 @@ nonisolated enum BondMoment {
     nonisolated(unsafe) static var fails: [String: Int] = [:]
     nonisolated(unsafe) static var logAt: Float = 0
     /// The friendly pair kinds a moment may use (all existing; the one not seen for longest goes first).
-    static let kinds: [SocialKind] = [.chestBump, .highFive, .twirl, .hopAlong, .littleRace, .tag, .peekaboo, .mirrorDance, .swayHug, .danceOff, .shyWave, .nuzzle, .sitTogether, .dance, .follow, .ringAround, .backToBack, .chase]
+    /// Side by side, back to back, chasing, hopping: none puts two faces together (the owner's standing no-kiss rule): not chestBump, nuzzle, twirl, shyWave, mirrorDance, danceOff, highFive, cheekSquish, whisperGiggle, cuddleLean, spinHug.
+    static let kinds: [SocialKind] = [.swayHug, .hopAlong, .littleRace, .tag, .peekaboo, .sitTogether, .dance, .follow, .ringAround, .backToBack, .chase]
 }
 
 extension BlobBrain {
