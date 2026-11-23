@@ -59,7 +59,7 @@ nonisolated enum BondMoment {
     /// About every this many seconds (game time) one of a best-friend pair goes to the other; the first one sooner.
     static let gap: ClosedRange<Float> = 25...40, firstGap: ClosedRange<Float> = 10...20
     /// A busy partner: look again after this long, at most `maxTries` times, then give up quietly until the next gap.
-    static let retry: ClosedRange<Float> = 3...6, maxTries = 8
+    static let retry: ClosedRange<Float> = 1.5...3, maxTries = 14
     /// After a moment starts, neither starts an ordinary pair for this long (the moment replaces one; the pair share stays where it was).
     /// After a moment only THAT PAIR waits this long before another pair start with each other (BlobSocial.swift socialRelease); each may still start ordinary things with others.
     static let pairAgain: ClosedRange<Float> = 12...18
@@ -96,7 +96,9 @@ extension BlobBrain {
         guard let o = friends.min(by: { simd_distance($0.position, position) < simd_distance($1.position, position) }) else { fail("nofriend"); return false }
         let d = simd_distance(o.position, position)
         if o.meetBusy || o.reserved { fail("busy"); return false }
-        if o.idleMood == .grumpy || o.mixSleepy || o.idleState.kind == .sleep { fail("mood"); return false }
+        if o.idleMood == .grumpy { fail("grumpy"); return false }
+        if o.mixSleepy { fail("sleepy"); return false }
+        if o.idleState.kind == .sleep { fail("asleep"); return false }
         if o.held || o.commanded || !o.socialBook.enabled { fail("held"); return false }
         if !(o.socialFree || (o.socialWandering && o.idleState.kind == nil)) { fail("notfree"); return false }
         if d <= 0.9 || d >= 9 { fail("dist"); return false }
