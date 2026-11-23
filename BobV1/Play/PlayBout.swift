@@ -109,16 +109,16 @@ extension PlayToss {
         let zs = jellies.filter { !$0.free }.compactMap { home[$0.id]?.y }
         let zc = zs.isEmpty ? j.pos.y : zs.reduce(0, +) / Float(zs.count)
         let zlo = max(zr.lowerBound + 0.25, TossTuning.zBack + 2.5, zc - 1.6)          // (a ball on the floor needs room behind it for the one who sends it back)
-        let zhi = max(min(zr.upperBound - 0.25, catchZ() - 1.3, zc + 1.4), zlo + 0.5)          // (the row's own depth: the ball is never aimed into the far back or the front band)
+        let zhi = max(min(zr.upperBound - 0.25, catchZ() - 1.3, zc + 1.0), zlo + 0.5)          // (the row's own depth: the ball is never aimed into the far back or the front band)
         let r = ball.radius, g = TossTuning.gravity
         var from = ball.pos
         from.y = max(from.y, j.headTop + r * 0.8)
         // who: the one who has touched it least (with three it goes round all three)
         let rid = BoutMath.nextReceiver(others: others.map(\.id), touches: bout.touched, sender: bout.lastToucher, rnd: { self.rand() }) ?? others[0].id
         let rj = jelly(rid)!
-        var miss = false, T: Float = 1.2, spot = rj.pos, vel = SIMD3<Float>.zero
+        let miss = rand() < 1 / BoutMath.missEvery          // (rolled once: the retries below only look for a spot that comes down inside the floor)
+        var T: Float = 1.2, spot = rj.pos, vel = SIMD3<Float>.zero
         for attempt in 0..<8 {          // (a ball that is not struck on its way goes on to the floor: aim so that it comes down inside the floor, not against the back wall or past a side line)
-            miss = rand() < 1 / BoutMath.missEvery
             spot = BoutMath.pickFree(near: rj.pos, keepOff: others.filter { $0.id != rid }.map(\.pos) + [j.pos], miss: miss, reach: { Self.bodyReach($0) }, zlo: zlo, zhi: zhi, rnd: { self.rand() })
             let run = simd_distance(rj.pos, spot)
             let H = miss ? r + 0.02 : rj.sim.restCentroid.y + BobShape.H * 0.5 + BlobBrain.tossCrownRise + r * 0.9
@@ -197,7 +197,7 @@ extension PlayToss {
     /// The bout's ball came down on the floor: it is over. A small "oops" from the one who missed, no cheer, no point; the nearest sends the ball back to the player as always.
     func boutFloor() {
         guard bout.on else { boutAbort("floor-before-first-strike"); return }
-        ball.vel.x *= 0.12; ball.vel.z *= 0.12          // (it comes down with a soft thud and stays about where it landed: never rolled on to a side wall)
+        ball.vel.x = 0; ball.vel.z = 0          // (it comes down with a soft thud and stays about where it landed: never rolled on to a wall or into the front band)
         boutFinish("floor", oops: true)
     }
 
