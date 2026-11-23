@@ -391,6 +391,9 @@ extension BlobBrain {
                 standSpot = first.0; slideLeg = first.1
                 if slideLeg == 2 { decorIgnore = f.uid } else { slideSolidAgain(f) }
             }
+            if EmoteSpot.logOn, standSpot == nil || !(roundSlide || simd_distance(here, standSpot ?? here) > 0.35 || onlyUID != nil || kind == .decorHop || kind == .decorHopscotch || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick) || !(roundSlide || standSpot == nil || reachable(here, standSpot!)) {
+                if variety.now - toy.failLogAt > 5 { toy.failLogAt = variety.now; NSLog("[toyfail] t=%.1f id=%d %@ stand=%@ here=(%.2f,%.2f) reachable=%d", variety.now, steerID, f.kind.rawValue, standSpot.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "nil", here.x, here.y, standSpot.map { reachable(here, $0) ? 1 : 0 } ?? -1) }          // (toy-audit-r1 diag)
+            }
             guard let stand = standSpot,
                   roundSlide || simd_distance(here, stand) > 0.35 || onlyUID != nil || kind == .decorHop || kind == .decorHopscotch || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick,
                   roundSlide || reachable(here, stand) else { decorIgnore = exiting; continue }
