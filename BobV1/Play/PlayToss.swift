@@ -1151,9 +1151,12 @@ final class PlayToss {
                 let t = simd_dot(rel, vh) / (sp * sp)
                 guard t > 0.02, t < 3 else { continue }
                 let lateral = simd_length(rel - vh * t)
-                guard lateral < TossTuning.bodyRadius + ball.radius + 0.1 else { continue }
+                let ring = TossTuning.bodyRadius + ball.radius + 0.1
+                guard lateral < ring else { continue }
+                // the ball must be over his crown where it ENTERS his body's circle, not only at the closest point
+                let te = max(0.04, t - (max(ring * ring - lateral * lateral, 0)).squareRoot() / sp)
                 let need = o.headTop + ball.radius + 0.12
-                v.y = max(v.y, (need - from.y + 0.5 * g * t * t) / t)
+                v.y = max(v.y, (need - from.y + 0.5 * g * te * te) / te)
             }
         }
         ball.vel = v
