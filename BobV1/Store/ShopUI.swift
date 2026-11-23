@@ -428,7 +428,7 @@ struct ItemSheet: View {
         if item.isWearable && book.owns(item) { return "You have \(book.owned(item)) \u{00B7} buy another so two Jelmiko can match" }
         if item.unique && book.owns(item) { return "In your Bag" }
         if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
-        let dest = item.kind == .room ? "Live there from Rooms" : item.kind == .wallFrame ? "Hang it from your Bag or the album" : item.isWearable ? "Wear it from your Bag" : item.decor?.isPlayOnly == true ? "It comes out when you play soccer" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
+        let dest = item.kind == .room ? "Live there from Rooms" : item.kind == .wallFrame ? "Hang it from your Bag or the album" : item.isWearable ? "Wear it from your Bag" : item.decor?.isPlayOnly == true ? "Comes out in Play" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
         return "You'll have \(left) JellyCoins left \u{00B7} \(dest)"
     }
 
