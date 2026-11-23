@@ -209,7 +209,15 @@ extension BlobBrain {
                 guard clear else { continue }
                 guard reachable(position, pk), reachable(o.position, pr) else { why["unreachable", default: 0] += 1; continue }
                 let wk = simd_distance(position, pk), wr = simd_distance(o.position, pr)
-                let score = -(max(wk, wr) + 0.25 * (wk + wr))          // (the kick waits for the slower walker)
+                // round 2 (the push outlier): the walks to the places must not pass close by a body that stands (the peer spring pushed the walker every time: 7 of 10 pushes were a walk to a place)
+                func crowds(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ bodies: [SIMD2<Float>]) -> Bool {
+                    let ab = b - a, n = max(2, Int(simd_length(ab) / 0.15))
+                    for i in 0...n { let q = a + ab * (Float(i) / Float(n)); if bodies.contains(where: { simd_distance($0, q) < 1.3 }) { return true } }
+                    return false
+                }
+                let thirds = others.map { $0.position }
+                let crowd = (crowds(position, pk, thirds + [o.position]) ? 1 : 0) + (crowds(o.position, pr, thirds + [position]) ? 1 : 0)
+                let score = -(max(wk, wr) + 0.25 * (wk + wr)) - 4 * Float(crowd)          // (the kick waits for the slower walker)
                 if best == nil || score > best!.score { best = (pk, pr, score) }
             }
             if best != nil { break }
