@@ -33,6 +33,10 @@ nonisolated enum BondPairing {
         return chosen
     }
     @MainActor private static func choose(_ cands: [BlobBrain], chooser: BlobBrain, roll: Float) -> BlobBrain {
+        if chooser.socialBook.housemateBoost, !chooser.socialBook.housemates.isEmpty {          // (round 6: after a block the next pair start takes a housemate when one is among the candidates)
+            let hs = cands.filter { chooser.socialBook.housemates.contains($0.steerID) }
+            if !hs.isEmpty { return hs[min(hs.count - 1, Int(roll * Float(hs.count)))] }
+        }
         if multiplier != 1, cands.count > 1 {
             let ws = cands.map { weight(chooser: chooser, candidate: $0) }
             if ws.contains(where: { $0 != 1 }) {
@@ -94,11 +98,23 @@ final class BuddyBlock {
     var allowed: [SocialKind] = []
     var up = 0
     var startedAt: [Int: Float] = [:]
+    /// Round 6: where each body stood when it took its flag (the `[bond] flag` / `[bond] meet` lines).
+    var flagAt: [Int: SIMD2<Float>] = [:]
     init(id: Int, a: Int, b: Int) { self.id = id; idA = a; idB = b }
 }
 
 extension BlobBrain {
     /// Away: nothing is asked of a body that sleeps, naps, eats, is held or commanded, is in a group emote, a ball game or on park equipment, is grumpy or sleepy.
+    /// Round 6: after a block the two part: the next roam goal (one pick) is at least 2.5 from where the other stood and on its own side of the midpoint.
+    func partOK(_ cand: SIMD2<Float>) -> Bool {
+        guard let f = socialBook.partFrom, variety.now < socialBook.partUntil else { return true }
+        if simd_distance(cand, f) < 2.5 { return false }
+        let s = socialBook.partSide
+        return s == 0 || (cand.x - socialBook.partMidX) * s > 0
+    }
+    var partActive: Bool { socialBook.partFrom != nil && variety.now < socialBook.partUntil }
+    func partDone() { socialBook.partFrom = nil }
+
     /// True while the body holds a buddy-block flag or is in a block: a soccer session leaves such a body alone until the block ends.
     var inBuddyBlock: Bool { socialBook.block != nil }
     var buddyAway: Bool {
@@ -200,6 +216,10 @@ extension BlobBrain {
         guard let o = socialBrain(pid) else { buddyCancel(blk, "gone"); return false }
         if buddyAway || o.buddyAway { buddyCancel(blk, "away"); return false }
         if !blk.running {
+            if blk.flagAt[steerID] == nil {
+                blk.flagAt[steerID] = position
+                if EmoteSpot.logOn { NSLog("[bond] flag id=%d body=%d role=%@ at=%.2f,%.2f t=%.1f", blk.id, steerID, blk.waiter == steerID ? "waiter" : "walker", position.x, position.y, now) }
+            }
             if now - socialBook.buddyAssigned > BondMoment.deadline { buddyCancel(blk, "late"); return false }
             if blk.spot[steerID] == nil {          // the second one: a spot 1.4 from the waiter, on the side it comes from
                 guard let w = blk.waiter, let wb = socialBrain(w), let ws = blk.spot[w], let sp = buddyStandSpot(near: ws, partner: wb) else { buddyCancel(blk, "nospot"); return false }
@@ -235,6 +255,10 @@ extension BlobBrain {
         for kind in remaining + fallback {
             letGo(); o.letGo()
             if socialStart(kind, with: o, sim) {
+                if blk.done.isEmpty, EmoteSpot.logOn, let w = blk.waiter, let wb = socialBrain(w) ?? (w == steerID ? self : nil) {
+                    let other = wb === self ? o : self
+                    NSLog("[bond] meet id=%d waiter=%d at=%.2f,%.2f moved=%.2f walker=%d at=%.2f,%.2f moved=%.2f t=%.1f", blk.id, w, wb.position.x, wb.position.y, simd_distance(wb.position, blk.flagAt[w] ?? wb.position), other.steerID, other.position.x, other.position.y, simd_distance(other.position, blk.flagAt[other.steerID] ?? other.position), now)
+                }
                 blk.done.append(kind); blk.running = true; blk.stall = 0
                 if blk.startedAt[steerID] == nil { blk.startedAt[steerID] = now }
                 if blk.startedAt[o.steerID] == nil { blk.startedAt[o.steerID] = o.variety.now }
@@ -256,9 +280,11 @@ extension BlobBrain {
         let secs = variety.now - (blk.startedAt[steerID] ?? variety.now)
         BondMoment.onBlockEnd?(blk.done.count, secs)
         if EmoteSpot.logOn { NSLog("[bond] block end id=%d t=%.1f seconds=%.1f kinds=%d", blk.id, variety.now, secs, blk.done.count) }
-        for id in [blk.idA, blk.idB] {
-            guard let b = socialBrain(id) ?? (id == steerID ? self : nil) else { continue }
+        let pair = [blk.idA, blk.idB].compactMap { id in socialBrain(id) ?? (id == steerID ? self : nil) }
+        for b in pair {
+            let o = pair.first { $0 !== b }
             b.socialBook.block = nil; b.letGo(); b.socialBook.buddyArrivedAt = -1
+            if let o { b.socialBook.partFrom = o.position; b.socialBook.partMidX = (o.position.x + b.position.x) / 2; b.socialBook.partSide = b.position.x == o.position.x ? 0 : (b.position.x < o.position.x ? -1 : 1); b.socialBook.partUntil = b.variety.now + 25 }
             b.socialBook.bondNextAt = b.variety.now + b.rand(BondMoment.nextGap.lowerBound, BondMoment.nextGap.upperBound)
             b.socialBook.housemateBoost = !b.socialBook.housemates.isEmpty
         }

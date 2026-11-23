@@ -131,6 +131,8 @@ struct SocialBook {
     var block: BuddyBlock?
     var bondNextAt: Float = 0, bondMoments = 0, buddyAssigned: Float = 0, buddyArrivedAt: Float = -1
     var housemates: Set<Int> = [], housemateBoost = false
+    /// Round 6: the parting after a block (BondPairing.swift `partOK`): where the partner stood, the midpoint x, which side this body keeps, until when.
+    var partFrom: SIMD2<Float>?, partMidX: Float = 0, partSide: Float = 0, partUntil: Float = 0
     /// Friendship points with each best friend present (by body id), for "the closer friends go first".
     var bestPoints: [Int: Float] = [:]
     var lastKind: SocialKind?
