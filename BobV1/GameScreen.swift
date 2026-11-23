@@ -648,10 +648,15 @@ struct GameScreen: View {
                 await sleep(1.5)
                 #if targetEnvironment(simulator)
                 if d.integer(forKey: "PlayNetShots") != 0 || d.string(forKey: "PlayNetOnly") != nil {
+                    let enc = JSONEncoder(); enc.outputFormatting = .sortedKeys
+                    let decorJSON = { String(decoding: (try? enc.encode(care.store.placedDecor)) ?? Data(), as: UTF8.self) }
+                    NSLog("[playnet] store decor before Done: %@", decorJSON())
                     NSLog("[playnet] field minigoals during Play: %@", DecorField.shared.kinds(.minigoal).map { "uid\($0.uid)@\($0.centre.x),\($0.centre.y)" }.joined(separator: " "))
                     await care.play.runNetShots(runs: max(d.integer(forKey: "PlayNetShots"), 1), only: d.string(forKey: "PlayNetOnly"))
                     if d.integer(forKey: "PlayDemoEnd") != 0 {
-                        await sleep(3); care.endPlay(); await sleep(2)
+                        await sleep(3); care.endPlay(); await sleep(0.3)
+                        NSLog("[playnet] store decor after Done: %@", decorJSON())
+                        await sleep(1.7)
                         NSLog("[playnet] after Done: net pieces %d, minigoals: %@", DecorField.shared.feet.filter { $0.uid == PlayNetTuning.uid }.count, DecorField.shared.kinds(.minigoal).map { "uid\($0.uid)@\($0.centre.x),\($0.centre.y)" }.joined(separator: " "))
                     }
                 }          // (capture aid: the play net's fixed shots, Play/PlayNetShots.swift)
