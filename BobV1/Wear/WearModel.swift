@@ -52,7 +52,8 @@ nonisolated extension WearLook {
     /// 2026-11-16 (the owner: "remove the puffer vest and cardigan"): the Puffer vest and Cable cardigan leave too, with a refund per copy (StoreBook+RetiredBodies.swift) before the silent unequip. Their art stays (the Pip variants and the fit tests read it).
     /// 2026-11-22 (the owner: "Remove the tutu it looks stupid"): the Ballet tutu leaves too, refunded per copy (StoreBook+RetiredTutu.swift, no flag). Mesh and Pip variant stay in the bundle, unused.
     /// SHIP 2026-11-06: removed from the game (not sold, not in the Bag / Wear picker, not carried by a saved outfit). The enum case, row and art stay so old saves decode; StoreBook.dropRetiredLooks unequips and unowns it silently on load.
-    static let retired: Set<WearLook> = [.chainGold, .vestPuffer, .cardiganCable, .tutuPink]
+    /// 2026-11-23 (the owner: "Remove all necklaces besides the diamond chain"): the Pearl necklace, Flower lei and Coach whistle leave too, refunded per copy like the tutu (StoreBook+RetiredTutu.swift: `refundedLooks`). Their strings could not be kept out of the walking arms. Meshes stay in the bundle, unused.
+    static let retired: Set<WearLook> = [.chainGold, .vestPuffer, .cardiganCable, .tutuPink, .pearls, .lei, .whistleCoach]
     static let pieces: [WearLook] = WearGenerated.rows.filter { $0.slot != .feet && !retired.contains($0.look) }.map(\.look)
 }
 
@@ -133,7 +134,56 @@ nonisolated enum WearRules {
     nonisolated(unsafe) static var bowKeepsBand = ProcessInfo.processInfo.environment["WEAR_BOWTIE_BAND"] == "on"
     static func isBowtie(_ l: WearLook) -> Bool { l == .bowtiePink || l == .bowtieSky }
     /// Parts of the art that are not drawn at all: the bow tie's band.
-    static func drops(_ l: WearLook, part: String) -> Bool { isBowtie(l) && !bowKeepsBand && part == "band" }
+    static func drops(_ l: WearLook, part: String) -> Bool { (isBowtie(l) && !bowKeepsBand && part == "band") || (l == .diamondJ && droppedGem(part)) }
+
+    // MARK: the Diamond J is a FRONT-ONLY chain (necklace-r1, 2026-11-23)
+    // The old chain ran in one loop round the body at the neck line, where a walking arm crosses it (up to 11 cm inside a limb; the string cannot be routed round the arms, AUDIT.md round 4).
+    // Now only the stones in front of the body are drawn: the stones within `diamondArc` (degrees either side of the centre line, measured from the body axis) plus the J pendant on its bail.
+    // No stone is drawn where an arm ever reaches (WearBandTests.testMeasureDiamondArc). The outermost stones are drawn smaller (`diamondTaper`) so the chain's two ends read as tucked into the neck crease.
+    /// Half-width of the chain in degrees (each side of the centre line). 999 = the old closed loop (before pictures and measurements only).
+    static let diamondArcDefault: Float = 31          // (measured: every stone out to 30.8 degrees clears every arm in every motion; the next, at 40.7, goes 5.9 cm into one)
+    nonisolated(unsafe) static var diamondArcOverride: Float? = ProcessInfo.processInfo.environment["WEAR_J_ARC"].flatMap { $0 == "off" ? 999 : Float($0) }
+    static var diamondArc: Float { diamondArcOverride ?? diamondArcDefault }
+    /// How much smaller the last stone and the one before it are drawn (their own centres kept), so the ends fade into the crease.
+    nonisolated(unsafe) static var diamondTaper: [Float] = [0.62, 0.82]
+    /// The pendant and its bail are drawn this much larger about the middle of the J (wider and thicker, a little shorter: its tip stays where it was, clear of the feet), so the J reads from the room camera.
+    nonisolated(unsafe) static var diamondPendantScale = SIMD3<Float>(1.12, 0.94, 1.12)          // (x, y, z: wider and thicker, a touch shorter so its tip stays clear of the feet)
+    nonisolated(unsafe) static var diamondGemScale: Float = 1.0
+    static let diamondBailTop = SIMD3<Float>(0, -0.21, 0.04)          // (the pivot of the pendant scale: the middle of the J, on its front face)
+    /// Azimuth (degrees, from the front, + toward +x) of every stone of the Diamond J art, by its index in the part name "gemNN", about the body axis (z = 0).
+    static let diamondGemAz: [Float] = {
+        guard let a = WearMeshes.art(.diamondJ) else { return [] }
+        let anchor = WearLook.diamondJ.row.anchorRest
+        var out: [Float] = []
+        for part in a.parts where part.name.hasPrefix("gem") {
+            var c = SIMD3<Float>.zero
+            for q in part.positions { c += q }
+            c = c / Float(max(part.positions.count, 1)) + anchor
+            out.append(atan2(c.x, c.z) * 180 / .pi)
+        }
+        return out
+    }()
+    static func gemIndex(_ part: String) -> Int? { part.hasPrefix("gem") ? Int(part.dropFirst(3)) : nil }
+    static func droppedGem(_ part: String) -> Bool {
+        guard let k = gemIndex(part), k < diamondGemAz.count else { return false }
+        return abs(diamondGemAz[k]) > diamondArc
+    }
+    /// One vertex of the Diamond J's art as drawn: a stone scaled about its own centre (the end stones smaller), the pendant and bail scaled about the top of the bail.
+    static func diamondShaped(_ v: SIMD3<Float>, part: String, centre: SIMD3<Float>) -> SIMD3<Float> {
+        if part.hasPrefix("gem") {
+            let k = gemTaper(part) * diamondGemScale
+            return k == 1 ? v : centre + (v - centre) * k
+        }
+        return diamondPendantScale == SIMD3(repeating: 1) ? v : diamondBailTop + (v - diamondBailTop) * diamondPendantScale
+    }
+    /// 1 for a stone drawn full size, less for the last ones at each end of the chain.
+    static func gemTaper(_ part: String) -> Float {
+        guard let k = gemIndex(part), k < diamondGemAz.count, diamondArc < 900 else { return 1 }
+        let mine = abs(diamondGemAz[k])
+        let outer = diamondGemAz.map { abs($0) }.filter { $0 <= diamondArc }.sorted(by: >)
+        guard let r = outer.firstIndex(where: { abs($0 - mine) < 0.01 }), r < diamondTaper.count else { return 1 }
+        return diamondTaper[r]
+    }
 
     static func rule(_ l: WearLook, part: String) -> PartRule {
         let surface = PartRule(w0: 1, w1: 1)

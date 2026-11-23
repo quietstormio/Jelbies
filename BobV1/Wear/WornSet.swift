@@ -273,7 +273,7 @@ final class WornSet {
             for (slot, it) in s.items where it.scale > 0.001 {
                 guard let look = it.look, let body, let p = WearMeshes.prepare(look, body: body, art: s.artOverride[look.art]) else { continue }
                 if slot == .hands { Self.emitArms(p, into: &op, slot: s, skin: sk, scale: it.scale) }
-                else { Self.emit(p, into: &op, slot: s, skin: sk, limbs: limbs, scale: it.scale, time: time) }
+                else { Self.emit(p, into: &op, slot: s, skin: sk, limbs: p.frontOnly ? nil : limbs, scale: it.scale, time: time) }          // (the front-only Diamond J sits where no arm ever comes: the limb push would only pop its pendant)
             }
             if let b = s.bib, let body, let p = WearMeshes.bib(team: b.team, number: b.number, body: body) {
                 let sc: Float = s.role == .none ? (s.items[.body]?.scale ?? 0) : 1

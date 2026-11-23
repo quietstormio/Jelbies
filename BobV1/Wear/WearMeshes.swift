@@ -36,8 +36,12 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     /// A necklace-class piece (WearLevel.tilts): its loop sits on the TILTED plane (front low, over the arm tops, higher on the back) instead of a level one; set before finalize.
     var tilted = false
     var tiltFrontY: Float = 0
+    /// The front-only Diamond J: it takes no limb push (no arm reaches it; the push only popped its pendant).
+    var frontOnly = false
     /// This piece's side loop height (WearLevel.sideY).
     var tiltSide: Float = 0.645
+    /// This piece's own tilt window (rad off the front where the rise starts / is complete); nil = the global one (WearLevel.jWindow: the front-only Diamond J).
+    var tiltFromP: Float?, tiltAtP: Float?
     /// The vertices of the thin encircling ring parts (a collar, hem, band, string): the limb bulge moves them even where a garment's authored cover would leave them on the skin.
     var lvRing: [Bool] = []
     /// Bandana string: the tube's vertices are lifted by their local CENTRELINE's tilt (the sag fade must not squash the tube's cross-section); set before finalize.
@@ -127,8 +131,11 @@ nonisolated enum WearMeshes {
             p.partNames.append(part.name)
             var ylo = Float.infinity, yhi = -Float.infinity
             for q in part.positions { ylo = min(ylo, q.y); yhi = max(yhi, q.y) }
+            var gemCentre = SIMD3<Float>.zero
+            if l == .diamondJ, part.name.hasPrefix("gem") { for q in part.positions { gemCentre += q }; gemCentre /= Float(max(part.positions.count, 1)) }
             for k in 0..<part.positions.count {
-                let v = part.positions[k]
+                var v = part.positions[k]
+                if l == .diamondJ { v = WearRules.diamondShaped(v, part: part.name, centre: gemCentre) }
                 let r = isArm ? v : anchor + (hatFit.map { WearRules.seated(v, $0) } ?? v)
                 p.rest.append(r); p.nrm.append(part.normals[k]); p.ao.append(part.ao[k])
                 if material != 0 { if p.mat.isEmpty { p.mat = [Float](repeating: 0, count: p.rest.count - 1) }; p.mat.append(material) } else if !p.mat.isEmpty { p.mat.append(0) }
@@ -176,7 +183,8 @@ nonisolated enum WearMeshes {
         if let body, !isArm { CrownFit.prepare(p, body: body); if let lift = WearRules.neckLift(l), !p.levelPiece { raise(p, body: body, by: lift) } }
         if let body, !isArm, l.slot == .neck, WearLimbs.enabled, !p.levelPiece { seat(p, body: body) }          // (a levelled loop is not lifted up the wall: it takes its radius from the skin at its own height, WearLevel.finalize)
         markLimbFree(p, body: body, authoredCover: l.slot != .neck, clusters: WearLimbs.enabled && (l.slot == .neck || l.slot == .body))
-        p.tilted = WearLevel.tilts(l); p.tiltSide = WearLevel.sideY(l); p.tubeKeep = WearLevel.tilts(l) && (l == .bandanaCoral || l == .bandanaMint || l == .bandanaSun)
+        p.frontOnly = l == .diamondJ && WearRules.diamondArc < 900
+        p.tilted = WearLevel.tilts(l); p.tiltSide = WearLevel.sideY(l); (p.tiltFromP, p.tiltAtP) = (WearLevel.jWindow(l)?.from, WearLevel.jWindow(l)?.at); p.tubeKeep = WearLevel.tilts(l) && (l == .bandanaCoral || l == .bandanaMint || l == .bandanaSun)
         if let body, !isArm { WearLevel.finalize(p, body: body) }
         return p
     }
