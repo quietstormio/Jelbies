@@ -388,7 +388,12 @@ final class PlayToss {
         for j in jellies {
             // play-ball-r2: the head follows the ball everywhere, but the BODY keeps facing the player (a ball that flew past him to the back wall, or sideways along the row, turned the outer ones right round and the next ball found them 60-80 degrees off)
             let body: SIMD2<Float> = PlayTuning.ballReturnOld ? SIMD2(p.x, p.z) : playerPoint()          // (the ball sweeps past the outer ones sideways: a body that turned to it was 75-80 degrees off the player when it arrived)
-            j.brain.trackPoint = SIMD2(p.x, p.z); j.brain.waitFocus = body
+            var look = SIMD2(p.x, p.z)
+            if !PlayTuning.ballReturnOld {          // (the head follows the ball while it is within about 45 degrees of the player's line from him; past that his look turns his whole body toward it, and the ball sweeping past the outer ones in landscape found them 75-80 degrees round)
+                let a = look - j.pos, b = playerPoint() - j.pos
+                if simd_length(a) > 1e-3, simd_length(b) > 1e-3, simd_dot(a, b) < 0.7 * simd_length(a) * simd_length(b) { look = playerPoint() }
+            }
+            j.brain.trackPoint = look; j.brain.waitFocus = body
             // turned well away from it (he walked back to his place with his back to the room): he turns to watch it, on the spot
             guard !j.brain.tossBusy, Self.canHop(j.brain), j.brain.idleState.kind == nil, case .none = j.brain.script, clock - (turnT[j.id] ?? -9) > 0.7 else { continue }
             let want = j.brain.yawTo(body)
