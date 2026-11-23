@@ -49,6 +49,7 @@ final class BestFriendTests: XCTestCase {
         for (i, r) in lab.rigs.enumerated() {
             for j in 0..<5 where j != i { r.brain.socialBook.close[j] = (i < 3 && j < 3) ? 1 : 0.55 }
             r.brain.anticsEnabled = true
+            if i < 3 { r.brain.socialBook.housemates = Set((0..<3).filter { $0 != i }) }          // (round 6: as the app sets it: the other Jelmiko at home are the housemates, a visitor has none)
         }
         if bond {
             lab.rigs[0].brain.socialBook.close[3] = FriendTuning.closeMul[3]; lab.rigs[3].brain.socialBook.close[0] = FriendTuning.closeMul[3]
