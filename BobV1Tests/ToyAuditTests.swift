@@ -18,7 +18,7 @@ final class ToyAuditTests: XCTestCase {
     static let mixToys: [DecorKind] = [.drum, .blocks, .spintop, .bouncymat, .hoop, .plushbear]
 
     struct Result { var first: Float = -1; var uses = 0; var dur: [Float] = []; var stuck = 0; var minGap: Float = .infinity; var crowd = 0; var queued = 0; var tookTurn = 0; var gaveUp = 0; var perKind: [String: Int] = [:]
-        var walkF = 0, standF = 0, soloF = 0, pairF = 0, groupF = 0, frames = 0, otherIdle: [String: Int] = [:] }
+        var walkF = 0, standF = 0, soloF = 0, pairF = 0, groupF = 0, frames = 0, otherIdle: [String: Int] = [:], starts: [String: Int] = [:], shared = 0, minShareGap: Float = .infinity }
 
     func run(kinds: [DecorKind], seconds: Float, seed: UInt64) -> Result {
         let starts: [SIMD2<Float>] = [SIMD2(-1.8, 1.4), SIMD2(-0.2, 1.8), SIMD2(1.4, 1.2)]
@@ -31,7 +31,7 @@ final class ToyAuditTests: XCTestCase {
         }
         DecorField.shared.set(placed); DecorField.shared.toys = ToyBook()
         var res = Result()
-        var curUID = [Int](repeating: -1, count: 3), startT = [Float](repeating: 0, count: 3)
+        var curUID = [Int](repeating: -1, count: 3), startT = [Float](repeating: 0, count: 3), prevKind = [IdleKind?](repeating: nil, count: 3)
         let frames = Int(seconds * 60)
         for f in 0..<frames {
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
@@ -46,6 +46,8 @@ final class ToyAuditTests: XCTestCase {
                 if uid < 0, curUID[i] >= 0 { res.dur.append(t - startT[i]) }
                 if uid >= 0, t - startT[i] > 60 { res.stuck += 1; startT[i] = t + 1e6 }
                 curUID[i] = uid
+                if b.idleState.kind != prevKind[i], let k = b.idleState.kind { res.starts["\(k)", default: 0] += 1 }
+                prevKind[i] = b.idleState.kind
                 res.frames += 1
                 if b.activity == .walking || b.activity == .coming { res.walkF += 1 } else if b.idleState.kind == nil && b.social == nil { res.standF += 1 }
                 if b.social != nil { res.pairF += 1 } else if let k = b.idleState.kind, !BlobBrain.decorKinds.contains(k) { res.soloF += 1; res.otherIdle["\(k)", default: 0] += 1 }
@@ -61,7 +63,7 @@ final class ToyAuditTests: XCTestCase {
                 } }
             }
         }
-        for r in lab.rigs { res.queued += r.brain.toy.queued; res.tookTurn += r.brain.toy.tookTurn; res.gaveUp += r.brain.toy.gaveUp }
+        for r in lab.rigs { res.shared += r.brain.toy.joined; res.queued += r.brain.toy.queued; res.tookTurn += r.brain.toy.tookTurn; res.gaveUp += r.brain.toy.gaveUp }
         DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
         return res
     }
@@ -77,7 +79,7 @@ final class ToyAuditTests: XCTestCase {
             for seed in [3, 5, 9] as [UInt64] {
                 let r = run(kinds: Self.mixToys, seconds: secs, seed: seed)
                 tot.uses += r.uses; tot.stuck += r.stuck; tot.crowd += r.crowd; tot.queued += r.queued; tot.tookTurn += r.tookTurn; tot.gaveUp += r.gaveUp
-                tot.walkF += r.walkF; tot.standF += r.standF; tot.soloF += r.soloF; tot.pairF += r.pairF; tot.frames += r.frames; tot.minGap = min(tot.minGap, r.minGap)
+                tot.walkF += r.walkF; tot.standF += r.standF; tot.soloF += r.soloF; tot.pairF += r.pairF; tot.frames += r.frames; tot.minGap = min(tot.minGap, r.minGap); tot.shared += r.shared; for (k, v) in r.starts { tot.starts[k, default: 0] += v }
                 for (k, v) in r.perKind { tot.perKind[k, default: 0] += v }
                 for (k, v) in r.otherIdle { tot.otherIdle[k, default: 0] += v }
                 firsts.append(r.first)
@@ -87,19 +89,22 @@ final class ToyAuditTests: XCTestCase {
             lines.append(String(format: "MIX total uses per 10 min per body-trio: %.1f; stuck %d crowd %d queued %d tookTurn %d gaveUp %d minGap %.2f; share walk %.1f%% stand %.1f%% solo %.1f%% pair %.1f%%",
                                 Float(tot.uses) / mins * 10, tot.stuck, tot.crowd, tot.queued, tot.tookTurn, tot.gaveUp, tot.minGap,
                                 100 * Float(tot.walkF) / Float(tot.frames), 100 * Float(tot.standF) / Float(tot.frames), 100 * Float(tot.soloF) / Float(tot.frames), 100 * Float(tot.pairF) / Float(tot.frames)))
-            lines.append("MIX per kind uses: \(tot.perKind.sorted { $0.key < $1.key })")
+            lines.append("MIX shared moments \(tot.shared); per kind uses: \(tot.perKind.sorted { $0.key < $1.key })")
+            lines.append("MIX idle starts (all bodies, 3 seeds): \(tot.starts.sorted { $0.key < $1.key })")
             lines.append("MIX other idles (frames): \(tot.otherIdle.sorted { $0.key < $1.key })")
         } else {
-            for kind in Self.shopToys {
-                var uses = 0, firsts: [Float] = [], durs: [Float] = [], stuck = 0, crowd = 0, q = 0, tt = 0, gu = 0, minGap: Float = .infinity
+            let only = (env["TOYAUDIT_KINDS"] ?? "").split(separator: ",").map(String.init)
+            for kind in Self.shopToys where only.isEmpty || only.contains(kind.rawValue) {
+                var uses = 0, shr = 0, starts: [String: Int] = [:], firsts: [Float] = [], durs: [Float] = [], stuck = 0, crowd = 0, q = 0, tt = 0, gu = 0, minGap: Float = .infinity
                 for seed in [3, 5, 9] as [UInt64] {
                     let r = run(kinds: [kind], seconds: secs, seed: seed)
+                    shr += r.shared; for (k, v) in r.starts { starts[k, default: 0] += v }
                     uses += r.uses; if r.first >= 0 { firsts.append(r.first) }; durs += r.dur; stuck += r.stuck; crowd += r.crowd; q += r.queued; tt += r.tookTurn; gu += r.gaveUp; minGap = min(minGap, r.minGap)
                 }
                 let per10 = Float(uses) / (3 * secs / 600)
-                lines.append(String(format: "%@: uses/10min/trio %.1f (n=%d), first use %@, mean use %.1f s (max %.1f), unfinished>60s %d, crowd samples %d, queued %d tookTurn %d gaveUp %d, minGap %.2f",
+                lines.append(String(format: "%@: uses/10min/trio %.1f (n=%d), first use %@, mean use %.1f s (max %.1f), unfinished>60s %d, crowd samples %d, queued %d tookTurn %d gaveUp %d, minGap %.2f, shared moments %d, idle starts %@",
                                     kind.rawValue, per10, uses, firsts.isEmpty ? "never" : String(format: "%.1f s mean of %d/3 seeds", firsts.reduce(0, +) / Float(firsts.count), firsts.count),
-                                    durs.isEmpty ? 0 : durs.reduce(0, +) / Float(durs.count), durs.max() ?? 0, stuck, crowd, q, tt, gu, minGap))
+                                    durs.isEmpty ? 0 : durs.reduce(0, +) / Float(durs.count), durs.max() ?? 0, stuck, crowd, q, tt, gu, minGap, shr, "\(starts.sorted { $0.key < $1.key })"))
             }
         }
         try? lines.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)

@@ -47,7 +47,7 @@ struct ToyBrain {
     var audUntil: Float = 0, audNext: Float = 0, audCool: Float = 0, audPoll: Float = 0
     var audShown: [Int: Float] = [:]
     var audReacted = false, audTurn = false
-    var shared = 0
+    var shared = 0, joined = 0
     /// Counters (tests / the report).
     var noticed = 0, queued = 0, tookTurn = 0, gaveUp = 0, chased = 0
 }
@@ -321,7 +321,7 @@ extension BlobBrain {
             guard let i = ranked.firstIndex(where: { $0 === self }), i + taken < Self.audienceLimit(foot.kind) else { continue }
             guard rand() < Self.audienceChance(foot.kind) else { continue }
             guard let spot = toyAudienceSpot(foot, user: user) else { continue }
-            toy.audUID = uid; toy.audBy = show.by; toy.audStage = 1; toy.audSpot = spot; toy.audUntil = clock + 14
+            toy.joined += 1; toy.audUID = uid; toy.audBy = show.by; toy.audStage = 1; toy.audSpot = spot; toy.audUntil = clock + 14
             toy.audNext = clock; toy.audReacted = false; toy.audTurn = false
             requestNow(.goTo(spot))
             if EmoteSpot.logOn { NSLog("[toyshare] t=%.1f id=%d joins %@ uid=%d by=%d", variety.now, steerID, foot.kind.rawValue, uid, show.by) }
