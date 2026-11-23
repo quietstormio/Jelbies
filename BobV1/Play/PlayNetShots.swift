@@ -61,6 +61,7 @@ extension PlayToss {
                 await sleep(only == nil ? 2.5 : 1.0)          // (the Jelmiko walk back to their places first)
                 let (from, v) = s.launch(spec)
                 NSLog("[playnet] launch shot=%@", s.name)
+                let launchClock = clock
                 launch(from: from, velocity: v)
                 var t = 0.0, overSeen = false
                 while net.first == nil, t < 6, active {
@@ -69,9 +70,12 @@ extension PlayToss {
                 }
                 let result = net.first ?? (overSeen ? "over" : "wide")
                 NSLog("[playnet] shot=%@ result=%@ expect=%@ ok=%d run=%d t=%.2f", s.name, result, s.expect, result == s.expect ? 1 : 0, run, t)
+                var w2 = 0.0
+                while phase != .inHand, active, w2 < 30 { await sleep(0.1); w2 += 0.1 }          // (keep-out round: seconds from the launch to the ball back in the hand, scoring or not)
+                NSLog("[playnet] shot-back shot=%@ launch-to-hand=%.1f s hand=%d", s.name, clock - launchClock, phase == .inHand ? 1 : 0)
             }
         }
-        NSLog("[playnet] shots done")
+        NSLog("[playnet] shots done closest-body-to-footprint=%.2f dead-returns=%d", net.minBodyDist, net.deadReturns)
     }
 }
 #endif

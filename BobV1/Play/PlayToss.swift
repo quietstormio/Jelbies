@@ -460,7 +460,7 @@ final class PlayToss {
         for j in jellies where !j.brain.tossBusy {
             guard let h = home[j.id], simd_distance(j.pos, h) > 0.7, clock - (homeT[j.id] ?? -9) > 1.5, Self.canHop(j.brain) else { continue }
             homeT[j.id] = clock
-            j.brain.requestNow(.goTo(h))
+            j.brain.requestNow(.goTo(netStand(h)))          // (play-net keep-out)
         }
     }
 
@@ -684,7 +684,7 @@ final class PlayToss {
             let step = min((d - PlayTuning.supportMinDist) * PlayTuning.supportReach, PlayTuning.supportMaxStep)
             guard step >= PlayTuning.supportMinStep else { continue }          // (no shuffles: a step is worth walking)
             supportT[j.id] = clock
-            j.brain.requestNow(.goTo(j.pos + (xz - j.pos) / d * step))
+            j.brain.requestNow(.goTo(netStand(j.pos + (xz - j.pos) / d * step)))          // (play-net keep-out)
         }
     }
 
@@ -709,10 +709,11 @@ final class PlayToss {
             guard let a = arrival(j) else { continue }
             let d = simd_distance(j.pos, a.xz)
             guard d < Self.interceptReach else { continue }
+            if netKeepOut(a.xz) { continue }          // (play-net keep-out: a ball that will come down in or at the goal is not walked under: he lets it land)
             if best == nil || d < best!.d { best = (j, a.t, a.xz, d) }
         }
         // the one already going for it keeps it (two Jelmiko about as near as each other must not hand it back and forth every step: each hand-over releases the other's stand and nobody gets there)
-        if !PlayTuning.ballReturnOld, let c = headChoice, c != best?.j.id, let jc = jelly(c), let a = arrival(jc), simd_distance(jc.pos, a.xz) < Self.interceptReach { best = (jc, a.t, a.xz, simd_distance(jc.pos, a.xz)) }
+        if !PlayTuning.ballReturnOld, let c = headChoice, c != best?.j.id, let jc = jelly(c), let a = arrival(jc), simd_distance(jc.pos, a.xz) < Self.interceptReach, !netKeepOut(a.xz) {          // (play-net keep-out) best = (jc, a.t, a.xz, simd_distance(jc.pos, a.xz)) }
         headChoice = best?.j.id
         if PlayTuning.ballReturnOld || best == nil {
             support(toward: ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: [])
@@ -733,6 +734,7 @@ final class PlayToss {
             var stand = j.pos
             let off = meet - j.pos
             if simd_length(off) > Self.steerReach { stand = meet - off / simd_length(off) * (Self.steerReach * 0.6) }
+            stand = netStand(stand)          // (play-net keep-out: never a stand in the goal)
             let dirP = playerPoint() - stand
             let dir = simd_length(dirP) > 1e-3 ? simd_normalize(dirP) : SIMD2<Float>(0, 1)
             j.brain.tossFire = nil
@@ -745,7 +747,7 @@ final class PlayToss {
             let last = interceptAt[j.id]
             if last == nil || (clock - last!.t > 0.45 && simd_distance(last!.p, b.xz) > 0.25) {
                 let zr = Self.bodyZ(), zy = min(max(b.xz.y, zr.lowerBound), max(min(catchZ() - 1.2, zr.upperBound), zr.lowerBound)), bx = Self.bodyReach(PlayTuning.old ? b.xz.y : zy)
-                j.brain.requestNow(.goTo(SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)))
+                j.brain.requestNow(.goTo(netStand(SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy))))          // (play-net keep-out)
                 interceptAt[j.id] = (b.xz, clock)
             }
         } else if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage < 3, let last = interceptAt[j.id], simd_distance(j.brain.idleState.toss.stand, meetXZ) > Self.steerReach + 0.4, clock - last.t > 0.3 {
@@ -973,6 +975,7 @@ final class PlayToss {
         var stand = spot - dir * cd
         stand.y = min(max(stand.y, zr.lowerBound), zr.upperBound)
         stand.x = min(max(stand.x, -Self.bodyReach(stand.y)), Self.bodyReach(stand.y))
+        if netKeepOut(stand) || netKeepOut(k.xz) { footFlight = false; return false }          // (play-net keep-out: no kick stand in the goal; the ball is let land)
         var best: (j: PlayJelly, walk: Float)?
         for j in jellies {
             let f = j.brain.fixed(stand)
@@ -1089,7 +1092,7 @@ final class PlayToss {
             let u = SIMD2<Float>(dir.x * c - dir.y * s, dir.x * s + dir.y * c)
             let q = ballXZ - u * back
             let f = j.brain.fixed(q)
-            if simd_distance(f, q) < 0.1, j.brain.peerFree(f) { plan = (f, u); break }
+            if simd_distance(f, q) < 0.1, j.brain.peerFree(f), !netKeepOut(f) { plan = (f, u); break }          // (play-net keep-out)
         }
         if plan == nil, !PlayTuning.ballReturnOld {          // (a ball against a side wall: the nearest allowed spot to it, kicking along the wall toward the player, before the safety net)
             for back2 in [back, back * 0.8, back * 0.6] {
@@ -1098,7 +1101,7 @@ final class PlayToss {
                     let u = SIMD2<Float>(dir.x * c - dir.y * s, dir.x * s + dir.y * c)
                     let f = j.brain.fixed(ballXZ - u * back2)
                     let g = ballXZ - f
-                    if simd_length(g) > 0.45, simd_length(g) < 1.8, j.brain.peerFree(f) { plan = (f, simd_normalize(g)); break }
+                    if simd_length(g) > 0.45, simd_length(g) < 1.8, j.brain.peerFree(f), !netKeepOut(f) { plan = (f, simd_normalize(g)); break }          // (play-net keep-out)
                 }
                 if plan != nil { break }
             }

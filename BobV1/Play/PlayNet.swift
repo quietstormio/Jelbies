@@ -35,6 +35,10 @@ nonisolated enum PlayNetTuning {
     static let minLineGap: Float = 1.6
     /// How many seconds a celebration waits for a busy Jelmiko before it is given up.
     static let cheerWait: Float = 3.0
+    /// Keep-out round: no body is sent into the goal's footprint plus this margin; a stand there is moved to this far in front of the mouth line.
+    static let keepOutMargin: Float = 0.35, standFront: Float = 0.6
+    /// A ball at rest, or on its second floor contact, inside the goal's footprint (plus this much at the sides) without having scored is returned by the net (no cheer).
+    static let deadSide: Float = 0.3
 }
 
 nonisolated enum TossNetEvent: Equatable, Sendable {
@@ -195,6 +199,9 @@ struct PlayNetState {
     var sampleAt: Float = 0
     var bodyLogT: [Int: Float] = [:]
     var awaitHand = false
+    /// Keep-out round: the closest any body came to the footprint (0 = inside), the ball's floor contacts inside the dead zone, and the dead returns.
+    var minBodyDist: Float = 99
+    var floorHits = 0, wasFloor = false, deadReturns = 0
     var goals = 0
     /// Bodies that stay where they are while the net is up (sleepers): the net is placed clear of them.
     var blockers: [SIMD2<Float>] = []
@@ -208,6 +215,52 @@ struct PlayNetState {
 }
 
 extension PlayToss {
+    // MARK: keep-out (no body in the goal; the net returns what lands in it)
+
+    /// play-net keep-out: the goal's footprint plus `keepOutMargin` (the posts, the mouth, and everything behind the mouth line back to the wall). False without the net.
+    func netKeepOut(_ p: SIMD2<Float>) -> Bool {
+        guard netUp, let n = net.spec else { return false }
+        return abs(p.x - n.centre.x) < n.outerHalf + PlayNetTuning.keepOutMargin && p.y < n.frontZ + PlayNetTuning.keepOutMargin
+    }
+
+    /// play-net keep-out: a stand / walk target in the keep-out is moved to the nearest spot outside: in front of the mouth (at least `standFront` from the mouth line), or to the side when that is nearer.
+    func netStand(_ p: SIMD2<Float>) -> SIMD2<Float> {
+        guard netKeepOut(p), let n = net.spec else { return p }
+        let fwd = SIMD2(p.x, n.mouthZ + PlayNetTuning.standFront)
+        let edge = n.outerHalf + PlayNetTuning.keepOutMargin + 0.05
+        let side = SIMD2(n.centre.x + (p.x >= n.centre.x ? edge : -edge), p.y)
+        if p.y >= n.rearZ, abs(side.x - p.x) < fwd.y - p.y, abs(side.x) < Self.bodyReach(side.y) { return side }
+        return fwd
+    }
+
+    /// Distance from the goal's footprint to a point on the floor (0 inside).
+    func netDistance(_ p: SIMD2<Float>) -> Float {
+        guard let n = net.spec else { return 99 }
+        let dx = max(abs(p.x - n.centre.x) - n.outerHalf, 0), dz = max(n.rearZ - p.y, p.y - n.frontZ, 0)
+        return (dx * dx + dz * dz).squareRoot()
+    }
+
+    /// play-net keep-out: a ball that has not scored but lies in the goal's footprint (over the bar and down the back, off a post into the side, rolled in from the side) and comes to rest or touches the floor a second
+    /// time there is returned by the net exactly as after a goal (no cheer, no goal sound): put inside the mouth, held no longer than the cheer's minimum, then the roll / lob to the player.
+    func netDeadTick() {
+        guard let n = net.spec, net.hold == nil, !net.returning, phase == .loose || phase == .flying else { net.floorHits = 0; net.wasFloor = false; return }
+        let p = SIMD2(ball.pos.x, ball.pos.z)
+        guard abs(p.x - n.centre.x) < n.outerHalf + PlayNetTuning.deadSide, p.y < n.frontZ else { net.floorHits = 0; net.wasFloor = false; return }
+        let onFloor = ball.onFloor
+        if onFloor, !net.wasFloor { net.floorHits += 1 }
+        net.wasFloor = onFloor
+        guard onFloor, net.floorHits >= 2 || ball.speedXZ < 0.3 else { return }
+        net.floorHits = 0; net.wasFloor = false; net.deadReturns += 1
+        let at = SIMD2(min(max(p.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), n.mouthZ - 0.3)
+        ball.pos = SIMD3(at.x, ball.radius, at.y); ball.vel = .zero; ball.inNet = true
+        net.hold = .init(t: PlayNetTuning.holdCheer, rolled: false, scorer: nil)
+        net.goalAt = clock; net.awaitHand = true; net.returning = false; net.rescuesAtGoal = rescues
+        phase = .loose; looseT = 0; restT = 0; returnAim = nil; bumper = nil
+        for j in jellies where j.brain.tossHeaderApproach { j.brain.tossHeaderRelease(j.sim, j.skinner) }
+        netClearFoot()
+        NSLog("[playnet] return reason=dead from %.2f,%.2f (floor contacts / at rest in the goal without a goal)", p.x, p.y)
+    }
+
     // MARK: the API for the shots
 
     /// The net's mouth: its centre on the floor line, and the clear half width between the posts.
@@ -248,7 +301,7 @@ extension PlayToss {
             let c = cosf(a), s = sinf(a)
             let u = SIMD2(base.x * c - base.y * s, base.x * s + base.y * c)
             let stand = ball - u * back
-            guard !n.contains(stand, margin: 0.35), abs(stand.x) < Self.bodyReach(stand.y), Self.bodyZ().contains(stand.y) else { continue }
+            guard !n.contains(stand, margin: 0.35), !netKeepOut(stand), abs(stand.x) < Self.bodyReach(stand.y), Self.bodyZ().contains(stand.y) else { continue }
             if jellies.contains(where: { $0.id != ignoring && simd_distance($0.pos, stand) < 0.9 }) { continue }
             return (stand, u)
         }
@@ -324,6 +377,11 @@ extension PlayToss {
             for j in jellies where !j.free && !net.nearLogged.contains(j.id) {
                 if let p0 = net.goalPos[j.id], simd_distance(p0, m) - simd_distance(j.pos, m) > 0.35 { net.nearLogged.insert(j.id); NSLog("[playnet] BODY WALKED TOWARD NET id=%d from %.2f,%.2f to %.2f,%.2f", j.id, p0.x, p0.y, j.pos.x, j.pos.y) }
             }
+        }
+        netDeadTick()          // (play-net keep-out)
+        for j in jellies where !j.free {          // (the closest any body came to the footprint: the keep-out's proof)
+            let d = netDistance(j.pos)
+            if d < net.minBodyDist - 0.03 { net.minBodyDist = d; NSLog("[playnet] closest body to the footprint: %.2f (id %d at %.2f,%.2f)", d, j.id, j.pos.x, j.pos.y) }
         }
         if let n = net.spec {
             for j in jellies where n.contains(j.pos, margin: 0.1) { if clock - (net.bodyLogT[j.id] ?? -9) > 1 { net.bodyLogT[j.id] = clock; NSLog("[playnet] BODY IN NET id=%d at %.2f,%.2f", j.id, j.pos.x, j.pos.y) } }

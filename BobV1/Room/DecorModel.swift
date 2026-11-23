@@ -168,7 +168,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .yarnball: return "A ball of yarn. It rolls and trails its strand."
         case .drum: return "A drum. Boop it for a thump."
         case .soccerball: return "A soccer ball. Jelmiko kick it with their stubby legs, dribble it and pass it."
-        case .minigoal: return "A goal for soccer. It comes out when you play soccer with them in Play."
+        case .minigoal: return "A goal for soccer. Comes out in Play."
         default: return batch3Use
         }
     }

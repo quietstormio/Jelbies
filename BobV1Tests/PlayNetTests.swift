@@ -53,7 +53,7 @@ final class PlayNetTests: XCTestCase {
     func testTheSoccerNetIsSoldOwnedNotPlaceableAndAPlacedOneIsPutAwayOnLoad() throws {
         let item = try XCTUnwrap(StoreCatalog.item("decor-minigoal"))
         XCTAssertEqual(item.name, "Soccer net"); XCTAssertEqual(item.price, 70)
-        XCTAssertEqual(item.description, "A goal for soccer. It comes out when you play soccer with them in Play.")
+        XCTAssertEqual(item.description, "A goal for soccer. Comes out in Play.")
         XCTAssertTrue(ShopTab.toys.items.contains { $0.id == "decor-minigoal" }, "still sold")
         let b = book(); b.wallet.add(500)
         XCTAssertEqual(b.buy("decor-minigoal"), .bought)
@@ -447,6 +447,72 @@ final class PlayNetTests: XCTestCase {
         p.netStart(blockers: wall)
         XCTAssertFalse(p.netUp, "no room: the game starts without the net")
         XCTAssertNil(p.net.spec)
+        p.end()
+    }
+
+    // MARK: keep-out round (no body in the goal; the net returns what lands in it)
+
+    private func netGame() -> (PlayToss, [Rig], TossWorld, () -> [PlayJelly]) {
+        PlayTossTests.room(PlayTossTests.portrait)
+        ToyTuning.settle = 0
+        let rs = rigs(3)
+        func js() -> [PlayJelly] { rs.enumerated().map { PlayJelly(id: $0.offset, brain: $0.element.brain, sim: $0.element.sim, skinner: $0.element.skinner) } }
+        let p = PlayToss(); p.viewSize = PlayTossTests.portrait
+        p.begin(ball: .soccerball, title: "Soccer ball", jellies: js(), snapCamera: true)
+        p.netStart(blockers: [])
+        var w = TossWorld(); w.xHalf = PlayToss.ballXHalf; w.net = p.net.spec
+        for _ in 0..<120 { for r in rs { r.tick() }; p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js()) }
+        return (p, rs, w, js)
+    }
+
+    func testAStandInTheKeepOutIsMovedOutAndWithoutTheNetNothingIsKeptOut() {
+        let (p, _, _, _) = netGame()
+        let n = p.net.spec!
+        let inside: [SIMD2<Float>] = [SIMD2(0, n.mouthZ - 0.3), SIMD2(0, n.mouthZ + 0.2), SIMD2(n.outerHalf + 0.2, n.centre.y), SIMD2(-n.outerHalf - 0.3, n.mouthZ + 0.3), SIMD2(0.4, n.rearZ - 0.1)]
+        for q in inside {
+            XCTAssertTrue(p.netKeepOut(q), "\(q) is in the keep-out")
+            let m = p.netStand(q)
+            XCTAssertFalse(p.netKeepOut(m), "\(q) is moved out: \(m)")
+            XCTAssertTrue(m.y >= n.mouthZ + PlayNetTuning.standFront - 1e-3 || abs(m.x - n.centre.x) >= n.outerHalf + PlayNetTuning.keepOutMargin, "in front of the mouth line by 0.6, or beside the net")
+        }
+        let front = SIMD2<Float>(0.3, n.mouthZ + 1.6)
+        XCTAssertFalse(p.netKeepOut(front)); XCTAssertEqual(p.netStand(front), front, "a stand in front of the mouth stays")
+        p.end()
+        XCTAssertFalse(p.netKeepOut(inside[0]), "no net: nothing is kept out")
+        XCTAssertEqual(p.netStand(inside[0]), inside[0])
+    }
+
+    func testADeadBallInTheZoneIsReturnedWithoutACheerAndABallInFrontOfTheMouthIsPlayed() {
+        // (a) a ball that came to rest behind the mouth without scoring
+        var (p, rs, w, js) = netGame()
+        let n = p.net.spec!
+        p.ball.pos = SIMD3(0.3, p.ball.radius, n.rearZ + 0.2); p.ball.vel = .zero
+        p.phase = .loose; p.looseT = 0
+        var dead = false, cheered = false, back = false
+        for _ in 0..<900 {
+            for r in rs { r.tick() }
+            p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js())
+            if p.net.deadReturns > 0 { dead = true }
+            if rs.contains(where: { $0.brain.idleState.kind == .joy || $0.brain.idleState.kind == .bounce }) { cheered = true }
+            if p.phase == .inHand { back = true; break }
+        }
+        XCTAssertTrue(dead, "the dead ball is returned by the net"); XCTAssertEqual(p.net.goals, 0, "it was not a goal")
+        XCTAssertFalse(cheered, "no cheer")
+        XCTAssertTrue(back, "and it comes back to the hand")
+        p.end()
+        // (b) a ball in front of the mouth is played as ever
+        (p, rs, w, js) = netGame()
+        let n2 = p.net.spec!
+        p.ball.pos = SIMD3(0.2, p.ball.radius, n2.mouthZ + 1.7); p.ball.vel = .zero
+        p.phase = .loose; p.looseT = 0
+        var moved = false
+        for _ in 0..<900 {
+            for r in rs { r.tick() }
+            p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js())
+            if simd_distance(SIMD2(p.ball.pos.x, p.ball.pos.z), SIMD2(0.2, n2.mouthZ + 1.7)) > 0.5 || p.phase == .inHand { moved = true; break }
+        }
+        XCTAssertEqual(p.net.deadReturns, 0, "in front of the mouth: not dead")
+        XCTAssertTrue(moved, "a Jelmiko plays it (kick / return)")
         p.end()
     }
 }
