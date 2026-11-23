@@ -76,6 +76,9 @@ nonisolated enum BondMoment {
     nonisolated(unsafe) static var nextID = 1
     /// Round 5: more than this many bodies up in the place = crowded: no chasing kinds, one travelling kind per block at most.
     static let crowd = 3
+    /// FINAL ROUND: the per-place switch. At home (the sleepover / play date; everything that is not the park) a block runs only while this is true: stay kinds only, 2 kinds, walker's spot searched in 12 directions.
+    /// false = at home the pair gets the greeting and the pick weight only (the phone build's traffic by construction: no block, no flag, no parting). The park is never affected.
+    nonisolated(unsafe) static var blocksAtHome = true
     /// Crowded: the calm kinds (one of the travelling pair at most, the others stay put).
     static let calmTravel: [SocialKind] = [.hopAlong, .follow]
     static let calmStay: [SocialKind] = [.swayHug, .sitTogether, .dance, .peekaboo, .backToBack]
@@ -117,6 +120,8 @@ extension BlobBrain {
 
     /// True while the body holds a buddy-block flag or is in a block: a soccer session leaves such a body alone until the block ends.
     var inBuddyBlock: Bool { socialBook.block != nil }
+    /// Home = not the park (the park sets `outingPlay`).
+    var buddyAtHome: Bool { !outingPlay }
     var buddyAway: Bool {
         if BondMoment.soccerMember?(steerID) == true { return true }
         if isSleeping || isNapping || reserved || held || commanded || commandedIdle != nil || isPerched || idleMood == .grumpy || mixSleepy { return true }
@@ -128,6 +133,7 @@ extension BlobBrain {
     /// The pair's clock (pickAutonomous, after `buddyPickDue`): when it fires and both are not away, reserve both and set off at once.
     func bondUrge(_ sim: SoftBody) -> Bool {
         guard BondPairing.multiplier != 1, MoveMix.on, anticsEnabled, !socialBook.bestFriends.isEmpty, socialBook.block == nil, socialBook.enabled, social == nil else { return false }
+        if buddyAtHome, !BondMoment.blocksAtHome { return false }          // (final round: the home switch)
         let now = variety.now
         if socialBook.bondNextAt == 0 { socialBook.bondNextAt = now + rand(BondMoment.firstGap.lowerBound, BondMoment.firstGap.upperBound) }
         guard now >= socialBook.bondNextAt else { return false }
@@ -147,8 +153,14 @@ extension BlobBrain {
         blk.waiter = steerID; blk.spot[steerID] = wait
         let up = ([self] + socialOthers().filter { $0 !== self }).filter { $0.idleState.kind != .sleep }.count
         blk.up = up
-        blk.plan = buddyPlan(with: o, crowded: up > BondMoment.crowd)
-        blk.allowed = up > BondMoment.crowd ? BondMoment.calmTravel + BondMoment.calmStay : BondMoment.travel + BondMoment.stay
+        if buddyAtHome {          // at home: stay kinds only, 2 kinds per block
+            let recent = Set((socialBook.recentWith[o.steerID] ?? []) + (o.socialBook.recentWith[steerID] ?? []))
+            var st = BondMoment.calmStay.filter { !recent.contains($0) }; if st.count < 2 { st = BondMoment.calmStay }
+            blk.plan = Array(shuffledByRand(st).prefix(2)); blk.allowed = BondMoment.calmStay
+        } else {
+            blk.plan = buddyPlan(with: o, crowded: up > BondMoment.crowd)
+            blk.allowed = up > BondMoment.crowd ? BondMoment.calmTravel + BondMoment.calmStay : BondMoment.travel + BondMoment.stay
+        }
         BondMoment.active = blk
         for b in [self, o] { b.socialBook.block = blk; b.socialBook.buddyAssigned = b.variety.now; b.socialBook.buddyArrivedAt = -1; b.socialBook.bondNextAt = b.variety.now + 1000 }
         if EmoteSpot.logOn { NSLog("[bond] block start id=%d ids=%d,%d t=%.1f plan=%@", blk.id, steerID, o.steerID, now, blk.plan.map(\.rawValue).joined(separator: ",")) }
@@ -186,6 +198,22 @@ extension BlobBrain {
     private func buddyStandSpot(near w: SIMD2<Float>, partner o: BlobBrain) -> SIMD2<Float>? {
         let from = position - w, l = simd_length(from)
         let base = l > 0.1 ? atan2f(from.y, from.x) : 0
+        if buddyAtHome {          // final round, at home: 12 directions at 1.5...1.8 (the side it comes from first), the first spot that is clear floor and reachable without passing within 1.3 of a standing body
+            for k in 0..<12 {
+                let da = (k % 2 == 0 ? 1 : -1) * Float((k + 1) / 2) * (.pi / 6)
+                let r: Float = 1.5 + 0.3 * Float(k % 3) / 2
+                let p = w + SIMD2(cosf(base + da), sinf(base + da)) * r
+                guard buddyClear(p, besides: o), reachable(position, p) else { continue }
+                var ok = true
+                let n = max(1, Int(simd_distance(position, p) / 0.2))
+                for x in socialOthers() where x !== self && x !== o && x.activity != .walking {
+                    for i in 0...n { let q = position + (p - position) * (Float(i) / Float(n)); if simd_distance(x.position, q) < 1.3 { ok = false; break } }
+                    if !ok { break }
+                }
+                if ok { return p }
+            }
+            return nil
+        }
         for da: Float in [0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9] {
             let p = w + SIMD2(cosf(base + da), sinf(base + da)) * BondMoment.spotApart
             if buddyClear(p, besides: o), reachable(position, p) { return p }
