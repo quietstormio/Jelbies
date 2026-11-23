@@ -336,7 +336,7 @@ final class FeatureCaptureTests: XCTestCase {
         var rows: [UIImage] = []
         for (name, id) in [("Pip", 1), ("Moss", 2), ("Lavender", 3)] {
             var cells: [UIImage] = []
-            for (label, look) in [("headphones", WearLook.headphones), ("cowboy hat", .cowboyHat), ("beret", .beret), ("hair bow", .hairBow), ("lei", .lei)] {
+            for (label, look) in [("headphones", WearLook.headphones), ("cowboy hat", .cowboyHat), ("beret", .beret), ("hair bow", .hairBow), ("scarf", .scarfCosy)] {
                 cells.append(try closeup(Char(id: id, outfit: [look.slot: look]), yaw: 0.6, label: "\(name) + \(label)"))
             }
             rows.append(hstack(cells))
@@ -363,7 +363,7 @@ final class FeatureCaptureTests: XCTestCase {
         DayClock.shared.forcedHour = 12
         let sets: [[Char]] = [
             [Char(id: 1, outfit: [.body: .capeHero, .face: .sunglassesStar, .feet: .sneakerSun]), Char(id: 2, outfit: [.head: .bucketHatPink, .neck: .bowtiePink, .feet: .rainBoots]), Char(id: 3, outfit: [.body: .backpackSky, .face: .glassesRound, .feet: .balletPink])],
-            [Char(id: 1, outfit: [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .feet: .sneakerLightup]), Char(id: 2, outfit: [.head: .partyHat, .body: .capeHero, .neck: .pearls, .feet: .glitterShoes]), Char(id: 3, outfit: [.head: .beaniePink, .neck: .scarfSky, .feet: .frogBoots])],
+            [Char(id: 1, outfit: [.head: .sweatband, .neck: .bandanaCoral, .hands: .wristbandsSky, .feet: .sneakerLightup]), Char(id: 2, outfit: [.head: .partyHat, .body: .capeHero, .neck: .diamondJ, .feet: .glitterShoes]), Char(id: 3, outfit: [.head: .beaniePink, .neck: .scarfSky, .feet: .frogBoots])],
         ]
         let labels = ["Alt 1: Pip cape+shades | Moss bucket hat+bow tie | Lavender backpack+glasses (wings up)",
                       "Alt 2: Pip sweatband+whistle | Moss party hat+tutu+pearls | Lavender beanie+scarf (wings low)"]
