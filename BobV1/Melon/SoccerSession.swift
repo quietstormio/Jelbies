@@ -49,7 +49,7 @@ nonisolated enum SoccerSessionTuning {
     }()
     static let kickoffLen: ClosedRange<Float> = 55...80
     static let recurLen: ClosedRange<Float> = 32...50
-    static let gap: ClosedRange<Float> = 120...150          // (round 3: 65...95 gave 44 % of their time in 600 s (4 sessions of 54-82 s: a game runs 25 s past its session); 120...150 gives 2-3 recurring sessions after the kick-off)
+    static let gap: ClosedRange<Float> = 105...130          // (round 3: 65...95 gave 44 % of their time in 600 s (4 sessions of 54-82 s: a game runs 25 s past its session); 120...150 gave 27 % (4 sessions, recurring ones 38-40 s); 105...130 is the in-between)
     static let openingWait: ClosedRange<Float> = 20...40
     static let kickoffWait: ClosedRange<Float> = 0.3...0.8
     static let passKicks: ClosedRange<Float> = 5...8
