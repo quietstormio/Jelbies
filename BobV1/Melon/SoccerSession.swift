@@ -83,7 +83,7 @@ final class SoccerSession {
     private var restSince: Float = -1
     private var soloNextAt: Float = 0
     private var soloWaiting = false
-    private var failStreak = 0, awaitRest = false
+    private var failStreak = 0, awaitRest = false, awaitedRoll = false
     /// Tests: play this game first.
     var forceGame: Game?
     private var restAt: Float = 0
@@ -180,6 +180,7 @@ final class SoccerSession {
         let serial = DecorField.shared.toys.news.last?.serial ?? 0
         for m in ready { m.mix.sess = true; m.mix.order = SessOrder(); m.toy.handled = max(m.toy.handled, serial); m.toy.noticeUID = -1; m.toy.chaseSpot = nil }
         log("start #\(sessions) kickoff=\(kickoffSession) members=\(members) len=\(String(format: "%.0f", endsAt - clock))")
+        if kickoffSession, ready.count >= 2, forceGame == nil { forceGame = .pass }          // (the kick-off is a pass: the simplest game first)
         kickoffSession = false
         lastGame = nil
         chooseGame(ready)
@@ -263,12 +264,12 @@ final class SoccerSession {
             R.mix.order = SessOrder(kind: .station, spot: plan.pr)
             K.mix.order.kick = SessKick(dir: dir, roll: max(L - 1.0, 0.45))
             for m in ms where m !== K && m !== R { m.sessSpectate(ball: c, avoid: [plan.pk, plan.pr]) }
-            ballAtPlan = c; phase = .walking; phaseAt = clock; awaitRest = false; restAt = clock
+            ballAtPlan = c; phase = .walking; phaseAt = clock; awaitRest = false; awaitedRoll = false; restAt = clock
             log("turn K=\(K.steerID) R=\(R.steerID) ball=(\(String(format: "%.2f,%.2f", c.x, c.y))) line=\(String(format: "%.2f", L))")
         case .walking:
             let kOK = K.mix.order.state == 2, rOK = R.mix.order.state == 2
-            if moving { if awaitRest || clock - restAt < 8 { return } } else { restAt = clock; if awaitRest { awaitRest = false; phaseAt = clock } }
-            if simd_distance(c, ballAtPlan) > 1.0 {          // (somebody brushed the ball on the way: the line is planned again from where it lies, not a failure)
+            if moving { if awaitRest || clock - restAt < 8 { return } } else { restAt = clock; if awaitRest { awaitRest = false; awaitedRoll = true; phaseAt = clock } }
+            if simd_distance(c, ballAtPlan) > (awaitedRoll ? 1.6 : 1.0) {          // (somebody brushed the ball on the way: the line is planned again from where it lies, not a failure)
                 replans += 1; awaitRest = false
                 for m in ms { m.mix.order = SessOrder() }
                 phase = .plan; planAt = clock; log("ball moved: replan (\(replans))")
@@ -291,7 +292,7 @@ final class SoccerSession {
                     if let plan = K.mixPassPlan(ball: rest, with: R) {          // (they walk to their places while it rolls: the first kick is not held up by the walk)
                         K.mix.order = SessOrder(kind: .station, spot: plan.pk); R.mix.order = SessOrder(kind: .station, spot: plan.pr)
                         for m in ms where m !== K && m !== R { m.sessSpectate(ball: rest, avoid: [plan.pk, plan.pr]) }
-                        ballAtPlan = rest; phase = .walking; phaseAt = clock; awaitRest = true; restAt = clock
+                        ballAtPlan = rest; phase = .walking; phaseAt = clock; awaitRest = true; awaitedRoll = false; restAt = clock
                         log("places taken while the ball rolls to (\(String(format: "%.2f,%.2f", rest.x, rest.y)))")
                     }
                 }
@@ -402,7 +403,7 @@ final class SoccerSession {
             if S.mix.order.state == 2 { phase = .rolling; phaseAt = clock; restSince = -1 }
             else if S.mix.order.state == -1 || clock - phaseAt > 8 {
                 S.mix.order = SessOrder(); failures += 1; phase = .plan; planAt = clock + 1
-                if failures == 2 || failures == 5, S.sessRollOut() != nil { selfRolls += 1; log("shot turn cannot start: the ball rolls itself out"); planAt = clock + 3 }
+                if failures == 1 || failures == 4, S.sessRollOut() != nil { selfRolls += 1; log("shot turn cannot start: the ball rolls itself out"); planAt = clock + 3 }
                 if failures >= 7 { gameDone("failed") }
             }
         case .rolling:
@@ -489,7 +490,7 @@ extension BlobBrain {
         let dir = L > 0.05 ? d / L : SIMD2<Float>(0, -1)
         if EmoteSpot.logOn { NSLog("[ballrescue] t=%.1f ball=(%.2f,%.2f) rolled toward (%.2f,%.2f) (session)", variety.now, c.x, c.y, tgt.x, tgt.y) }
         f.kickBall(sb.uid, direction: dir, speed: min(max(1.15 * L + 0.2, 0.8), 3.2), by: -1)
-        return c + dir * (L * 0.95)          // (about where it comes to rest: the roll is v / 1.15)
+        return c + dir * (L * 0.7)          // (about where it comes to rest: measured, the ball stops at about 0.7 of the distance asked for)
     }
     var scriptIsWalking: Bool { if case .walk = script { return true }; return false }
 

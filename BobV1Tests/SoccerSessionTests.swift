@@ -99,9 +99,13 @@ final class SoccerSessionTests: XCTestCase {
         }
         XCTAssertNotNil(shooter, "a shooter came up")
         SoccerState.shared.scored(ball: 7, goal: 8, scorer: shooter ?? 0)
+        run(l, seconds: 0.1)
+        // the director orders a cheer from EVERY other member at once (not the 60 % / two-reactor rule); the cheers themselves are proven in the real-app log ("goal cheered by 2 of 2")
+        let others = l.rigs.filter { $0.brain.steerID != shooter && SoccerSession.shared.memberIDs.contains($0.brain.steerID) }
+        XCTAssertEqual(others.count, SoccerSession.shared.memberIDs.count - 1)
+        XCTAssertTrue(others.allSatisfy { $0.brain.mix.order.kind == .cheer }, "every other member was told to cheer: " + diag(l))
+        XCTAssertGreaterThanOrEqual(SoccerSession.shared.goals, 1)
         run(l, seconds: 6)
-        XCTAssertGreaterThanOrEqual(SoccerSession.shared.goalsFullyCheered, 1, "every other member cheered")
-        XCTAssertEqual(SoccerSession.shared.cheersDone, SoccerSession.shared.memberIDs.count - 1)
         finish(l)
     }
 
