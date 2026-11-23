@@ -82,7 +82,7 @@ final class PlayToss {
     @ObservationIgnored private(set) var passes = 0
     @ObservationIgnored private(set) var leftHand = false
     /// A Jelbie has touched the ball since the throw (a header or a bump): only then does a fast ball at the front count as caught.
-    @ObservationIgnored private(set) var touched = false
+    @ObservationIgnored var touched = false          // (play-net-r2: internal set, the net's return flight is a touched ball)
     @ObservationIgnored private var catchFrom = SIMD3<Float>.zero
     @ObservationIgnored private var catchT: Float = 0
     @ObservationIgnored var bumper: Int?          // (play-net-r1: internal)
@@ -489,6 +489,7 @@ final class PlayToss {
         }
         if netUp, netHoldTick(dt: dt) { return }          // (play-net-r1: the ball lies in the net after a goal; nobody goes for it until it rolls out)
         if ball.resting || (ball.onFloor && phase == .flying) { if phase == .flying { phase = .loose; looseT = 0 } }
+        if netUp { netReturnTick(dt: dt) }          // (play-net-r2: after the cheer the net sends the ball back to the player; it stays a flying return until caught)
         if kickHeightT == nil, ball.pos.y <= ball.radius + Self.kickHeightAbove + 0.02, ball.vel.y <= 0.3, ball.ignoring == nil { kickHeightT = clock }
         if !PlayTuning.ballReturnOld, footFlight || footChoice != nil { footTick() }
         // back at the bottom of the screen: caught

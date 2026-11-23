@@ -207,13 +207,75 @@ final class PlayNetTests: XCTestCase {
         XCTAssertEqual(goalCalls.count, 1, "the goal callback fires once")
         XCTAssertEqual(p.net.goals, 1)
         XCTAssertEqual(cheering.count, 3, "the player's own throw: all three cheer")
-        if let r = rolledOut { XCTAssertGreaterThan(r, PlayNetTuning.holdTime - 0.2, "rolls out after about 0.9 s"); XCTAssertLessThan(r, 3.0) } else { XCTFail("the ball never rolled out of the net") }
+        if let r = rolledOut { XCTAssertGreaterThan(r, PlayNetTuning.holdCheer - 0.2, "the ball stays in the net while the cheer runs (1.6 s at least)"); XCTAssertLessThan(r, 3.0) } else { XCTFail("the ball never rolled out of the net") }
         p.end()
         XCTAssertFalse(p.netUp)
         XCTAssertNil(p.net.spec)
         for r in rs { XCTAssertFalse(r.brain.reserved, "released") }
         for _ in 0..<400 { for r in rs { r.tick() } }
         for r in rs { XCTAssertFalse(r.brain.commanded, "the cheer's commanded flag clears itself when the cheer ends"); XCTAssertNil(r.brain.idleState.kind == .joy ? 1 : nil) }
+    }
+
+    /// A game with the net, the middle shot fired; steps until `until` says stop (or `maxT`), returns the controller and the rigs.
+    func goalGame(returns: Bool, maxT: Float, until: (PlayToss, [MotionRig]) -> Bool) -> (PlayToss, [MotionRig], TossNet, Float?) {
+        PlayTossTests.room(PlayTossTests.portrait)
+        ToyTuning.settle = 0
+        let rs = rigs(3)
+        func js() -> [PlayJelly] { rs.enumerated().map { PlayJelly(id: $0.offset, brain: $0.element.brain, sim: $0.element.sim, skinner: $0.element.skinner) } }
+        let p = PlayToss(); p.viewSize = PlayTossTests.portrait
+        p.begin(ball: .soccerball, title: "Soccer ball", jellies: js(), snapCamera: true)
+        p.netStart(blockers: [])
+        p.net.returnsToPlayer = returns
+        let n = p.net.spec!
+        var w = TossWorld(); w.xHalf = PlayToss.ballXHalf; w.net = n
+        for _ in 0..<200 { for r in rs { r.tick() }; p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js()) }
+        let (from, v) = PlayNetShot.list(innerHalf: n.innerHalf, radius: p.ball.radius)[0].launch(n)
+        p.launch(from: from, velocity: v)
+        var t: Float = 0, goalAt: Float?
+        while t < maxT {
+            for r in rs { r.tick() }
+            p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js()); t += rs[0].sim.stepDt
+            if goalAt == nil, p.net.goals > 0 { goalAt = t }
+            if until(p, rs) { break }
+        }
+        return (p, rs, n, goalAt)
+    }
+
+    func testAfterAGoalTheBallIsReturnedToThePlayerAndNobodyIsSentToTheNet() {
+        var sawReturn = false, flyingAtLaunch = false, walkedToNet = false, cheerEnd: Float?
+        var goalT: Float?
+        let (p, rs, n, g) = goalGame(returns: true, maxT: 14) { p, rs in
+            if p.net.returning, !sawReturn { sawReturn = true; flyingAtLaunch = p.phase == .flying && p.returnAim != nil && p.ball.vel.z > 0.5 }
+            if p.net.goals > 0, !sawReturn, rs.allSatisfy({ $0.brain.idleState.kind == nil }) { cheerEnd = cheerEnd ?? p.clock }
+            if p.net.goals > 0 {
+                let net = p.net.spec!
+                for r in rs { if case .walk(let t, _) = r.brain.script, net.contains(t, margin: 0.8) { walkedToNet = true } }
+            }
+            return sawReturn && p.phase == .inHand
+        }
+        _ = goalT; goalT = g
+        XCTAssertNotNil(g, "the middle shot scores")
+        XCTAssertTrue(sawReturn, "the net sends the ball back to the player")
+        XCTAssertTrue(flyingAtLaunch, "the next phase is a return flight with a landing aim, toward the player")
+        XCTAssertFalse(walkedToNet, "nobody is ordered to the net")
+        XCTAssertEqual(p.phase, .inHand, "caught at the hand")
+        XCTAssertEqual(p.rescues, 0, "no rescue was needed")
+        _ = (rs, n)
+        p.end()
+    }
+
+    func testWithReturnsToPlayerOffTheOldShortRollOutHappens() {
+        var returning = false, rolledOutLoose = false
+        let (p, _, n, g) = goalGame(returns: false, maxT: 6) { p, _ in
+            if p.net.returning { returning = true }
+            if p.net.goals > 0, p.net.hold == nil, p.phase == .loose || p.phase == .flying, p.ball.pos.z > p.net.spec!.mouthZ { rolledOutLoose = p.phase == .loose || rolledOutLoose }
+            return rolledOutLoose
+        }
+        XCTAssertNotNil(g)
+        XCTAssertFalse(returning, "no return flight to the player")
+        XCTAssertTrue(rolledOutLoose, "the ball rolled out of the mouth and is handed back as a loose ball")
+        XCTAssertLessThan(p.ball.pos.z, n.mouthZ + 1.6, "it lies near the mouth (0.9 in front), for the loose-ball handling to fetch")
+        p.end()
     }
 
     func testTheScorerBouncesAndTheOthersCheer() {
