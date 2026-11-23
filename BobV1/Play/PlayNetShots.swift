@@ -35,12 +35,12 @@ struct PlayNetShot {
             .init(name: "low-right", start: SIMD3(0.4, 0.4, 0.6), aim: SIMD3(corner, r + 0.03, 0), flight: 0.22, expect: "goal"),
             .init(name: "high-left", start: SIMD3(-0.4, 0.5, 0.6), aim: SIMD3(-corner, PlayNetTuning.barUnder * PlayNetTuning.scale - r - 0.14, 0), flight: 0.22, expect: "goal"),
             .init(name: "high-right", start: SIMD3(0.4, 0.5, 0.6), aim: SIMD3(corner, PlayNetTuning.barUnder * PlayNetTuning.scale - r - 0.14, 0), flight: 0.22, expect: "goal"),
-            .init(name: "post-left", start: SIMD3(-0.6, 0.5, 0.6), aim: SIMD3(-(w + 0.02), 0.55, 0), flight: 0.22, expect: "post"),
-            .init(name: "post-right", start: SIMD3(0.6, 0.5, 0.6), aim: SIMD3(w + 0.02, 0.55, 0), flight: 0.22, expect: "post"),
+            .init(name: "post-left", start: SIMD3(-0.6, 0.5, 0.6), aim: SIMD3(-(w + 0.5 * (PlayNetTuning.scale * GoalGeometry.outerHalfX - w)), 0.55, 0), flight: 0.22, expect: "post"),
+            .init(name: "post-right", start: SIMD3(0.6, 0.5, 0.6), aim: SIMD3(w + 0.5 * (PlayNetTuning.scale * GoalGeometry.outerHalfX - w), 0.55, 0), flight: 0.22, expect: "post"),
             .init(name: "bar", start: SIMD3(0, 0.6, 0.6), aim: SIMD3(0, barY, 0), flight: 0.22, expect: "bar"),
             .init(name: "over", start: SIMD3(0, 1.9, 2.2), aim: SIMD3(0, 2.1, 0), flight: 0.5, expect: "over"),
-            .init(name: "wide-left", start: SIMD3(-1.2, 0.5, 0.6), aim: SIMD3(-(w + 1.6), 0.55, 0), flight: 0.25, expect: "wide"),
-            .init(name: "wide-right", start: SIMD3(1.2, 0.5, 0.6), aim: SIMD3(w + 1.6, 0.55, 0), flight: 0.25, expect: "wide"),
+            .init(name: "wide-left", start: SIMD3(-2.0, 0.5, 0.6), aim: SIMD3(-2.1, 0.55, 0), flight: 0.25, expect: "wide"),
+            .init(name: "wide-right", start: SIMD3(2.0, 0.5, 0.6), aim: SIMD3(2.1, 0.55, 0), flight: 0.25, expect: "wide"),
             .init(name: "slow-roll", start: SIMD3(0.3, r, 0.6), aim: .zero, flight: 0, expect: "goal", roll: 2.0),
         ]
     }

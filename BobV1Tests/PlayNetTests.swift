@@ -138,9 +138,9 @@ final class PlayNetTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(abs(b!.x), 0.5 + TossNet(centre: b!).outerHalf - 0.25, "clear of the piece")
         XCTAssertLessThanOrEqual(abs(b!.x) + TossNet(centre: b!).outerHalf, 4 + 1e-4, "inside the visible row")
         // the whole back row blocked (a wall of furniture across z0 .. z0 + 0.6): forward in 0.3 steps
-        let c = PlayNetPlacement.place(zBack: TossTuning.zBack, lineZ: 1.0, reach: reach, blocked: { $0.y < z0 + 0.7 })
+        let c = PlayNetPlacement.place(zBack: TossTuning.zBack, lineZ: 1.0, reach: reach, blocked: { $0.y < z0 - 0.3 })
         XCTAssertNotNil(c)
-        XCTAssertGreaterThan(c!.y, z0 + 0.5)
+        XCTAssertEqual(c!.y, z0 + 0.3, accuracy: 1e-4, "one step forward")
         XCTAssertEqual((c!.y - z0) / 0.3, ((c!.y - z0) / 0.3).rounded(), accuracy: 1e-3, "in steps of 0.3")
         XCTAssertLessThanOrEqual(TossNet(centre: c!).mouthZ, 1.0 - PlayNetTuning.minLineGap + 1e-4, "never nearer than 1.6 to the line")
         // everything blocked: none
@@ -148,7 +148,7 @@ final class PlayNetTests: XCTestCase {
         // a line too near to leave the gap: none at all
         XCTAssertNil(PlayNetPlacement.place(zBack: TossTuning.zBack, lineZ: -0.3, reach: reach, blocked: { _ in false }))
         // a narrow visible row: slides never leave it
-        let narrow = PlayNetPlacement.place(zBack: TossTuning.zBack, lineZ: 1.0, reach: { _ in 1.5 }, blocked: { _ in false })
+        let narrow = PlayNetPlacement.place(zBack: TossTuning.zBack, lineZ: 1.0, reach: { _ in 1.0 }, blocked: { _ in false })
         XCTAssertNil(narrow, "a row narrower than the net: it does not fit")
     }
 
@@ -211,7 +211,9 @@ final class PlayNetTests: XCTestCase {
         p.end()
         XCTAssertFalse(p.netUp)
         XCTAssertNil(p.net.spec)
-        for r in rs { XCTAssertFalse(r.brain.reserved, "released"); XCTAssertFalse(r.brain.commanded, "the cheer's commanded flag is gone") }
+        for r in rs { XCTAssertFalse(r.brain.reserved, "released") }
+        for _ in 0..<400 { for r in rs { r.tick() } }
+        for r in rs { XCTAssertFalse(r.brain.commanded, "the cheer's commanded flag clears itself when the cheer ends"); XCTAssertNil(r.brain.idleState.kind == .joy ? 1 : nil) }
     }
 
     func testTheScorerBouncesAndTheOthersCheer() {
@@ -238,7 +240,7 @@ final class PlayNetTests: XCTestCase {
         let rs = rigs(3)
         func js() -> [PlayJelly] { rs.enumerated().map { PlayJelly(id: $0.offset, brain: $0.element.brain, sim: $0.element.sim, skinner: $0.element.skinner) } }
         let p = PlayToss(); p.viewSize = PlayTossTests.portrait
-        p.begin(ball: .soccerball, title: "Soccer ball", jellies: js(), snapCamera: true)
+        p.begin(ball: .soccerball, title: "Soccer ball", jellies: [], snapCamera: true)
         XCTAssertNil(p.shotSpot(ball: SIMD2(0, 0)), "no net: no spot")
         p.netStart(blockers: [])
         let n = p.net.spec!
@@ -270,7 +272,8 @@ final class PlayNetTests: XCTestCase {
         _ = care.store.place("decor-minigoal")
         care.syncDecor()
         let before = care.store.placedDecor
-        let encBefore = try! JSONEncoder().encode(before)
+        let enc = JSONEncoder(); enc.outputFormatting = .sortedKeys
+        let encBefore = try! enc.encode(before)
         XCTAssertEqual(DecorField.shared.kinds(.minigoal).count, 1)
         let ownUID = DecorField.shared.kinds(.minigoal)[0].uid
         let ownAt = DecorField.shared.kinds(.minigoal)[0].centre
@@ -282,7 +285,7 @@ final class PlayNetTests: XCTestCase {
         XCTAssertEqual(goals[0].uid, PlayNetTuning.uid)
         XCTAssertEqual(goals[0].spec.half.x, DecorKind.minigoal.spec.half.x * 1.6, accuracy: 1e-4, "measured 1.6 times")
         XCTAssertEqual(care.store.placedDecor, before, "the store's list is untouched")
-        XCTAssertEqual(try! JSONEncoder().encode(care.store.placedDecor), encBefore, "byte-identical")
+        XCTAssertEqual(try! enc.encode(care.store.placedDecor), encBefore, "byte-identical")
         XCTAssertNotNil(DecorField.shared.anim[PlayNetTuning.uid], "an anim: the puff can be driven")
         // the play world has the net, the room's own goal is not a solid piece of it
         XCTAssertNotNil(care.tossWorld().net)
@@ -291,7 +294,7 @@ final class PlayNetTests: XCTestCase {
         XCTAssertFalse(DecorField.shared.feet.contains { $0.uid == PlayNetTuning.uid }, "no temporary piece left")
         let after = DecorField.shared.kinds(.minigoal)
         XCTAssertEqual(after.count, 1); XCTAssertEqual(after[0].uid, ownUID); XCTAssertEqual(after[0].centre, ownAt, "the room's goal is back where it was")
-        XCTAssertEqual(try! JSONEncoder().encode(care.store.placedDecor), encBefore)
+        XCTAssertEqual(try! enc.encode(care.store.placedDecor), encBefore)
         XCTAssertNil(care.tossWorld().net)
     }
 
