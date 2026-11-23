@@ -60,6 +60,9 @@ nonisolated enum SoccerSessionTuning {
 final class SoccerSession {
     static let shared = SoccerSession()
     nonisolated deinit {}
+    /// integrate-r1 (best-friend-r1 rule 4): a body in a running session counts as "away" for buddy blocks (BondMoment.soccerMember). Installed at creation and again at every tick.
+    static func installBuddyHook() { BondMoment.soccerMember = { id in MainActor.assumeIsolated { SoccerSession.shared.isActive && SoccerSession.shared.memberIDs.contains(id) } } }
+    init() { Self.installBuddyHook() }
 
     enum Game { case pass, dribblePass, shots, solo }
     enum Phase { case plan, walking, kicking, rolling, fetch }
@@ -123,6 +126,7 @@ final class SoccerSession {
     // MARK: the tick (called from every brain's socialTick; one of them, the lowest awake id, drives)
 
     func tick(by b: BlobBrain, _ dt: Float) {
+        if BondMoment.soccerMember == nil { Self.installBuddyHook() }
         guard SoccerSessionTuning.on, MoveMix.on, !b.outingPlay else { return }
         let field = DecorField.shared
         let ball = field.feet.first { $0.kind == .soccerball }
@@ -661,6 +665,7 @@ extension BlobBrain {
         if activity == .touched || activity == .recovering { return "touched" }
         if social != nil { return "social" }
         if !inSession && mix.sess { return "member" }
+        if !inSession && inBuddyBlock { return "buddyBlock" }          // (integrate-r1: a body holding a buddy flag or in a block is not recruited until the block ends)
         return nil
     }
 
