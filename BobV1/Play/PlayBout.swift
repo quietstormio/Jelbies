@@ -210,7 +210,7 @@ extension PlayToss {
             guard lateral < ring else { continue }
             let te = max(0.04, t - (max(ring * ring - lateral * lateral, 0)).squareRoot() / sp)
             let need = o.headTop + ball.radius + 0.12
-            v.y = max(v.y, (need - from.y + 0.5 * g * te * te) / te)
+            v.y = max(v.y, min((need - from.y + 0.5 * g * te * te) / te, 6))          // (capped: a body right at the start of the path asked for a lift of 30+ and the ball went through the ceiling)
         }
     }
 
