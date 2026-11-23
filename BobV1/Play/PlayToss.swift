@@ -1093,7 +1093,7 @@ final class PlayToss {
             let u = SIMD2<Float>(dir.x * c - dir.y * s, dir.x * s + dir.y * c)
             let q = ballXZ - u * back
             let f = j.brain.fixed(q)
-            if netUp, let n = net.spec, ballXZ.y < n.mouthZ + 2.4, u.y < 0.35 { continue }          // (play-net keep-out: a ball near the goal is never kicked toward it / along its line)
+            if netUp, let n = net.spec, ballXZ.y < n.mouthZ + 1.5, u.y < 0.35 { continue }          // (play-net keep-out: a ball near the goal is never kicked toward it / along its line)
             if simd_distance(f, q) < 0.1, j.brain.peerFree(f), !netKeepOut(f) { plan = (f, u); break }          // (play-net keep-out)
         }
         if plan == nil, !PlayTuning.ballReturnOld {          // (a ball against a side wall: the nearest allowed spot to it, kicking along the wall toward the player, before the safety net)
@@ -1103,7 +1103,7 @@ final class PlayToss {
                     let u = SIMD2<Float>(dir.x * c - dir.y * s, dir.x * s + dir.y * c)
                     let f = j.brain.fixed(ballXZ - u * back2)
                     let g = ballXZ - f
-                    if netUp, let n = net.spec, ballXZ.y < n.mouthZ + 2.4, simd_length(g) > 1e-3, g.y / simd_length(g) < 0.35 { continue }          // (play-net keep-out)
+                    if netUp, let n = net.spec, ballXZ.y < n.mouthZ + 1.5, simd_length(g) > 1e-3, g.y / simd_length(g) < 0.35 { continue }          // (play-net keep-out)
                     if simd_length(g) > 0.45, simd_length(g) < 1.8, j.brain.peerFree(f), !netKeepOut(f) { plan = (f, simd_normalize(g)); break }          // (play-net keep-out)
                 }
                 if plan != nil { break }
