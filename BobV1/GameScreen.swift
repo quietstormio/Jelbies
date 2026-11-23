@@ -652,7 +652,7 @@ struct GameScreen: View {
             await sleep(2.5)
             var kinds: [DecorKind] = [.soccerball]
             if d.integer(forKey: "PlaceSoccer") >= 2 { kinds.append(.minigoal) }
-            for k in kinds where !care.store.placedDecor.contains(where: { $0.kind == k }) { care.store.grant(k.storeID); _ = care.store.place(k.storeID) }
+            for k in kinds where !care.store.placedDecor.contains(where: { $0.kind == k }) { care.store.grant(k.storeID); _ = care.store.place(k.storeID, dev: true) }
             care.syncDecor()
             NSLog("[placesoccer] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
         }

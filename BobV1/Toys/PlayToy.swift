@@ -72,8 +72,7 @@ final class BallToy: PlayToy {
     func deactivate() {}
 }
 
-/// play-net-r1: the soccer ball WITH the net (owner 2026-11-23: "put the net in the toy selector ... they can play with or without net"). Offered to anyone who owns the soccer ball (the play net
-/// comes with the ball; the Shop's Mini goal is not needed and nothing is bought, saved or placed). Its picture is the Mini goal's store art. The home room only: the park's strip leaves it out.
+/// play-net-r1: the soccer ball WITH the net (owner 2026-11-23: "put the net in the toy selector ... they can play with or without net"). Offered only to a player who owns the soccer ball AND the Shop's soccer net (owner 2026-11-23; the item is `decor-minigoal`, never placed in a room; nothing is bought, saved or placed by the card). Its picture is the Mini goal's store art. The home room only: the park's strip leaves it out.
 @MainActor
 final class SoccerNetToy: PlayToy {
     static let id = "ball-soccernet"
@@ -83,7 +82,7 @@ final class SoccerNetToy: PlayToy {
     var price: Int { StoreCatalog.item(storeID)?.price ?? 70 }
     /// The picture (the Mini goal's store item); the ownership test is the soccer ball's, below.
     var storeID: String { DecorKind.minigoal.storeID }
-    func isOwned(_ book: StoreBook) -> Bool { book.count(DecorKind.soccerball.storeID) > 0 }
+    func isOwned(_ book: StoreBook) -> Bool { book.count(DecorKind.soccerball.storeID) > 0 && book.count(storeID) > 0 }
     func activate(care: GameCare) { care.beginPlay(ball: .soccerball, net: true) }
     func deactivate() {}
 }

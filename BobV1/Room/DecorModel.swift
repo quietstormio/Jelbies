@@ -42,6 +42,8 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     static let batch2: [DecorKind] = DecorKind.allCases.filter { !original.contains($0) }
     /// Which tab of the Shop / Bag lists it.
     enum Category: String, Sendable { case furniture, toys }
+    /// A piece that is only ever out during Play (the soccer net, owned from the Shop): it cannot be put in the room.
+    var isPlayOnly: Bool { self == .minigoal }
     var category: Category {
         switch self {
         case .seesaw, .sandbox, .hopscotch, .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
@@ -166,7 +168,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .yarnball: return "A ball of yarn. It rolls and trails its strand."
         case .drum: return "A drum. Boop it for a thump."
         case .soccerball: return "A soccer ball. Jelmiko kick it with their stubby legs, dribble it and pass it."
-        case .minigoal: return "A little goal with a net. Jelmiko boop it; add a soccer ball and they line up and shoot."
+        case .minigoal: return "A goal for soccer. It comes out when you play soccer with them in Play."
         default: return batch3Use
         }
     }
@@ -179,7 +181,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .wardrobe: return "Wardrobe"; case .divider: return "Room divider"; case .floorlamp: return "Floor lamp"; case .slide: return "Slide"
         case .monstera: return "Monstera"; case .duck: return "Rubber duck"; case .blocks: return "Block stack"; case .spintop: return "Spinning top"
         case .toycar: return "RC car"; case .yarnball: return "Yarn ball"; case .drum: return "Drum"
-        case .soccerball: return "Soccer ball"; case .minigoal: return "Mini goal"
+        case .soccerball: return "Soccer ball"; case .minigoal: return "Soccer net"
         default: return batch3Title
         }
     }

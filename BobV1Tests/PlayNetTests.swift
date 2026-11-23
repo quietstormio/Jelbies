@@ -30,19 +30,46 @@ final class PlayNetTests: XCTestCase {
         XCTAssertEqual(b.buy("decor-ball"), .bought)
         XCTAssertFalse(PlayToyRegistry.offered(book: b).contains { $0.toyID == SoccerNetToy.id }, "the bouncy ball alone: no net card")
         b.grant("decor-soccerball")
-        XCTAssertEqual(PlayToyRegistry.offered(book: b).map(\.toyID), ["ball-ball", "ball-soccerball", SoccerNetToy.id], "the net card follows the soccer ball directly")
-        XCTAssertEqual(b.count("decor-minigoal"), 0, "the Shop's Mini goal is not needed")
+        XCTAssertEqual(PlayToyRegistry.offered(book: b).map(\.toyID), ["ball-ball", "ball-soccerball"], "the soccer ball alone: nothing about a net")
+        XCTAssertEqual(b.count("decor-minigoal"), 0)
+        b.grant("decor-minigoal")
+        XCTAssertEqual(PlayToyRegistry.offered(book: b).map(\.toyID), ["ball-ball", "ball-soccerball", SoccerNetToy.id], "with the net owned too, its card follows the soccer ball directly")
+        let b2 = book(); b2.grant("decor-minigoal")
+        XCTAssertTrue(PlayToyRegistry.offered(book: b2).isEmpty, "the net alone (no soccer ball): no card")
         XCTAssertFalse(PlayToyRegistry.offered(book: b, park: true).contains { $0.toyID == SoccerNetToy.id }, "the park's strip never shows the net")
         XCTAssertEqual(PlayToyRegistry.toy(SoccerNetToy.id)?.title, "Soccer net")
         XCTAssertNotNil(StoreCatalog.item(PlayToyRegistry.toy(SoccerNetToy.id)!.storeID), "the card's picture is the Mini goal's store art")
         XCTAssertEqual(PlayToyRegistry.toy(SoccerNetToy.id)?.storeID, "decor-minigoal")
-        XCTAssertEqual(b.count("decor-minigoal"), 0, "showing the card bought nothing")
+        XCTAssertEqual(b.count("decor-minigoal"), 1, "showing the card bought nothing more")
     }
 
     func testTheNetIsNotAStoreOrBagOrCatalogueItem() {
         XCTAssertFalse(DecorKind.allCases.contains { $0.rawValue.contains("playnet") }, "no new decor kind")
         XCTAssertEqual(StoreCatalog.items.filter { $0.id == "decor-minigoal" }.count, 1, "the Mini goal is sold once, as before")
         XCTAssertFalse(StoreCatalog.items.contains { $0.id.contains("net") && $0.id != "decor-minigoal" })
+    }
+
+    /// Owner 2026-11-23: the net is bought in the Shop (decor-minigoal), is not a room piece, and an old save with one placed puts it away (still owned).
+    func testTheSoccerNetIsSoldOwnedNotPlaceableAndAPlacedOneIsPutAwayOnLoad() throws {
+        let item = try XCTUnwrap(StoreCatalog.item("decor-minigoal"))
+        XCTAssertEqual(item.name, "Soccer net"); XCTAssertEqual(item.price, 70)
+        XCTAssertEqual(item.description, "A goal for soccer. It comes out when you play soccer with them in Play.")
+        XCTAssertTrue(ShopTab.toys.items.contains { $0.id == "decor-minigoal" }, "still sold")
+        let b = book(); b.wallet.add(500)
+        XCTAssertEqual(b.buy("decor-minigoal"), .bought)
+        XCTAssertEqual(b.count("decor-minigoal"), 1, "owned")
+        XCTAssertFalse(b.canPlace(item)); XCTAssertNotNil(b.placeBlocker(item))
+        XCTAssertNil(b.place("decor-minigoal")); XCTAssertTrue(b.placedDecor.isEmpty, "not placeable")
+        XCTAssertNotNil(b.place("decor-minigoal", dev: true), "the dev aid still can")
+        // a save with a placed one (and one in another room's stash) loads with them put away, ownership kept, the rest untouched
+        var s = StoreBook.Saved()
+        s.counts = ["decor-minigoal": 1, "decor-soccerball": 1]
+        s.placedAt = [PlacedDecor(uid: 4, kind: .minigoal, x: 0, z: -1.6), PlacedDecor(uid: 5, kind: .soccerball, x: 1, z: 1)]
+        s.stash = ["loft": [PlacedDecor(uid: 6, kind: .minigoal, x: 0, z: -1.6)]]
+        let back = try JSONDecoder().decode(StoreBook.Saved.self, from: try JSONEncoder().encode(s))
+        XCTAssertEqual(back.placedAt?.map(\.uid), [5], "the net is put away, the ball stays")
+        XCTAssertEqual(back.stash?["loft"]?.count, 0)
+        XCTAssertEqual(back.counts["decor-minigoal"], 1, "still owned")
     }
 
     // MARK: the ball and the net: fixed paths
@@ -357,7 +384,7 @@ final class PlayNetTests: XCTestCase {
     func testTheNetIsTemporaryNothingIsSavedAndTheOwnersGoalComesBack() {
         let care = GameCare(jellyCount: 3, persistent: false, defaults: UserDefaults(suiteName: "PlayNet.1")!)
         care.store.grant("decor-soccerball"); care.store.grant("decor-minigoal")
-        _ = care.store.place("decor-minigoal")
+        _ = care.store.place("decor-minigoal", dev: true)
         care.syncDecor()
         let before = care.store.placedDecor
         let enc = JSONEncoder(); enc.outputFormatting = .sortedKeys
