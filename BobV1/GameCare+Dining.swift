@@ -22,13 +22,17 @@ extension GameCare {
 
     /// One fixed step of the meal flow for Jelly `id` (a no-op unless the tray is for him): the walk to his place, the tray pop-in, the pieces
     /// paid as eaten, the refusal label, the re-serve loop. Jelly 0 keeps the Call / queued-request gating it always had.
+    /// The ball game's hold on a Jelmiko (`reserved` + the PlayToss wait focus) applies only when no meal is wanted or running and he is not the meal's Jelly.
+    static func playHolds(reserving: Bool, mealActive: Bool, holds: Bool) -> Bool { !reserving && !mealActive && holds }
+
     func tickDining(id: Int, brain: BlobBrain, sim: SoftBody?, dt: Float) {
         if id == 0, notice != nil { noticeAge += dt; if noticeAge > 1.9 { notice = nil } }
         traceSingle(id: id, brain: brain, sim: sim, dt: dt)
         if !groupActive {             // single serving: the Jelly the tray is for waits where he stands (reserved), everybody else is free (a group's waiter stays reserved between its sittings)
             let reserving = id == mealJelly && (wanted != nil || meal != nil)
-            brain.reserved = reserving
-            brain.waitFocus = reserving ? (dining.isPresent ? dining.places.first?.stand : (wantedOrigin ?? DiningSpot.preferred)) : nil
+            let playHeld = Self.playHolds(reserving: reserving, mealActive: wanted != nil || meal != nil, holds: play.holds(id))          // (play-ball-r2: the ball game holds its Jelmiko on the line: the wait pose, no roam leg / stroll; PlayToss sets their waitFocus. NEVER while a meal is wanted or running: then these lines compute exactly what the phone build computes)
+            brain.reserved = reserving || playHeld
+            if !playHeld { brain.waitFocus = reserving ? (dining.isPresent ? dining.places.first?.stand : (wantedOrigin ?? DiningSpot.preferred)) : nil }
             brain.mealFaceYaw = reserving && DiningGroup.calmWait ? DiningLayout.make(n: 1).places[0].yaw : nil          // (C3: the calm wait faces his place)
         }
         if id != mealJelly, wanted != nil || meal != nil { stepAside(id: id, brain: brain, sim: sim, dt: dt); return }

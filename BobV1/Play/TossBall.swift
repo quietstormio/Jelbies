@@ -150,7 +150,8 @@ nonisolated struct TossBall: Sendable {
             let reach = TossTuning.bodyRadius + r
             guard dist < reach, pos.y - r < b.top + 0.02 else { continue }
             // a ball whose centre is about level with the crown or above it, near the top of the dome, is ON HIS HEAD (the shoulder of the dome counts: the ball rolls off it onto the crown)
-            if pos.y > b.top - 0.15, dist < TossTuning.headRadius + 0.3, vel.y <= 0.5 {
+            // (play-ball-r2: a fast, flat ball whose centre is already above the crown meets the rim of the body's circle before it is over the crown's disc: it is on his head too, not a soft hit on the shoulder)
+            if pos.y > b.top - 0.15, dist < (pos.y > b.top ? reach : TossTuning.headRadius + 0.3), vel.y <= 0.5 {
                 ev.append(.headHit(id: b.id))
                 return
             }
