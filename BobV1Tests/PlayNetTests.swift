@@ -298,6 +298,30 @@ final class PlayNetTests: XCTestCase {
         XCTAssertNil(care.tossWorld().net)
     }
 
+    func testTheNetSurvivesARotationAndStaysClearOfTheLine() {
+        PlayTossTests.room(PlayTossTests.portrait)
+        let rs = rigs(3)
+        func js() -> [PlayJelly] { rs.enumerated().map { PlayJelly(id: $0.offset, brain: $0.element.brain, sim: $0.element.sim, skinner: $0.element.skinner) } }
+        let p = PlayToss(); p.viewSize = PlayTossTests.portrait
+        var goals = 0
+        p.net.onGoal = { _ in goals += 1 }
+        p.begin(ball: .soccerball, title: "Soccer ball", jellies: js(), snapCamera: true)
+        p.netStart(blockers: [])
+        XCTAssertNotNil(p.net.onGoal, "the goal callback survives the start")
+        var w = TossWorld(); w.xHalf = PlayToss.ballXHalf
+        for size in [PlayTossTests.landscape, PlayTossTests.portrait, PlayTossTests.landscape] {
+            PlayTossTests.room(size)
+            p.viewSize = size
+            for _ in 0..<60 { for r in rs { r.tick() }; w.net = p.net.spec; p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js()) }
+            XCTAssertTrue(p.netUp, "still up after the turn")
+            let n = p.net.spec!
+            XCTAssertLessThanOrEqual(n.mouthZ, (p.spots.values.map(\.y).min() ?? 9) - PlayNetTuning.minLineGap + 1e-3, "keeps 1.6 off the new line")
+            XCTAssertLessThanOrEqual(abs(n.centre.x) + n.outerHalf, min(PlayToss.ballReach(n.rearZ), PlayToss.ballReach(n.frontZ)) + 1e-3, "inside the new frame's back row")
+        }
+        p.end()
+        XCTAssertNotNil(p.net.onGoal, "and the end")
+    }
+
     func testNoRoomPostsTheMessage() {
         PlayTossTests.room(PlayTossTests.portrait)
         let rs = rigs(1)

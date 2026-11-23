@@ -243,7 +243,9 @@ extension PlayToss {
 
     /// Play started with the net: it is placed (or not: no room) once the line is known. `blockers` = bodies that stay where they are (sleepers).
     func netStart(blockers: [SIMD2<Float>]) {
+        let cb = net.onGoal          // (a goal callback registered once survives every game)
         net = PlayNetState()
+        net.onGoal = cb
         net.blockers = blockers
         netUp = false
         if let c = netPlacement(blockers: blockers) {
@@ -270,7 +272,9 @@ extension PlayToss {
 
     /// Play ended (Done or any way out): the net and everything it was doing are gone.
     func netEnd() {
+        let cb = net.onGoal
         net = PlayNetState()
+        net.onGoal = cb
         netUp = false
     }
 
