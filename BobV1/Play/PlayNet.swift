@@ -178,7 +178,11 @@ struct PlayNetState {
     /// The last Jelmiko who headed or kicked the ball since the throw (nil = nobody: the player's own throw).
     var lastToucher: Int?
     /// Who still has to start a cheer: id -> (does the 3-rep bounce, give-up time).
-    var pending: [Int: (scorer: Bool, until: Float)] = [:]
+    var pending: [Int: (scorer: Bool, until: Float, turnUntil: Float?)] = [:]
+    /// When the last goal was scored (the clock), the next sample of the cheer log, and when a body in the net was last logged.
+    var goalAt: Float = -99
+    var sampleAt: Float = 0
+    var bodyLogT: [Int: Float] = [:]
     var goals = 0
     /// Bodies that stay where they are while the net is up (sleepers): the net is placed clear of them.
     var blockers: [SIMD2<Float>] = []
@@ -284,14 +288,26 @@ extension PlayToss {
         if let c = netPlacement(blockers: net.blockers) { if net.spec?.centre != c { net.spec = TossNet(centre: c) } }
     }
 
-    /// Every step while the game is on: the cheers that are waiting for a free Jelmiko.
+    /// Every step while the game is on: the cheers that are waiting for a free (or a turned) Jelmiko, the cheer log, and a Jelmiko inside the net (logged).
     func netTick(dt: Float) {
-        guard !net.pending.isEmpty else { return }
+        guard netUp else { return }
         for (id, p) in net.pending {
             guard let j = jellies.first(where: { $0.id == id }) else { net.pending[id] = nil; continue }
-            if netCelebrate(j, scorer: p.scorer) || clock > p.until { net.pending[id] = nil }
+            if netCelebrate(j, scorer: p.scorer, turnUntil: p.turnUntil) { net.pending[id] = nil }
+            else if clock > p.until { net.pending[id] = nil; NSLog("[playnet] cheer id=%d started=0 kind=none reason=gave-up idle=%@ script=%@ feet=%d", id, String(describing: j.brain.idleState.kind), String(describing: j.brain.script), j.brain.feet.active ? 1 : 0) }
         }
+        if let n = net.spec {
+            for j in jellies where n.contains(j.pos, margin: 0.1) { if clock - (net.bodyLogT[j.id] ?? -9) > 1 { net.bodyLogT[j.id] = clock; NSLog("[playnet] BODY IN NET id=%d at %.2f,%.2f", j.id, j.pos.x, j.pos.y) } }
+        }
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled, clock - net.goalAt < 2.2, clock >= net.sampleAt {
+            net.sampleAt = clock + 0.2
+            for j in jellies where !j.free { NSLog("[playnet] cheerstate t=+%.1f id=%d idle=%@ lift=%.2f facing=%.0f", clock - net.goalAt, j.id, String(describing: j.brain.idleState.kind), j.sim.centroid().y - j.sim.restCentroid.y, netFacing(j)) }
+        }
+        #endif
     }
+    /// The angle (degrees) between where he looks and the player.
+    func netFacing(_ j: PlayJelly) -> Float { abs(wrapAngle(j.brain.yawTo(playerPoint()) - j.brain.yaw)) * 180 / .pi }
 
     /// A Jelmiko touched the ball (header / kick): he is the one who scores if it goes in.
     func netNoteToucher(_ id: Int) { if netUp { net.lastToucher = id } }
@@ -309,8 +325,10 @@ extension PlayToss {
             if net.first == nil { net.first = "goal" }
             let scorer = touched ? net.lastToucher : nil
             net.hold = .init(t: 0, rolled: false, scorer: scorer)
+            net.goalAt = clock; net.sampleAt = clock
             phase = .loose; looseT = 0; restT = 0; returnAim = nil; bumper = nil; passTo = nil
             for j in jellies where j.brain.tossHeaderApproach { j.brain.tossHeaderRelease(j.sim, j.skinner) }
+            netClearFoot()
             DecorField.shared.kick(PlayNetTuning.uid, min(1, 0.4 + speed / 3.4))
             onEvent?(.goal(scorer: scorer))
             celebrateGoal(scorer: scorer)
@@ -357,30 +375,41 @@ extension PlayToss {
 
     // MARK: the celebration
 
-    /// A goal: the scorer (if a Jelmiko kicked it) does the 3-rep bounce, every other Jelmiko on the line cheers, each where he stands. A goal from the player's own throw makes all of
-    /// them cheer. Each starts as soon as his body is free (a Jelmiko still in his header or bump finishes it first), within `cheerWait`.
+    /// A goal: EVERY Jelmiko on the line cheers, facing the player (the audience), with the joy bounce, the excited face and the blush: the scorer (if a Jelmiko kicked it) the bigger 3-rep bounce,
+    /// the others 2 reps; a goal from the player's own throw is cheered by all. Each starts at once when his body is free and facing the player; one who is turned away (he was going for the
+    /// ball) turns to the player first; one still in his header or bump finishes it first. Gives up after `cheerWait`, logged.
     func celebrateGoal(scorer: Int?) {
         for j in jellies where !j.free {
             let sc = scorer == j.id
-            if !netCelebrate(j, scorer: sc) { net.pending[j.id] = (sc, clock + PlayNetTuning.cheerWait) }
+            if !netCelebrate(j, scorer: sc, turnUntil: nil) { net.pending[j.id] = (sc, net.pending[j.id]?.until ?? clock + PlayNetTuning.cheerWait, net.pending[j.id]?.turnUntil) }
         }
     }
 
-    /// Starts one Jelmiko's cheer the way the ball game starts its own motions (`commanded`, as `tossHeaderStart` does: in Play the Jelmiko are held). False = his body is busy.
-    private func netCelebrate(_ j: PlayJelly, scorer: Bool) -> Bool {
+    /// Starts one Jelmiko's cheer the way the ball game starts its own motions (`commanded`, as `tossHeaderStart` does: in Play the Jelmiko are held). False = not yet (body busy, or turning to the player).
+    private func netCelebrate(_ j: PlayJelly, scorer: Bool, turnUntil: Float?) -> Bool {
         let b = j.brain
-        guard b.idleState.kind == nil, !b.isSleeping, !b.isNapping, !b.feet.active else { return false }
-        if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) }
-        if scorer {
-            guard b.idleStart(.bounce, j.sim) else { return false }
-            b.commanded = true
-            b.idleState.reps = 3
-            b.face(.excited, hold: 1.4); b.blushBump(hold: 2.6, peak: 0.75)
-        } else {
-            guard b.idleStart(.joy, j.sim) else { return false }
-            b.commanded = true
-            b.face(.excited, hold: 1.1); b.blushBump(hold: 2.4, peak: 0.7)
+        guard !b.isSleeping, !b.isNapping else { return false }
+        // still turning to the player: wait for the turn to end (or for its time)
+        if let tu = turnUntil, clock < tu {
+            if case .none = b.script {} else { return false }
         }
-        return true
+        guard b.idleState.kind == nil, !b.feet.active else { return false }
+        if netFacing(j) > 25, turnUntil == nil {          // turned away from the audience: turn first (a short turn on the spot)
+            if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) }
+            b.startTurn(to: b.yawTo(playerPoint()), sim: j.sim)
+            net.pending[j.id] = (scorer, net.pending[j.id]?.until ?? clock + PlayNetTuning.cheerWait, clock + 0.9)
+            return false
+        }
+        if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) }
+        let started: Bool
+        if scorer {
+            started = b.idleStart(.bounce, j.sim)
+            if started { b.commanded = true; b.idleState.reps = 3; b.face(.excited, hold: 1.8); b.blushBump(hold: 2.8, peak: 0.8) }
+        } else {
+            started = b.idleStart(.joy, j.sim)
+            if started { b.commanded = true; b.idleState.reps = 2; b.face(.excited, hold: 1.5); b.blushBump(hold: 2.6, peak: 0.7) }
+        }
+        NSLog("[playnet] cheer id=%d started=%d kind=%@ facing=%.0f dt=%.2f", j.id, started ? 1 : 0, scorer ? "bounce3" : "joy2", netFacing(j), clock - net.goalAt)
+        return started
     }
 }
