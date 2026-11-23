@@ -647,7 +647,14 @@ struct GameScreen: View {
                 for _ in 0..<100 where care.play.camBlend < 0.95 { await sleep(0.1) }
                 await sleep(1.5)
                 #if targetEnvironment(simulator)
-                if d.integer(forKey: "PlayNetShots") != 0 { await care.play.runNetShots(runs: d.integer(forKey: "PlayNetShots")) }          // (capture aid: the play net's fixed shots, Play/PlayNetShots.swift)
+                if d.integer(forKey: "PlayNetShots") != 0 || d.string(forKey: "PlayNetOnly") != nil {
+                    NSLog("[playnet] field minigoals during Play: %@", DecorField.shared.kinds(.minigoal).map { "uid\($0.uid)@\($0.centre.x),\($0.centre.y)" }.joined(separator: " "))
+                    await care.play.runNetShots(runs: max(d.integer(forKey: "PlayNetShots"), 1), only: d.string(forKey: "PlayNetOnly"))
+                    if d.integer(forKey: "PlayDemoEnd") != 0 {
+                        await sleep(3); care.endPlay(); await sleep(2)
+                        NSLog("[playnet] after Done: net pieces %d, minigoals: %@", DecorField.shared.feet.filter { $0.uid == PlayNetTuning.uid }.count, DecorField.shared.kinds(.minigoal).map { "uid\($0.uid)@\($0.centre.x),\($0.centre.y)" }.joined(separator: " "))
+                    }
+                }          // (capture aid: the play net's fixed shots, Play/PlayNetShots.swift)
                 #endif
                 if mode == 1 {
                     let speed = d.double(forKey: "PlayDemoSpeed") > 0 ? d.double(forKey: "PlayDemoSpeed") : 1.8

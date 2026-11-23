@@ -50,16 +50,17 @@ struct PlayNetShot {
 extension PlayToss {
     /// Runs the list `runs` times (waiting for each ball to come back to the hand). Logs `[playnet] shot=... result=...`.
     @MainActor
-    func runNetShots(runs: Int) async {
+    func runNetShots(runs: Int, only: String? = nil) async {
         func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
         guard netUp, let n = net.spec else { NSLog("[playnet] shots: no net"); return }
         for run in 0..<max(runs, 1) {
-            for s in PlayNetShot.list(innerHalf: n.innerHalf, radius: ball.radius) {
+            for s in PlayNetShot.list(innerHalf: n.innerHalf, radius: ball.radius) where only == nil || s.name == only {
                 var waited = 0.0
                 while phase != .inHand, active, waited < 30 { await sleep(0.1); waited += 0.1 }
                 guard active, let spec = net.spec else { return }
-                await sleep(0.4)
+                await sleep(only == nil ? 2.5 : 1.0)          // (the Jelmiko walk back to their places first)
                 let (from, v) = s.launch(spec)
+                NSLog("[playnet] launch shot=%@", s.name)
                 launch(from: from, velocity: v)
                 var t = 0.0, overSeen = false
                 while net.first == nil, t < 6, active {
