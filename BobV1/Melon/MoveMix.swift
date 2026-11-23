@@ -40,10 +40,30 @@ nonisolated enum MoveMix {
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
     static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
+    /// Round 3c: a ball pass is never played closer than this between the two (a close exchange ends instead).
+    static let passMinDist: Float = 2.0
+    // 7. soccer by themselves (round 3): with a soccer ball placed, some moment about every `soccerGap` s of field time, a real pass exchange of `passKicksMin...Max` kicks
+    nonisolated(unsafe) static var soccerNextAt: Float = 0
+    nonisolated(unsafe) static var soccerDbg: [String: Int] = [:]
+    nonisolated(unsafe) static var ballBadSince: Float = -1
+    /// A pass found no clear line from where the ball lies: the next solo kick dribbles it out to the middle of the floor first.
+    nonisolated(unsafe) static var ballNeedsRoom = false 
+    nonisolated(unsafe) static var ballNeedsRoomSince: Float = 0
+    static let ballBadAfter: Float = 8
+    static let soccerGap: ClosedRange<Float> = 45...70, soccerSoloSkip: Float = 0.5
+    static let passChance: Float = 0.85, passKicksMin = 3, passKicksMax = 6
+    static let followGoal: Float = 0.55, followThird: Float = 0.35          // after a pass: a shot run (goal placed) / the third one joins with a kick
+    /// Leg against the board's predicted positions over the next 2 s (see `mixBoardConflict`).
+    static let boardNear: Float = 1.05, boardPenalty: Float = 6
+    /// A kind unseen for this long gets the full recency boost (x1 + 1); never seen = full.
+    static let recencyFull: Float = 600, recencyExtra: Float = 2          // (x3 at most: 1 + 2; the brief said about x2, the 10-minute kind count needed more)
     static let windowGap: Float = 90
     /// Longest roam leg (was 5.5; 3.4 grumpy): a stale far cell is reachable in one leg.
     nonisolated(unsafe) static var legMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_LEGMAX"].flatMap { Float($0) } ?? 6.5
     static let legMaxGrumpy: Float = 5.5
+    /// The park (round 3): roam legs no longer than before the mix, and a share of the runs.
+    nonisolated(unsafe) static var parkLegMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_PARKLEG"].flatMap { Float($0) } ?? 5.5
+    nonisolated(unsafe) static var parkRunMul: Float = ProcessInfo.processInfo.environment["MOVEMIX_PARKRUN"].flatMap { Float($0) } ?? 0.4
     static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
     /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
     static let ownShare: Float = 0.7
@@ -89,6 +109,14 @@ struct MixBook {
     var strollDir = SIMD2<Float>.zero
     var strollDirAt: Float = -99
     var strollThird = -1
+    var soccerFollowAt: Float = -1
+    var soccerLogAt: Float = -99
+    var soccerNudgeAt: Float = -99
+    var soccerPassTries = 0
+    var soccerOwn = false
+    var passWhy = ""
+    var soccerNudgeT: Float = -99, soccerStuck = 0
+    var soccerNudgeBall = SIMD2<Float>.zero
     var windowUntil: Float = -1
     /// A run covers the first `runShare` of a leg; the rest is walked at the normal blend (afterRun = the real goal), so a run never ends in a stop.
     var afterRun: SIMD2<Float>?
@@ -190,7 +218,8 @@ extension BlobBrain {
                     nearest = min(nearest, simd_distance(o.position, cand))
                     if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
                 }
-                var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false)
+                if mixLegThroughSolid(here, cand) { continue }
+                var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) - mixBoardConflict(from: here, to: cand, speed: roomNominalWalk)
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
                 score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
                 score += MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
@@ -270,8 +299,8 @@ extension BlobBrain {
             if (busy && near < MoveMix.runClearance) || near < peerGap * 1.1 { return false }
         }
         if let b = board, b.claimed(near: g, radius: MoveMix.claimRadius, except: steerID) { return false }
-        guard roomLegConflict(from: here, to: g, speed: roomNominalWalk * 1.6, others: others, dash: true) < 0.01 else { return false }
-        let chance = MoveMix.runChance * (1 - 0.75 * idleNight) * (idleMood == .happy ? 1 : MoveMix.okayRunMul)
+        guard roomLegConflict(from: here, to: g, speed: roomNominalWalk * 1.6, others: others, dash: true) < 0.01, mixBoardConflict(from: here, to: g, speed: roomNominalWalk * 1.6) < 0.01, !mixLegThroughSolid(here, g) else { return false }
+        let chance = MoveMix.runChance * (outingPlay ? MoveMix.parkRunMul : 1) * (1 - 0.75 * idleNight) * (idleMood == .happy ? 1 : MoveMix.okayRunMul)
         guard rand() < chance else { return false }
         var rg = here + (g - here) * MoveMix.runShare
         if d - simd_distance(here, rg) < MoveMix.runTail { rg = here + (g - here) / d * max(d - MoveMix.runTail, 0) }
@@ -294,5 +323,157 @@ extension BlobBrain {
         script = .walk(target: g, then: .none); activity = .walking
         mix.last = .leg; mix.legKind = "run-tail"
         return true
+    }
+}
+
+extension BlobBrain {
+    /// 1...2: the weight boost of a kind last seen `ago` seconds ago (nil = never).
+    func mixRecency(_ ago: Float?) -> Float { 1 + MoveMix.recencyExtra * min(1, (ago ?? MoveMix.recencyFull) / MoveMix.recencyFull) }
+}
+
+extension BlobBrain {
+    /// Round 3 (park, destination level): the leg `here -> cand` runs through a park solid (slide, seesaw, bench ...). Always false at home.
+    func mixLegThroughSolid(_ here: SIMD2<Float>, _ cand: SIMD2<Float>) -> Bool {
+        guard MoveMix.on else { return false }
+        if ParkClearSpot.legCrossesSolid(here, cand, radius: footprint) { return true }
+        let courts = ParkClearSpot.courts
+        guard !courts.isEmpty else { return false }          // (park hopscotch court: a leg across it meets the hoppers / the line)
+        let n = max(1, Int(simd_distance(here, cand) / 0.2))
+        for i in 0...n { let p = here + (cand - here) * (Float(i) / Float(n)); if courts.contains(where: { $0.distance(p) < 0.35 }) { return true } }
+        return false
+    }
+    /// 0...`boardPenalty`: the leg would come within a body's width of where another body will be (from the shared board) in the next 2 s. Not only for runs.
+    func mixBoardConflict(from here: SIMD2<Float>, to cand: SIMD2<Float>, speed: Float) -> Float {
+        guard MoveMix.on, let b = board else { return 0 }
+        let L = simd_distance(here, cand)
+        guard L > 0.05, speed > 0.1 else { return 0 }
+        var worst: Float = 0
+        let near = peerGap * MoveMix.boardNear
+        for o in socialOthers() where o !== self {
+            for k in 1...4 {
+                let t = Float(k) * 0.5
+                guard let q = b.position(of: o.steerID, after: t) else { break }
+                let mine = here + (cand - here) * min(1, speed * t / L)
+                let d = simd_distance(mine, q)
+                if d < near { worst = max(worst, 1 - d / near) }
+            }
+        }
+        return worst * MoveMix.boardPenalty
+    }
+}
+
+extension BlobBrain {
+    /// A soccer ball is placed, free and at rest (nobody using it).
+    private func mixFreeSoccer() -> DecorFoot? { freeBall().flatMap { $0.kind == .soccerball ? $0 : nil } }
+    /// A sleeper close to `p`, or `p` under a HUD button: not a place to send the ball.
+    func mixBallSpotBad(_ p: SIMD2<Float>) -> Bool {
+        if !mixStopOK(p) { return true }
+        return socialOthers().contains { $0 !== self && $0.idleState.kind == .sleep && simd_distance($0.position, p) < 1.3 }
+    }
+
+    /// pickAutonomous (before the pair roll): with a soccer ball in the room, about every minute or so one of them starts a soccer moment: a pass with a friend, else a kick of his own.
+    func mixSoccerUrge(_ sim: SoftBody) -> Bool {
+        mixSoccerWallNudge()
+        if EmoteSpot.logOn, variety.now - mix.soccerLogAt > 10, let sb = DecorField.shared.feet.first(where: { $0.kind == .soccerball }) {          // (round 3 diagnosis: why a ball moment does not start)
+            mix.soccerLogAt = variety.now
+            let f = DecorField.shared
+            NSLog("[soccerurge] t=%.1f id=%d ball=(%.2f,%.2f) moving=%d occupant=%d wired=%d held=%d due=%d mood=%d res=%d soc=%d idle=%d hold=%d", variety.now, steerID, f.position(sb).x, f.position(sb).y, f.anim[sb.uid]?.moving == true ? 1 : 0, f.occupant[sb.uid] ?? -1, DecorKind.wired.contains(sb.kind) ? 1 : 0, sb.uid == f.held ? 1 : 0, variety.now >= MoveMix.soccerNextAt ? 1 : 0, idleMood == .grumpy ? 1 : 0, reserved ? 1 : 0, social == nil ? 0 : 1, idleState.kind == nil ? 0 : 1, socialBook.hold ? 1 : 0)
+        }
+        guard MoveMix.on, anticsEnabled, idleMood != .grumpy, !mixSleepy, !reserved, social == nil, idleState.kind == nil, !socialBook.hold, let ball = mixFreeSoccer() else { return false }
+        let clock = variety.now          // (round 3b: game time of the brain; the field clock runs slowly while nothing rolls)
+        guard clock >= MoveMix.soccerNextAt else { return false }
+        let c = DecorField.shared.position(ball)
+        let others = socialOthers().filter { $0 !== self }
+        if others.contains(where: { $0.reserved || ($0.idleState.kind == .sleep && simd_distance($0.position, c) < 3.5) }) { MoveMix.soccerNextAt = clock + 8; return false }          // (a meal on, or a sleeper by the ball)
+        MoveMix.soccerNextAt = clock + rand(MoveMix.soccerGap.lowerBound, MoveMix.soccerGap.upperBound)
+        let ballOff = roamProvider?().map { !$0.contains(c) || $0.halfWidth(at: c.y) - abs(c.x) < 0.3 } ?? false
+        let passWanted = rand() < MoveMix.passChance || mix.soccerPassTries > 0
+        if passWanted, !ballOff, !mixBallSpotBad(c) {
+            var why = "quiet"
+            do {          // (round 3b: a ball pass is the owner's own ask: it does not wait out the quiet period or the same-pair cooldown of the pair emotes)
+                let cands = others.filter { o in
+                    let d = simd_distance(o.position, position)
+                    return (o.socialFree || o.socialWandering) && d > 1.6 && d < 9 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 7.5
+                }
+                why = cands.isEmpty ? "nobody" : "plan"
+                if !cands.isEmpty {
+                    let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]
+                    if o.socialFree {
+                        if !socialStart(.pass, with: o, sim) { if !MoveMix.ballNeedsRoom { MoveMix.ballNeedsRoomSince = variety.now }; MoveMix.ballNeedsRoom = true; MoveMix.soccerDbg["passNoLine", default: 0] += 1; why = "noLine"; mix.soccerPassTries = 99 } else { mix.soccerPassTries = 0; varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passStarted", default: 0] += 1; return true }
+                    } else if o.socialBeckonStop() {          // (he is out on a leg: asked to stop; the pass starts when he has, like the other pairs)
+                        mix.soccerPassTries = 0
+                        socialBook.invite = (.pass, o.steerID, 0); varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passInvited", default: 0] += 1; return true
+                    } else { why = "beckon" }
+                }
+            }
+            MoveMix.soccerDbg["passFail-" + why, default: 0] += 1
+            if EmoteSpot.logOn { NSLog("[soccerpass] t=%.1f id=%d fail=%@ tries=%d", variety.now, steerID, why, mix.soccerPassTries) }
+            mix.soccerPassTries += 1
+            if mix.soccerPassTries <= 14 { MoveMix.soccerNextAt = clock + rand(2, 4); return false }          // (the pass is what was wanted: look again in a few seconds, do not turn it into a solo kick yet)
+            mix.soccerPassTries = 0
+        }
+        mix.soccerOwn = true; defer { mix.soccerOwn = false }
+        if decorStart(.soccerKick, sim, only: .soccerball) { mix.last = .solo; return true }
+        MoveMix.soccerNextAt = clock + 8
+        return false
+    }
+
+    /// socialRelease of a finished ball pass: sometimes one of them (or the third) follows with a kick / a shot run.
+    func mixPassEnded(_ s: SocialSession) {
+        guard MoveMix.on, s.kind == .pass, s.end == .done || s.end == .brokenUp else { return }
+        if s.mixFollowID == -2 {
+            s.mixFollowID = -1
+            let r = rand()
+            let goalPlaced = !DecorField.shared.goals.isEmpty
+            let pair = [s.idA, s.idB].filter { $0 >= 0 }
+            if goalPlaced, r < MoveMix.followGoal, let id = pair.randomElement() { s.mixFollowID = id }
+            else if r < MoveMix.followGoal + MoveMix.followThird || !goalPlaced && r < 0.6 {
+                let third = socialOthers().filter { !pair.contains($0.steerID) && $0.socialFree && $0.idleMood != .grumpy && !$0.mixSleepy }
+                if let t = third.first { s.mixFollowID = t.steerID; t.mix.soccerFollowAt = variety.now + rand(1.0, 2.2) }
+                else if let id = pair.randomElement() { s.mixFollowID = id }
+            }
+        }
+        if s.mixFollowID == steerID { mix.soccerFollowAt = variety.now + rand(0.9, 2.0); mix.strollUntil = -1 }
+    }
+    /// pickAutonomous: this one was picked to follow a pass with a kick.
+    func mixSoccerFollowDue(_ sim: SoftBody) -> Bool {
+        guard MoveMix.on, mix.soccerFollowAt > 0 else { return false }
+        let now = variety.now
+        if now < mix.soccerFollowAt { restTimer = 0.2; return true }          // (a beat: he looks at the ball)
+        let late = now > mix.soccerFollowAt + 8
+        mix.soccerFollowAt = -1
+        guard !late, !reserved, social == nil, idleState.kind == nil, mixFreeSoccer() != nil else { return false }
+        mix.soccerOwn = true; defer { mix.soccerOwn = false }
+        if decorStart(.soccerKick, sim, only: .soccerball) { mix.last = .solo; return true }
+        return false
+    }
+}
+
+extension BlobBrain {
+    /// A soccer ball that has rolled to the wall, outside the floor the Jelmiko walk on, cannot be stood behind: it gets a gentle roll back in (nobody is the kicker). Every 6 s at most.
+    func mixSoccerWallNudge() {
+        guard MoveMix.on, let rf = roamProvider?() else { return }
+        let f = DecorField.shared
+        guard let sb = f.feet.first(where: { $0.kind == .soccerball }), f.occupant[sb.uid] == nil, sb.uid != f.held, f.anim[sb.uid]?.moving != true else { MoveMix.ballBadSince = -1; return }
+        let c = f.position(sb), now = variety.now
+        // a ball at rest where no Jelmiko may stand (outside the walkable floor, at the wall, or under a HUD button)
+        let pocket = MoveMix.ballNeedsRoom && now - MoveMix.ballNeedsRoomSince > 12          // (no pass line from here and no kicker could dribble it out: a dead pocket beside the goal / a piece)
+        let bad = !rf.contains(c) || rf.halfWidth(at: c.y) - abs(c.x) < 0.3 || !rf.stopOK(c) || pocket
+        guard bad else { MoveMix.ballBadSince = -1; return }
+        if pocket { MoveMix.ballBadSince = min(MoveMix.ballBadSince < 0 ? now : MoveMix.ballBadSince, now - MoveMix.ballBadAfter - 0.1) }
+        if MoveMix.ballBadSince < 0 { MoveMix.ballBadSince = now; return }
+        guard now - MoveMix.ballBadSince > MoveMix.ballBadAfter, now - mix.soccerNudgeAt > 6 else { return }
+        mix.soccerNudgeAt = now; MoveMix.ballBadSince = -1
+        // the nearest spot that is allowed, inside the floor, open and clear of the walls: the ball rolls there
+        var target: SIMD2<Float>?
+        if pocket { MoveMix.ballNeedsRoom = false }
+        let mid = SIMD2<Float>(0, (rf.minZ + rf.maxZ) / 2 + 0.5)
+        if pocket { var bp: (SIMD2<Float>, Float)?; for r in [Float(2.0), 3.0, 4.0, 4.6] { for k in 0..<16 { let a = Float(k) * .pi / 8; let p = c + SIMD2(sinf(a), cosf(a)) * r; if rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 1.6, rf.stopOK(p), f.openFloor(p) { let sc = -simd_distance(p, mid); if bp == nil || sc > bp!.1 { bp = (p, sc) } } } }; target = bp?.0 }
+        if target == nil { outer: for r in [Float(0.9), 1.5, 2.2, 3.0, 3.8] { for k in 0..<16 { let a = Float(k) * .pi / 8; let p = c + SIMD2(sinf(a), cosf(a)) * r; if rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 0.8, rf.stopOK(p), f.openFloor(p) { target = p; break outer } } } }
+        let tgt = target ?? SIMD2(0, (rf.minZ + rf.maxZ) / 2)
+        let d = tgt - c, L = simd_length(d)
+        let dir = L > 0.05 ? d / L : SIMD2<Float>(0, -1)
+        if EmoteSpot.logOn { NSLog("[ballrescue] t=%.1f ball=(%.2f,%.2f) rolled toward (%.2f,%.2f)", now, c.x, c.y, tgt.x, tgt.y) }
+        f.kickBall(sb.uid, direction: dir, speed: min(max(1.15 * L + 0.2, 0.8), 3.2), by: -1)
     }
 }

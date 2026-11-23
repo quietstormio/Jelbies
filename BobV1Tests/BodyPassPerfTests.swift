@@ -84,7 +84,7 @@ final class BodyPassPerfTests: XCTestCase {
         out.append(try measure(Cfg(n: 3, dirt: 0, sparkle: 0, shadow: 1024)))
         out.append(try measure(Cfg(n: 3, dirt: 0.85, sparkle: 0, shadow: 1024)))
         out.append(try measure(Cfg(n: 1, dirt: 0, sparkle: 0, shadow: 2048)))
-        let path = ProcessInfo.processInfo.environment["BODYPERF_OUT"] ?? "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/6a40096b-092a-48d0-8cbe-4e00ccea7702/scratchpad/bodyperf.txt"
+        let path = ProcessInfo.processInfo.environment["BODYPERF_OUT"] ?? (NSTemporaryDirectory() as NSString).appendingPathComponent("bodyperf.txt")
         try out.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
     }
 }

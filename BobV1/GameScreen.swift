@@ -623,6 +623,16 @@ struct GameScreen: View {
             f()
             withAnimation(CareMenu.spring) { open.wrappedValue = false }
         }
+        // capture aid (move-mix round 3): -PlaceSoccer 1 puts a soccer ball in the room, 2 also the mini goal (what the Jelmiko do by themselves with them)
+        if d.integer(forKey: "PlaceSoccer") > 0 {
+            for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
+            await sleep(2.5)
+            var kinds: [DecorKind] = [.soccerball]
+            if d.integer(forKey: "PlaceSoccer") >= 2 { kinds.append(.minigoal) }
+            for k in kinds where !care.store.placedDecor.contains(where: { $0.kind == k }) { care.store.grant(k.storeID); _ = care.store.place(k.storeID) }
+            care.syncDecor()
+            NSLog("[placesoccer] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
+        }
         // capture aid: -PlayDemo 1 (grant the balls, open Play mode and flick at the middle Jelbie over and over) | 2 (the toy picker, toys owned) | 3 (the picker, nothing owned) | 4 (Play mode, no auto flick)
         if d.integer(forKey: "PlayDemo") > 0 {
             for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }

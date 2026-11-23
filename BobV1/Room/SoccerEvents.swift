@@ -30,6 +30,7 @@ enum SoccerEvents {
     static let keep = 32
 
     static func emit(_ e: SoccerEvent) {
+        if EmoteSpot.logOn { NSLog("[soccer] ev=%@", String(describing: e)) }          // (move-mix round 3: the soccer moments, counted from the real-app console)
         recent.append(e)
         if recent.count > keep { recent.removeFirst(recent.count - keep) }
         sink?(e)
