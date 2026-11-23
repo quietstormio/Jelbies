@@ -149,7 +149,7 @@ final class BallReturnTests: XCTestCase {
             var wait: Float = 0
             while (p.phase != .inHand || wait < 1.6) && wait < 20 { step(); wait += dt }
             let hand = p.handWorld()
-            player = SIMD2(hand.x, hand.z)
+            player = p.playerPoint()          // (the camera's place on the floor: what the Jelmiko turn to; see PlayToss.playerPoint)
             let z0 = p.spots.values.map(\.y).reduce(0, +) / Float(max(p.spots.count, 1))
             let tz = spec.deep ? z0 - 1.0 : z0 + 0.6
             let reach = PlayToss.ballReach(tz) - 0.7

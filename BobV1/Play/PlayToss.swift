@@ -444,7 +444,8 @@ final class PlayToss {
     private func touchLog(_ kind: String, _ j: PlayJelly) {
         guard UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
         let hand = handWorld()
-        let to = SIMD2(hand.x - j.pos.x, hand.z - j.pos.y)
+        let toHand = SIMD2(hand.x - j.pos.x, hand.z - j.pos.y)
+        let to = playerPoint() - j.pos
         let ys = j.sim.yaw()
         let fwd = SIMD2<Float>(sinf(ys), cosf(ys))
         let err = acosf(max(-1, min(1, simd_dot(fwd, to) / max(simd_length(to), 1e-4)))) * 180 / .pi
@@ -455,13 +456,20 @@ final class PlayToss {
         let sz = viewSize
         let js = GameCamera.screenPoint(floor: j.pos, y: j.sim.centroid().y, size: sz) ?? .zero
         let bs = GameCamera.screenPoint(floor: SIMD2(ball.pos.x, ball.pos.z), y: ball.pos.y, size: sz) ?? .zero
-        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f visErr=%.1f centroidY=%.3f headTop=%.3f idle=%@ stage=%d rise=%.3f jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
+        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f visErr=%.1f handErr=%.1f centroidY=%.3f headTop=%.3f idle=%@ stage=%d rise=%.3f jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
               clock, throwSerial, ballKind == .soccerball ? "soccer" : (ballKind == .beachball ? "beach" : "bouncy"), kind, j.id, err,
-              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, visErr, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, j.headTop - (standTop[j.id] ?? j.headTop), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
+              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, visErr, abs(wrapAngle(atan2f(toHand.x, toHand.y) - vy)) * 180 / .pi, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, j.headTop - (standTop[j.id] ?? j.headTop), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
     }
 
     /// Where the player stands: the hand's spot (the flick's origin, the camera side).
-    func playerPoint() -> SIMD2<Float> { let h = handWorld(); return SIMD2(h.x, h.z) }
+    /// (play-ball-r2 step 1c) The player is the one looking: the camera's place on the floor, not the hand under it. In landscape the outer Jelmiko stand 3 u out and only 1 to 3 u in front of the hand, so a body facing the camera is 55-65 degrees off the line to the hand; to the eye it is the 15-20 degrees it looks. Everything that turns a body toward the player (the stand, the mid-air turn, the bodies that keep facing the player) uses this.
+    func playerPoint() -> SIMD2<Float> {
+        if PlayTuning.ballReturnOld { let h = handWorld(); return SIMD2(h.x, h.z) }
+        let cam = GameCamera.camera(aspect: Float(viewSize.width / max(viewSize.height, 1)))
+        let r = unproject(ndc: SIMD2<Float>(0, -1), invViewProj: cam.invViewProj)
+        return SIMD2(r.o.x, r.o.z)
+    }
+    func handPlayerPoint() -> SIMD2<Float> { let h = handWorld(); return SIMD2(h.x, h.z) }
     /// The Jelmiko on the play line wait where they are while the ball game is on: GameCare+Dining's `reserved` (its wait pose, never a roam leg) is held for them.
     func holds(_ id: Int) -> Bool { ballGame && jellies.contains { $0.id == id && !$0.free } }
 
