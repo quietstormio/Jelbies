@@ -961,7 +961,7 @@ final class PlayToss {
     /// Every tick while a kick is planned: ease the ball onto the kick spot, give the go so the foot lands as the ball arrives, let a plan go when the ball went elsewhere.
     private func footTick() {
         // a pass that reaches its receiver who is not set (still walking, mid-step): the ball is struck at once, it never rolls past him
-        if let pid = passTo, ownGame != .none || passPlan != nil, phase == .loose, let rj = jelly(pid), !rj.brain.tossFootApproach, !rj.brain.tossBusy,
+        if let pid = passTo, phase == .loose, let rj = jelly(pid), !rj.brain.tossFootApproach, !rj.brain.tossBusy,
            ball.pos.y < ball.radius + 0.5, simd_distance(SIMD2(ball.pos.x, ball.pos.z), rj.pos) < Self.contactDist(ball.radius) + 0.1 { passPlan = nil; strikeByContact(rj); return }
         guard let c = footChoice, let j = jelly(c) else { return }
         guard j.brain.tossFootApproach else { if !j.brain.tossBusy { footChoice = nil }; return }
