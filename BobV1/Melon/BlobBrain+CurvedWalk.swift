@@ -18,7 +18,7 @@ extension BlobBrain {
         return curvedWalkDefault
     }()
     /// SHIPPING DEFAULT (set by the real-app gate; see the hand-back).
-    static let curvedWalkDefault = false          // (OFF: the real-app gate failed the mid-walk-turn row, see the hand-back; `-CurvedWalk 1` turns it on)
+    static let curvedWalkDefault = false          // (round 2 decides; `-CurvedWalk 1` turns it on)
     static let curveMaxErr: Float = 2.4
     nonisolated(unsafe) static var curveCounts = [0, 0]          // (test seam: curved steps planned, spot turns while moving)
     static let curveAhead: [Float] = [0.9, 0.6]
@@ -30,7 +30,9 @@ extension BlobBrain {
         switch job { case .some(.dine), .some(.sip): return false; default: break }
         switch idleState.kind {
         case nil, .some(.wander), .some(.run): return true
-        case .some(let k): return k != .soccerKick && Self.decorKinds.contains(k) && idleState.decorGo          // (the walk to a piece of decor: a plain walk to a stand; the emote itself is not touched)
+        case .some(.trot): return true          // (a trot and the walk to a window are plain walks to a point)
+        case .some(let k): if idleState.windowGo, k != .soccerKick { return true }
+            return k != .soccerKick && Self.decorKinds.contains(k) && idleState.decorGo          // (the walk to a piece of decor: a plain walk to a stand; the emote itself is not touched)
         }
     }
 
@@ -123,6 +125,10 @@ extension BlobBrain {
     func curveLogPush(got: SIMD2<Float>, cand: SIMD2<Float>, curved: Bool) {
         var nd: Float = 9, nw = false
         for p in steerPeers() { let d = simd_distance(p.pos, cand); if d < nd { nd = d; nw = p.id < Int.max / 4 } }
-        NSLog("[push] t=%.2f id=%d x=%.2f z=%.2f moved=%.3f kind=%@ nearest=%.2f(%@) curved=%d", variety.now, steerID, cand.x, cand.y, simd_distance(got, cand), curveKind, nd, nw ? "walker" : "stander", curved ? 1 : 0)
+        // an indirect effect: either body (this one or the nearest other) took a curved step in the previous 1.5 s
+        var near: BlobBrain?, od: Float = 9
+        for o in socialOthers() where o !== self { let d = simd_distance(o.position, cand); if d < od { od = d; near = o } }
+        let recent = (peerClock - lastCurvedClock < 1.5) || (near.map { $0.peerClock - $0.lastCurvedClock < 1.5 } ?? false)
+        NSLog("[push] t=%.2f id=%d x=%.2f z=%.2f moved=%.3f kind=%@ nearest=%.2f(%@) curved=%d recent=%d", variety.now, steerID, cand.x, cand.y, simd_distance(got, cand), curveKind, nd, nw ? "walker" : "stander", curved ? 1 : 0, recent ? 1 : 0)
     }
 }

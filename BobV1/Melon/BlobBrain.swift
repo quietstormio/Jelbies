@@ -1304,6 +1304,7 @@ final class BlobBrain {
     var peerClock: Float = 0
     /// (curved walk) `peerClock` of the last planned step that carried the root: a walk is 'moving' for 0.5 s after it.
     var lastTranslateClock: Float = -10
+    var lastCurvedClock: Float = -10          // (log only: `peerClock` of the last curved step)
     var spotTurnClock: Float = -10          // (log only: `peerClock` of the last turn-on-the-spot step of a walk)
     var peerSample: [Int: (pos: SIMD2<Float>, t: Float)] = [:]
     var peerVel: [Int: SIMD2<Float>] = [:]
@@ -1598,7 +1599,7 @@ final class BlobBrain {
         // the last stride of a stance walk is an unhurried one (people brake into a hug): the soft body keeps the walk's momentum for a few centimetres past the root when the root stops at once
         let brake: Float = (exact && walkFinal) ? ContactTuning.finalStepRate(sideBySide: contactSideFinal) : 1
         if a > 0.01, !walkFinal { lastTranslateClock = peerClock }
-        if bend != nil || aimSub { Self.curveCounts[0] += 1 }
+        if bend != nil || aimSub { Self.curveCounts[0] += 1; lastCurvedClock = peerClock }
         if EmoteSpot.logOn, bend != nil || aimSub { curveLogStep(err: err, D: D, intermediate: intermediate, dy: wm, bend: bend != nil, travel: rootD) }
         startStep(rootD: rootD, dyaw: wm, reach: uS * r, peak: stepLift * amplitude, rate: stepRate * runRateMul * locoRateMul * brake)
         return 0
