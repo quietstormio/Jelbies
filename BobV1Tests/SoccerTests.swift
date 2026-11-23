@@ -65,6 +65,52 @@ final class SoccerTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(dz.min() ?? -1, -1e-4, "nothing moves toward the room")
     }
 
+    /// move-mix round 3c: with the REAL HUD rectangles of the Pro Max (portrait 440 x 956 and landscape 956 x 440, safe-area insets as the phone reports them) the floor's keep-outs are the real ones. Three happy Jelmiko,
+    /// a soccer ball put at several spots (beside the left button column, at the heart, in the middle), 200 s each: whenever a pass kick happens the two are at least 2.0 u apart, and a ball that lies where nobody may stand is rolled back.
+    func testAPassIsNeverACloseExchangeWithTheRealHUD() {
+        guard MoveMix.on else { return }
+        let wasSize = HUDLayout.measuredSize, wasInsets = HUDLayout.measuredInsets
+        defer { HUDLayout.measuredSize = wasSize; HUDLayout.measuredInsets = wasInsets }
+        var minDist: Float = 99, kickN = 0, passN = 0
+        for land in [false, true] {
+            HUDLayout.measuredSize = land ? CGSize(width: 956, height: 440) : CGSize(width: 440, height: 956)
+            HUDLayout.measuredInsets = land ? UIEdgeInsets(top: 0, left: 62, bottom: 21, right: 62) : UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0)
+            let aspect: Float = land ? 956.0 / 440.0 : 440.0 / 956.0
+            for (bi, ballAt) in [SIMD2<Float>(-2.2, 3.4), SIMD2(1.6, 6.8), SIMD2(0.0, 1.0)].enumerated() {
+                SoccerState.shared.reset(); SoccerEvents.clear(); DecorField.shared.clear(); DecorField.shared.bodies = []; MoveMix.soccerNextAt = 0; MoveMix.ballBadSince = -1
+                GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: aspect); _ = GameCamera.refreshRoam(aspect: aspect)
+                RoomLayout.dynamicBoxes = []
+                DecorField.shared.set([PlacedDecor(uid: 7, kind: .soccerball, x: ballAt.x, z: ballAt.y), PlacedDecor(uid: 8, kind: .minigoal, x: 0, z: -1.6)])
+                let lab = SocialTests.Lab(positions: SocialTests.starts, quiet: false, seed: UInt64(70 + bi + (land ? 10 : 0)))
+                SoccerTests.keep.append(lab)
+                for (i, r) in lab.rigs.enumerated() {
+                    let b = r.brain
+                    b.sleepEnabled = false; b.anticsEnabled = true; b.watching = true; b.homeRoom = true
+                    b.idleMood = .happy; b.idleNight = 0; b.idleDeepNight = 0; b.idleMorning = 0
+                    b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
+                    r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
+                }
+                var dists: [Float] = []
+                SoccerEvents.sink = { e in
+                    if case .kick = e, let sn = lab.rigs.compactMap({ $0.brain.social }).first(where: { $0.kind == .pass }), let x = sn.a, let y = sn.b { dists.append(simd_distance(x.position, y.position)) }
+                }
+                var sessions = Set<ObjectIdentifier>()
+                for _ in 0..<(60 * 200) {
+                    lab.tick(watching: false)
+                    DecorField.shared.bodies = lab.rigs.map { ($0.brain.steerID, $0.brain.position) }; DecorField.shared.tick(dt: 1.0 / 60)
+                    for r in lab.rigs { if let sn = r.brain.social, sn.kind == .pass { sessions.insert(ObjectIdentifier(sn)) } }
+                }
+                SoccerEvents.sink = nil
+                for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
+                MotionLog.write("SOCCER realHUD \(land ? "landscape" : "portrait") ball \(ballAt): pass sessions \(sessions.count), pass kicks \(dists.count), distances min \(dists.min() ?? 0) max \(dists.max() ?? 0)")
+                minDist = min(minDist, dists.min() ?? 99); kickN += dists.count; passN += sessions.count
+                DecorField.shared.clear()
+            }
+        }
+        MotionLog.write("SOCCER realHUD TOTAL: pass sessions \(passN), pass kicks \(kickN), closest two at a pass kick \(minDist)")
+        XCTAssertGreaterThanOrEqual(minDist, 2.0, "a pass kick with the two closer than 2.0 u (the close exchange) happened with the mix on")
+    }
+
     func testCatalogueHasTheBallAndGoalAndNoFootball() {
         let b = StoreCatalog.item("decor-soccerball"), g = StoreCatalog.item("decor-minigoal")
         XCTAssertEqual(b?.price, 35); XCTAssertEqual(b?.roomUnits, 1); XCTAssertEqual(b?.decor?.category, .toys)
