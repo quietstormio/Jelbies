@@ -68,7 +68,7 @@ nonisolated enum BondPairing {
 nonisolated enum BondMoment {
     static let firstGap: ClosedRange<Float> = 10...20, nextGap: ClosedRange<Float> = 35...50
     static let awayRetry: ClosedRange<Float> = 8...12, cancelRetry: ClosedRange<Float> = 20...25, yieldRetry: ClosedRange<Float> = 20...30
-    static let waitFor: Float = 12, deadline: Float = 40, spotApart: Float = 1.4, blockMax: Float = 28
+    static let waitFor: Float = 12, deadline: Float = 40, spotApart: Float = 1.55, blockMax: Float = 28
     static let travel: [SocialKind] = [.littleRace, .tag, .chase, .follow, .hopAlong]
     /// None puts two faces together (the owner's standing no-kiss rule).
     static let stay: [SocialKind] = [.swayHug, .sitTogether, .dance]
