@@ -337,6 +337,7 @@ extension BlobBrain {
         guard idleState.cooldown <= 0 else { return false }
         if anticsEnabled, runMoveDemo == nil, idleState.treat <= 0, treatMaybeStart(sim) { return true }
         let decorOffers: Set<IdleKind> = anticsEnabled && !decorLocked ? Self.decorOffers() : []
+        if EmoteSpot.logOn, variety.now - toy.dirLogAt > 10 { toy.dirLogAt = variety.now; NSLog("[toydirect] t=%.1f id=%d mood=%@ offers=%@ antics=%d locked=%d night=%.2f sinceDirect=%.0f demo=%d", variety.now, steerID, "\(idleMood)", "\(decorOffers.map { $0.rawValue }.sorted())", anticsEnabled ? 1 : 0, decorLocked ? 1 : 0, idleNight, variety.now - toy.lastDirect, runMoveDemo == nil ? 0 : 1) }          // (toy-audit-r1 diag)
         // a toy is out: a direct chance (ToyTuning.directChance) to go and play with one, before the bag; not the toy he used last, at least directGap s between his sessions
         if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleMood != .grumpy, idleNight < 0.6, variety.now - toy.lastDirect >= (outingPlay ? ParkPlayTuning.directGap : ToyTuning.directGap), rand() < (outingPlay ? ParkPlayTuning.directChance : ToyTuning.directChance) {
             var kinds = Array(decorOffers)

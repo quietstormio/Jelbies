@@ -36,6 +36,7 @@ struct ToyBrain {
     var lastUID = -1
     /// Variety clock of his last direct toy start.
     var lastDirect: Float = -999
+    var dirLogAt: Float = -999
     var failLogAt: Float = -999          // (toy-audit-r1 diag)
     /// Park only (ParkPlayTuning): the toy clock before which he does not pick this big toy again by himself (the slide, the hopscotch court).
     var parkCool: [DecorKind: Float] = [:]
