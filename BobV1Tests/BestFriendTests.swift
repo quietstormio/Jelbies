@@ -10,10 +10,6 @@ import simd
 
 @MainActor
 final class BestFriendTests: XCTestCase {
-    /// The block mechanics are tested at home too, so the switch is on for these tests; it ships off.
-    override func setUp() { super.setUp(); BondMoment.blocksAtHome = true }
-    override func tearDown() { BondMoment.blocksAtHome = false; super.tearDown() }
-
     private func visitor(_ id: Int, _ pts: [Int: Float], merged: Int? = nil) -> ParkVisitor {
         var v = ParkVisitor(id: id, name: "V\(id)", colour: .cream, signature: .none, wear: nil, style: .balanced, blurb: "", greeting: "")
         for (c, p) in pts { v.friendship[String(c)] = p }
@@ -52,7 +48,7 @@ final class BestFriendTests: XCTestCase {
         let lab = SocialTests.Lab(n: 5, positions: pos, quiet: true, seed: seed)
         for (i, r) in lab.rigs.enumerated() {
             for j in 0..<5 where j != i { r.brain.socialBook.close[j] = (i < 3 && j < 3) ? 1 : 0.55 }
-            r.brain.anticsEnabled = true
+            r.brain.anticsEnabled = true; r.brain.outingPlay = true          // (the lab is the park: what ships)
             if i < 3 { r.brain.socialBook.housemates = Set((0..<3).filter { $0 != i }) }          // (round 6: as the app sets it: the other Jelmiko at home are the housemates, a visitor has none)
         }
         if bond {
@@ -242,7 +238,7 @@ final class BestFriendTests: XCTestCase {
         let pos: [SIMD2<Float>] = [SIMD2(-1.6, 0.8), SIMD2(1.8, 1.6), SIMD2(0.2, 3.0)]
         let lab = SocialTests.Lab(n: n, positions: Array(pos.prefix(n)), quiet: false, seed: seed)
         for (i, r) in lab.rigs.enumerated() {
-            r.brain.anticsEnabled = true; r.brain.idleMood = .okay
+            r.brain.anticsEnabled = true; r.brain.outingPlay = true; r.brain.idleMood = .okay
             r.brain.socialBook.cooldown = 3; r.brain.idleState.cooldown = 9; r.brain.restTimer = 0.5 + Float(i)
             if i < 2 { r.brain.socialBook.bestFriends = [1 - i]; r.brain.socialBook.close[1 - i] = FriendTuning.closeMul[3] }
             if i >= 2 { r.brain.socialBook.housemates = [] }
@@ -282,7 +278,7 @@ final class BestFriendTests: XCTestCase {
     }
 
     func testAtHomeABlockUsesStayKindsOnlyAndTheSwitchTurnsItOff() {
-        defer { BondMoment.blocksAtHome = true; BondMoment.onKind = nil }  // (setUp turns it on for the class)
+        defer { BondMoment.blocksAtHome = false; BondMoment.onKind = nil }          // (ships off)
         BondMoment.blocksAtHome = false
         var lab = buddies(seed: 47)
         var a = lab.rigs[0].brain, b = lab.rigs[1].brain
