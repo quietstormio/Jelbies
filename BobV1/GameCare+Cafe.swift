@@ -60,6 +60,8 @@ final class CafeBook {
     var lounged = false
     /// The regulars (Park friends at the bistro table and the counter): bodies, who they are, seconds to each one's next idle, and where each stands.
     var regularsPending = false
+    /// cafe-regulars-r1: this visit's guest plan, the pair's table and their talk (GameCare+CafeRegulars.swift).
+    let guests = CafeGuests()
     var regulars: [JellyActor] = []
     var regularVisitors: [ParkVisitor] = []
     var regularIdle: [Int: Float] = [:]
@@ -362,7 +364,7 @@ extension GameCare {
         let share = Float(pieces) / Float(CafeTuning.piecesPerTreat)
         prof.stats.nudge(t.condition.mapValues { $0 * share }, food: t.name)
         if first {
-            bondEarn(.meal, slot: id)          // (the relationship: a café treat is a meal, once per treat)
+            bondEarn(.meal, slot: id, story: ["where": "cafe"])          // (the relationship: a café treat is a meal, once per treat)
             let fresh = !prof.perks.isActive(t.perk)
             let dur = t.perk.raceOnly ? t.perk.duration : t.perk.duration * CafeTuning.perkDurationMul
             prof.perks.grant(t.perk, duration: max(dur, prof.perks.remaining(t.perk)))          // (never cuts a longer one short, as at home)

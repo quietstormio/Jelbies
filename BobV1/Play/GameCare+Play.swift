@@ -53,7 +53,7 @@ extension GameCare {
         applyPlayWorld()
         play.onEvent = { [weak self] e in self?.playFeedback(e) }
         play.begin(ball: kind, title: kind.title, jellies: playJellies())
-        for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id) }          // (the relationship: a toy the player starts)
+        for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id, story: ["toy": "ball"]) }          // (the relationship: a toy the player starts)
         AudioHub.shared.play(.uiconfirm)
     }
 
@@ -66,7 +66,7 @@ extension GameCare {
         applyPlayWorld()
         play.beginToy(title: wand.title)
         wand.begin(care: self)
-        for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id) }          // (the relationship: a toy the player starts)
+        for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id, story: ["toy": "bubbles"]) }          // (the relationship: a toy the player starts)
         AudioHub.shared.play(.uiconfirm)
     }
 

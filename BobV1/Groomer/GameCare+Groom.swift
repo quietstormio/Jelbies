@@ -179,7 +179,7 @@ extension GameCare {
             bathPlug.wet[id] = nil
             for (kind, secs) in tier.perks { prof.perks.grant(kind, duration: secs) }
             needs(for: id).gain(.attention, 0.1)
-            bondEarn(.care, slot: id)          // (the relationship: a groom)
+            bondEarn(.care, slot: id, story: ["care": "groom"])          // (the relationship: a groom)
         }
         for a in book.actors {
             guard let brain = a.brain else { continue }

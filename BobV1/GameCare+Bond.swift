@@ -8,14 +8,18 @@ import Foundation
 
 extension GameCare {
     /// One event for the Jelmiko in `slot`. Previews, preview ids and anybody who is not one of the player's own (Park visitors, guests) earn nothing.
-    func bondEarn(_ kind: BondKind, slot: Int, favourite: Bool = false, win: Bool = false) {
+    /// `story`: the details this call site knows for the Profile's living line (course, place, court, toy, food ...); it changes nothing about what the Relationship counts.
+    func bondEarn(_ kind: BondKind, slot: Int, favourite: Bool = false, win: Bool = false, story: [String: String] = [:]) {
         guard !isPreview, let j = jelly(slot) else { return }
-        bondEarn(kind, character: j.character, favourite: favourite, win: win)
+        bondEarn(kind, character: j.character, favourite: favourite, win: win, story: story)
     }
 
-    func bondEarn(_ kind: BondKind, character c: Int, favourite: Bool = false, win: Bool = false) {
+    func bondEarn(_ kind: BondKind, character c: Int, favourite: Bool = false, win: Bool = false, story: [String: String] = [:]) {
         guard !isPreview, !JellyRoster.isPreview(c), jellies.contains(where: { $0.character == c }) else { return }
+        let before = JellyBond.level(c, bondDefaults).hearts
         let add = JellyBond.earn(kind, c, favourite: favourite, win: win, bondDefaults)
+        var d = story; if win { d["win"] = "1" }
+        storyRecord(kind, character: c, detail: d, levelBefore: before, levelAfter: JellyBond.level(c, bondDefaults).hearts)
         if DevArgs.enabled { NSLog("[bond] character %d %@ +%d -> %d points", c, kind.rawValue, add, JellyBond.points(c, bondDefaults)) }
     }
 
@@ -26,7 +30,7 @@ extension GameCare {
     func bondAte(slot: Int, _ c: Consumable) {
         guard bondFed.insert(slot).inserted else { return }
         let fav = jelly(slot)?.traits?.snack == c.id
-        bondEarn(c.kind == .drink ? .drink : .meal, slot: slot, favourite: fav)
+        bondEarn(c.kind == .drink ? .drink : .meal, slot: slot, favourite: fav, story: fav && c.kind != .drink ? ["food": c.id] : [:])
     }
 
     /// Stroking that gives hearts: `seconds` of it for `slot` (a refused, annoyed stroke is never passed in). Every `strokeSeconds` is one event.

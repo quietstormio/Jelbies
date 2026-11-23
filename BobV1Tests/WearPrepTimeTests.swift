@@ -96,9 +96,9 @@ final class WearPrepTimeTests: XCTestCase {
     func testPerFrameCost() throws {
         let lab = makeLab()
         let outfits: [[WearSlot: WearLook]] = [
-            [.body: .tutuPink, .neck: .scarfPlum, .hands: .wristbandsSky],
-            [.body: .backpackSky, .neck: .scarfPlum, .hands: .wristbandsSky],
-            [.body: .tutuPink, .neck: .scarfPlum, .hands: .wristbandsSky]]
+            [.body: .capeHero, .neck: .pearls, .hands: .wristbandsSky],
+            [.body: .backpackSky, .neck: .whistleCoach, .hands: .wristbandsSky],
+            [.body: .capeHero, .neck: .lei, .hands: .wristbandsSky]]          // (wear-audit-r1: the three neck strings the limb push works on; was scarfPlum x3)
         let set = WornSet(); set.body = WearBody.shared; set.soundOn = false; Self.keep.append(set)
         var skins = [[Float]](repeating: [Float](repeating: 0, count: MotionRig.renderMesh.vertexCount * 6), count: 3)
         func step() {

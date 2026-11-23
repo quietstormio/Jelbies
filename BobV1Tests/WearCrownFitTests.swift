@@ -106,7 +106,14 @@ final class WearCrownFitTests: XCTestCase {
             let moss = FeatureCompat.solve(.daisy, worn: [art])
             XCTAssertFalse(moss.hidden, "\(art) hides the daisy")
         }
-        for art in ["cowboy_hat", "beret", "propeller_beanie"] { XCTAssertTrue(FeatureCompat.solve(.daisy, worn: [art]).onHat, art) }
+        // (2026-11-22, wear-audit-r1: this used to demand the legacy "daisy on the hat" placement (`onHat`) for these three hats. The daisy was replaced on 2026-11-13 by two antennas that are body
+        // vertices; the owner's rule of 2026-11-14 (AntennaFit.swift) is that they are NEVER tucked and never hidden: they stand out of every hat, and a tall hat only raises their roots.
+        // So the live check is: not hidden, and a root lift that is a real, finite number no taller than the hat.)
+        for art in ["cowboy_hat", "beret", "propeller_beanie"] {
+            let fit = FeatureCompat.solve(.daisy, worn: [art])
+            XCTAssertFalse(fit.hidden, art)
+            XCTAssertTrue(fit.antennaLift.isFinite && fit.antennaLift >= 0 && fit.antennaLift < 0.5, "\(art) lifts the antenna roots by \(fit.antennaLift)")
+        }
     }
 
     func testPipsSpinesGrowThroughTheCrown() {

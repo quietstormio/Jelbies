@@ -116,6 +116,7 @@ struct EmoteSpotState {
     var skip = false
     var walked: Float = 0
     var logT: Float = 0
+    var storyT: Float = 0          // the Profile story's sampler (Story/StorySampler.swift)
     var deferSince: Float = -1
 }
 
@@ -130,8 +131,8 @@ extension BlobBrain {
         emoteSpot.logT = 0
         let st: String
         if held { st = "held" }
-        else if let s = social { st = (s.kind.isGroup ? "group:" : "pair:") + s.kind.rawValue }
-        else if let k = idleState.kind { st = (k == .sleep || k == .sit ? "rest:" : (Self.travelKinds.contains(k) ? "move:" : "solo:")) + k.rawValue }
+        else if let s = social { st = (s.kind == .pass ? "play:" : (s.kind.isGroup ? "group:" : "pair:")) + s.kind.rawValue }
+        else if let k = idleState.kind { st = (k == .sleep || k == .sit ? "rest:" : (Self.travelKinds.contains(k) ? "move:" : (k == .soccerKick ? "play:" : "solo:"))) + k.rawValue }
         else if activity == .walking || activity == .coming { st = "walk" } else { st = "stand" }
         if !Self.floorLogged, let rf = roamProvider?() {          // (round 2b: once, the live floor: per row z, half width, the stop-clear spans (HUD buttons cut out) - the allowed / not allowed picture)
             Self.floorLogged = true

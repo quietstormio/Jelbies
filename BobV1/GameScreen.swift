@@ -541,6 +541,7 @@ struct GameScreen: View {
             try? await Task.sleep(nanoseconds: UInt64(after) * 1_000_000_000)
             town = .condition
         }
+        .task { await StoryDev.runIfRequested(care: model.care) }          // `-StoryDump <n>` (dev arguments only): Story/StoryDev.swift
         .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
         .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
@@ -621,6 +622,16 @@ struct GameScreen: View {
             await sleep(1.4)
             f()
             withAnimation(CareMenu.spring) { open.wrappedValue = false }
+        }
+        // capture aid (move-mix round 3): -PlaceSoccer 1 puts a soccer ball in the room, 2 also the mini goal (what the Jelmiko do by themselves with them)
+        if d.integer(forKey: "PlaceSoccer") > 0 {
+            for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
+            await sleep(2.5)
+            var kinds: [DecorKind] = [.soccerball]
+            if d.integer(forKey: "PlaceSoccer") >= 2 { kinds.append(.minigoal) }
+            for k in kinds where !care.store.placedDecor.contains(where: { $0.kind == k }) { care.store.grant(k.storeID); _ = care.store.place(k.storeID) }
+            care.syncDecor()
+            NSLog("[placesoccer] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
         }
         // capture aid: -PlayDemo 1 (grant the balls, open Play mode and flick at the middle Jelbie over and over) | 2 (the toy picker, toys owned) | 3 (the picker, nothing owned) | 4 (Play mode, no auto flick)
         if d.integer(forKey: "PlayDemo") > 0 {
@@ -1135,7 +1146,7 @@ struct GameScreen: View {
         // capture aid: `-LobbyAuto volley|volleyTrain|volleyHow|track|trackHow` opens the Volleyball / Track lobby (and the sheet) at launch (the lobbies read the same argument)
         switch UserDefaults.standard.string(forKey: "LobbyAuto") {
         case "volley", "volleyTrain", "volleyHow": return .volley
-        case "track", "trackHow": return .track
+        case "track", "trackHow", "trackUpgrade": return .track
         case "show", "showHow": return .studio          // (the Jelly Show lobby is the Studio now)
         default: break
         }
@@ -1241,7 +1252,7 @@ struct GameScreen: View {
             care.store.awardMedal()
             care.bath.wallet.add(max(0, 400 - care.bath.wallet.count), silent: true)
             if d.integer(forKey: "WearSeed") == 2 {
-                let o: [[WearLook]] = [[.capTeamPink, .bibPink, .sneakerCoral], [.flowerCrown, .bowtieSky, .glitterShoes], [.crownGold, .pearls, .tutuPink, .balletPink]]
+                let o: [[WearLook]] = [[.capTeamPink, .bibPink, .sneakerCoral], [.flowerCrown, .bowtieSky, .glitterShoes], [.crownGold, .pearls, .capeHero, .balletPink]]
                 for (i, ls) in o.enumerated() { for l in ls { care.store.wear(l, on: i) } }
             }
         }

@@ -341,7 +341,7 @@ extension BlobBrain {
         if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleMood != .grumpy, idleNight < 0.6, variety.now - toy.lastDirect >= (outingPlay ? ParkPlayTuning.directGap : ToyTuning.directGap), rand() < (outingPlay ? ParkPlayTuning.directChance : ToyTuning.directChance) {
             var kinds = Array(decorOffers)
             for i in kinds.indices.reversed() where i > 0 { kinds.swapAt(i, min(i, Int(rand() * Float(i + 1)))) }
-            for k in kinds where !varietyPeerJustStarted(k) && decorStart(k, sim) {
+            for k in kinds where !varietyPeerJustStarted(k) && !(MoveMix.on && k == .soccerKick && rand() < MoveMix.soccerSoloSkip) && decorStart(k, sim) {          // (MoveMix round 3b: the scheduler's own solo soccer kicks come half as often: the soccer urge and the follow-ups make the moments, with passes)
                 toy.lastDirect = variety.now; idleState.cooldown = max(idleState.cooldown, 3)
                 kindCooldownStart(k)
                 return true

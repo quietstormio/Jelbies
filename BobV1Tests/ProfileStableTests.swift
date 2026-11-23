@@ -108,4 +108,48 @@ final class ProfileStableTests: XCTestCase {
             assertSame("relationship @\(w)", h)
         }
     }
+
+    // MARK: the story slots (Story/): the living line and the friend rows
+
+    /// Every line the pre-written bank can say with the longest names, plus the longest text the guard allows (90 characters that still fit two lines at 375 pt) and "no line".
+    private func livingLines() -> [String] {
+        var out: [String] = [""]
+        let v = ["A": "Marshmallow", "B": "Fluffernutter", "PERS": "cheeky", "FOOD": "cheeseburgers", "ACT": "flapping and hopping", "SPOT": "at the front of the room", "RACE": "Tsunami", "SHOW": "Lagoon", "EMOTE": "bouncing up and down together",
+                 "LEFT": "three more race wins", "WHEN": "yesterday", "TIER": "Sandcastle", "PLACE": "second", "LEVEL": "Close friends"]
+        for p in StoryTemplates.aboutBank + StoryTemplates.newsBank { out.append(StoryFill.apply(p.text, v)) }
+        let longest = out.filter { StoryGuard.checkFinal($0, kind: .about, checkTone: false) == nil }.max { $0.count < $1.count } ?? ""
+        out.append(longest)
+        return out
+    }
+
+    func testTheLivingLineBoxIsTheSameHeightForEveryLine() {
+        let lines = livingLines()
+        XCTAssertGreaterThan(lines.count, 60)
+        for w in phones {
+            var h: [String: CGFloat] = [:]
+            for t in lines { h[t] = height(StoryLivingBubble(text: t, byModel: t.count % 2 == 0, tint: .pink), width: inner(w)) }
+            assertSame("living line @\(w)", h)
+        }
+    }
+
+    func testEveryLineThatPassesTheGuardFitsTwoLinesAt375() {
+        for t in livingLines() where !t.isEmpty && StoryGuard.checkFinal(t, kind: .about, checkTone: false) == nil {
+            XCTAssertTrue(StoryGuard.fitsLines(t, width: StoryLayout.lineWidth, size: StoryLayout.lineSize, lines: 2), t)
+            let one = height(Text(t).font(SK.font(StoryLayout.lineSize, .semibold)).frame(width: StoryLayout.lineWidth, alignment: .leading), width: StoryLayout.lineWidth)
+            let two = height(Text("Aa\nBb").font(SK.font(StoryLayout.lineSize, .semibold)).frame(width: StoryLayout.lineWidth, alignment: .leading), width: StoryLayout.lineWidth)
+            XCTAssertLessThanOrEqual(one, two + 0.5, "needs a third line in the real font: \(t)")
+        }
+        // and a text the guard refuses for width is refused
+        XCTAssertEqual(StoryGuard.checkFinal(String(repeating: "Wide wide words ", count: 5).trimmingCharacters(in: .whitespaces) + ".", kind: .about, checkTone: false), .tooWide)
+    }
+
+    func testEveryFriendRowTakesTheSameHeight() {
+        let notes = [""] + StoryTemplates.noteBank.map { StoryFill.apply($0.text, ["A": "Marshmallow", "B": "Fluffernutter", "EMOTE": "bouncing up and down together"]) }
+        for w in phones {
+            var h: [String: CGFloat] = [:]
+            for n in notes { h[n] = height(StoryFriendRow(names: "Marshmallow and Fluffernutter", note: n, byModel: n.count % 2 == 0) { Circle().frame(width: 40, height: 40) }, width: inner(w)) }
+            h["placeholder"] = height(StoryFriendPlaceholder(), width: inner(w))
+            assertSame("friend row @\(w)", h)
+        }
+    }
 }
