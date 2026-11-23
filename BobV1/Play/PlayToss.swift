@@ -59,6 +59,11 @@ final class PlayToss {
     private(set) var phase: Phase = .off
     /// The Jelmiko have the ball and are passing it among themselves (the "Pass it back" button shows). Never true with one Jelmiko.
     private(set) var ownGame: OwnGame = .none
+    private func setOwn(_ g: OwnGame) {
+        guard g != ownGame else { return }
+        if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playkeep] %@ clock=%.3f", g == .none ? "off" : (keeping ? "on(next)" : "on"), clock) }
+        ownGame = g
+    }
     var keeping: Bool { if case .passing = ownGame { return true }; return false }
     var active: Bool { phase != .off }
     /// The ball game is on (the Jelbies are held to their play line); a non-ball toy (the bubble wand, `.toy`) leaves them free.
@@ -101,6 +106,8 @@ final class PlayToss {
     /// The passes this throw is meant to make before the ball goes back (rolled at the throw from the style: 0 = none) and when the player asked for it back.
     @ObservationIgnored private(set) var pendingPasses = 0
     @ObservationIgnored private var recallAt: Float?
+    /// A pass under way: where the ball is to come to rest and how hard it is braked (m/s^2).
+    @ObservationIgnored private var passTrack: (spot: SIMD2<Float>, decel: Float)?
     @ObservationIgnored private var passPlan: (to: Int, spot: SIMD2<Float>, dir: SIMD2<Float>, until: Float)?
     @ObservationIgnored private var footAimed = false          // (the throw was aimed at his feet: a header fallback cannot meet it, so the plan is held to the last moment)
     /// Where a good return is meant to come down (the catch zone), and the steering assist that eases it there; the seconds the loose ball has lain still.
@@ -212,7 +219,7 @@ final class PlayToss {
         jellies = js
         phase = .inHand
         rally = 0; shownRally = 0; nudges = 0; looseT = 0; bumper = nil; passTo = nil; finger = nil; leftHand = false
-        ownGame = .none; pendingPasses = 0; passPlan = nil; recallAt = nil
+        setOwn(.none); pendingPasses = 0; passPlan = nil; recallAt = nil
         camGoal = 1
         if snapCamera { camBlend = 1; GameCamera.playBlend = 1 }
         frameOn()
@@ -233,7 +240,7 @@ final class PlayToss {
     func end() {
         guard phase != .off else { return }
         phase = .off
-        ownGame = .none; pendingPasses = 0; passPlan = nil
+        setOwn(.none); pendingPasses = 0; passPlan = nil
         camGoal = 0
         finger = nil
         release(jellies)
@@ -373,7 +380,7 @@ final class PlayToss {
 
     private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>, foot: Bool = false) {
         footFlight = foot; footChoice = nil; footPlan = [:]; kickHeightT = nil
-        ownGame = .none; passPlan = nil; recallAt = nil; pendingPasses = rollChain()
+        setOwn(.none); passPlan = nil; recallAt = nil; pendingPasses = rollChain()
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playchain] throw=%d planned=%d foot=%d", throwSerial + 1, pendingPasses, foot ? 1 : 0) }
         ball.pos = start; ball.vel = v; ball.floorBounces = 0; ball.ignoring = nil
         phase = .flying
@@ -472,6 +479,13 @@ final class PlayToss {
         let events = ball.step(dt, in: world)
         for j in jellies where !j.brain.tossBusy && !j.brain.feet.active && j.brain.idleState.kind == nil { standTop[j.id] = j.headTop }
         if !PlayTuning.ballReturnOld { for o in jellies { let P = playerPoint() - o.pos; o.brain.tossFaceYaw = (o.brain.tossBusy && simd_length(P) > 1e-3) ? atan2f(P.x, P.y) : nil } }          // (the header's hop turns him toward the player in the air)
+        if let tr = passTrack, phase == .loose {
+            let here = SIMD2(ball.pos.x, ball.pos.z), to = tr.spot - here, dist = simd_length(to)
+            if dist < 0.06 { ball.vel.x = 0; ball.vel.z = 0; passTrack = nil } else {
+                let v = min(simd_length(SIMD2(ball.vel.x, ball.vel.z)), (2 * tr.decel * dist).squareRoot())
+                let d2 = to / dist; ball.vel.x = d2.x * v; ball.vel.z = d2.y * v
+            }
+        } else if passTrack != nil { passTrack = nil }
         watch(ball.pos)
         if simd_distance(ball.pos, handWorld()) > 1.5 || ball.pos.z < catchZ() - 0.6 { leftHand = true }
         var headed = false
@@ -790,16 +804,29 @@ final class PlayToss {
         }
         let styled = PlayTuning.style(ballKind).headShare < 1 && !PlayTuning.ballReturnOld
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playchain] hop by=%d left=%d", j.id, left) }
-        guard styled, left > 0 else { ownGame = .none; return nil }
+        guard styled, left > 0 else { setOwn(.none); return nil }
         let line = jellies.filter { !$0.free && $0.id != j.id && simd_distance($0.pos, j.pos) >= PlayTuning.passMinDist && simd_distance($0.pos, j.pos) <= PlayTuning.passMaxDist }
         // never back to the one who just passed, unless there are only two of them
         let others = line.filter { $0.id != prev }
         let pool = (others.isEmpty && jellies.filter({ !$0.free }).count <= 2) ? line : others
-        guard !pool.isEmpty else { ownGame = .none; return nil }
+        guard !pool.isEmpty else { setOwn(.none); return nil }
         let still = pool.filter { Self.canHop($0.brain) && !$0.brain.tossBusy }          // (one who is standing is better than one still walking home: he can turn to the pass at once)
         let pick = still.isEmpty ? pool : still
-        let o = pick[min(Int(rand() * Float(pick.count)), pick.count - 1)]
-        ownGame = .passing(left: left - 1, from: j.id, to: o.id)
+        // the first pass of a chain goes to the FAR partner when the lane in front of the row is clear of the one between (the ball visibly travels); later ones are drawn
+        var o = pick[min(Int(rand() * Float(pick.count)), pick.count - 1)]
+        if case .none = ownGame, let far = pick.max(by: { simd_distance($0.pos, j.pos) < simd_distance($1.pos, j.pos) }), simd_distance(far.pos, j.pos) > simd_distance(o.pos, j.pos) + 0.3 {
+            // the ball runs in front of the row (0.88 in front of the bodies): the one between must be clear of that lane
+            let pp = playerPoint()
+            func spotOf(_ q: PlayJelly) -> SIMD2<Float> { let d = pp - q.pos; return q.pos + (simd_length(d) > 1e-3 ? simd_normalize(d) : SIMD2(0, 1)) * Self.contactDist(ball.radius) }
+            let a = spotOf(j), b = spotOf(far), ab = b - a, L2 = max(simd_dot(ab, ab), 1e-4)
+            let blocked = jellies.contains { m in
+                guard m.id != j.id, m.id != far.id else { return false }
+                let t = min(max(simd_dot(m.pos - a, ab) / L2, 0), 1)
+                return simd_length(m.pos - (a + ab * t)) < TossTuning.bodyRadius + ball.radius + 0.03
+            }
+            if !blocked { o = far }
+        }
+        setOwn(.passing(left: left - 1, from: j.id, to: o.id))
         return o
     }
 
@@ -819,13 +846,14 @@ final class PlayToss {
             dirO = d; spot = sp; D = simd_length(sp - ballXZ)
             if D >= 1.3 { break }
         }
-        guard D >= 1.3 else { ownGame = .none; liveKick(by: j); return }          // (never a pass that close: the ball goes back)
-        let k = TossTuning.rollDecayPerS
+        guard D >= 1.6 else { setOwn(.none); liveKick(by: j); return }          // (never a pass that close: the ball goes back)
+        // 0.7 to 1.1 s of travel whatever the distance; the ball is braked evenly so that it comes to rest at the spot (the receiver traps it, then kicks): v0 = 2 D / T, a = v0 / T
         let T = min(max(0.7 + 0.1 * D, 0.8), 1.1)
-        let speed = D * k / (1 - expf(-k * T)) * 1.08
+        let speed = 2 * D / T
         let d = (spot - ballXZ) / D
-        ball.vel = SIMD3(d.x * speed, 0.4, d.y * speed)
-        ball.pos.y = max(ball.pos.y, r + 0.02)
+        ball.vel = SIMD3(d.x * speed, 0, d.y * speed)
+        ball.pos.y = r + 0.01
+        passTrack = (spot, speed / T)
         ball.ignoring = j.id; ball.ignoreT = 0.35
         returnAim = nil
         passTo = o.id; passes += 1; nudges += 1; touched = true; rally += 1
@@ -866,7 +894,7 @@ final class PlayToss {
         var to = -1
         if case .passing(_, _, let t) = ownGame { to = t }
         recallAt = clock
-        ownGame = .none; pendingPasses = 0
+        setOwn(.none); pendingPasses = 0
         NSLog("[playrecall] clock=%.3f phase=%@ ballTo=%d pos=%.2f,%.2f,%.2f", clock, String(describing: phase), to, ball.pos.x, ball.pos.y, ball.pos.z)
         // a pass that is already past / short of its receiver: nobody waits for it, the nearest free one takes it now
         if phase == .loose, let c = footChoice, let j = jelly(c), simd_distance(SIMD2(ball.pos.x, ball.pos.z), j.pos) > 2.2 {
@@ -983,15 +1011,11 @@ final class PlayToss {
         if plan.until > clock, j.brain.tossFootReady {          // (a pass rolling to him: the go is timed by when the ball reaches the spot in front of him, so the foot lands as it arrives, not by where it will be later)
             let d = simd_distance(ballXZ, plan.spot), sp = simd_length(vxz)
             if sp < 0.6, d > 1.3, ball.onFloor, !inKickReach(j) {          // (the pass stopped short or went elsewhere: nobody waits for it, the nearest takes it now and the chain is over)
-                j.brain.tossFootRelease(j.sim, j.skinner); footChoice = nil; bumper = nil; passPlan = nil; ownGame = .none; pendingPasses = 0
+                j.brain.tossFootRelease(j.sim, j.skinner); footChoice = nil; bumper = nil; passPlan = nil; setOwn(.none); pendingPasses = 0
                 NSLog("[playfoot] pass-stopped clock=%.3f id=%d d=%.2f", clock, c, d); return
             }
-            if inKickReach(j) || d < 0.5 { NSLog("[playfoot] strike-pass clock=%.3f id=%d d=%.2f (ball already here)", clock, c, d); passPlan = nil; strikeByContact(j) }          // (he was set late: no time for the wind-up, the ball is struck at once)
-            else if sp > 0.3, simd_dot(vxz, plan.spot - ballXZ) > 0 {
-                let rem = 1 - d * k / sp
-                let tts: Float = rem > 0.02 ? -logf(rem) / k : 99
-                if tts <= Self.footLead { j.brain.tossFootGo(); NSLog("[playfoot] go-pass clock=%.3f id=%d d=%.2f tts=%.2f", clock, c, d, tts) }
-            }
+            // he traps it: the wind-up starts when the ball has arrived and (nearly) stopped, so his foot lands 0.35-0.6 s after it
+            if d < 0.35 && sp < 0.9 { j.brain.tossFootGo(); NSLog("[playfoot] go-pass clock=%.3f id=%d d=%.2f sp=%.2f", clock, c, d, sp) }
             return
         }
         let ahead = ballXZ + vxz * ((1 - expf(-k * Self.footLead)) / k)
@@ -1137,7 +1161,7 @@ final class PlayToss {
         phase = .flying; looseT = 0
         touchLog("kick", j)
         noteRecallStrike()
-        footFlight = false; footChoice = nil; kickHeightT = nil; bumper = nil; footPlan[j.id] = nil; passPlan = nil
+        footFlight = false; footChoice = nil; kickHeightT = nil; bumper = nil; footPlan[j.id] = nil; passPlan = nil; passTrack = nil
         onEvent?(.kick(id: j.id))
         j.brain.jellyKick = max(j.brain.jellyKick, 1.6)
     }
@@ -1155,7 +1179,7 @@ final class PlayToss {
         ball.vel = v
         ball.pos.y = max(ball.pos.y, ball.radius + 0.02)
         ball.ignoring = nil; touched = true
-        footFlight = false; footChoice = nil; kickHeightT = nil; ownGame = .none; pendingPasses = 0; passPlan = nil
+        footFlight = false; footChoice = nil; kickHeightT = nil; setOwn(.none); pendingPasses = 0; passPlan = nil
         if let t = recallAt { NSLog("[playrecall] rescue dt=%.2f", clock - t) }
         phase = .flying; returnAim = SIMD2(target.x, target.z)
         rescues += 1; looseT = 0
@@ -1169,7 +1193,7 @@ final class PlayToss {
         catchSerial += 1
         onEvent?(.caught(rally: rally))
         bumper = nil; passTo = nil; returnAim = nil; restT = 0
-        footFlight = false; footChoice = nil; footPlan = [:]; kickHeightT = nil; ownGame = .none; pendingPasses = 0; passPlan = nil
+        footFlight = false; footChoice = nil; footPlan = [:]; kickHeightT = nil; setOwn(.none); pendingPasses = 0; passPlan = nil
         if let t = recallAt { NSLog("[playrecall] hand dt=%.2f", clock - t); recallAt = nil }
         for j in jellies { j.brain.tossFire = nil; j.brain.tossFireReady = nil }
         RoomLayout.ballSpheres.removeAll { $0.uid == Self.sphereUID }

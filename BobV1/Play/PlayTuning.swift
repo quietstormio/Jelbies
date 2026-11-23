@@ -28,9 +28,9 @@ nonisolated enum PlayTuning {
         }
     }
     /// A pass goes to a friend at least this far from the passer (bodies and faces never come close at a pass).
-    static let passMinDist: Float = 1.3
+    static let passMinDist: Float = 1.8
     /// ... and at most this far (a pass is slow enough to follow with the eye: 0.8 to 1.1 s of travel).
-    static let passMaxDist: Float = 3.4
+    static let passMaxDist: Float = 4.0
 
     /// Dev builds only: `-BallReturnOld 1` = the header's approach (walk, turn onto the player, crouch, jump) is off: the ball returns as it did before play-ball-r2.
     nonisolated(unsafe) static var ballReturnOld: Bool = DevArgs.enabled && (UserDefaults.standard.integer(forKey: "BallReturnOld") != 0 || ProcessInfo.processInfo.environment["BALL_RETURN_OLD"] == "1")
