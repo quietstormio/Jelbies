@@ -1016,7 +1016,7 @@ final class PlayToss {
     /// play-net-r1: a goal ends this flight's foot plan (the ball is held in the net; nobody goes on to kick it): the same state `caught()` clears, and a foot approach under way is let go.
     func netClearFoot() {
         footFlight = false; footChoice = nil; footPlan = [:]; kickHeightT = nil
-        for j in jellies { j.brain.tossFire = nil; j.brain.tossFireReady = nil; if j.brain.tossFootApproach { j.brain.tossFootRelease(j.sim, j.skinner) } }
+        for j in jellies { j.brain.tossFire = nil; j.brain.tossFireReady = nil; if j.brain.tossFootApproach { j.brain.tossFootRelease(j.sim, j.skinner); if j.brain.tossFootApproach { j.brain.idleState.toss.abort = true; j.brain.abortAll(j.sim, j.skinner); j.brain.tossFaceYaw = nil } } }          // (one still walking to his kick spot, which was behind the ball and so behind the net, is stopped too)
     }
 
     private func caught() {

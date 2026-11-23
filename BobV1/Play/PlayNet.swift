@@ -359,14 +359,14 @@ extension PlayToss {
     func netHoldTick(dt: Float) -> Bool {
         guard var h = net.hold, let n = net.spec else { return false }
         h.t += dt
-        if !h.rolled, h.t >= PlayNetTuning.holdTime {
+        if !h.rolled, h.t >= PlayNetTuning.holdTime, ball.pos.y <= ball.radius + 0.05 || h.t >= PlayNetTuning.holdTime + 0.9 {          // (a ball still bouncing in the net waits to lie on the floor: a roll started in the air loses its pace to the bounces and the ball never came out)
             h.rolled = true
             ball.inNet = false
             let out = n.rollOutSpot(from: SIMD2(ball.pos.x, ball.pos.z))
             var d = out - SIMD2(ball.pos.x, ball.pos.z)
             let L = simd_length(d)
             d = L > 1e-3 ? d / L : SIMD2(0, 1)
-            let sp = min(L * TossTuning.rollDecayPerS + TossTuning.stopSpeed, 2.6)
+            let sp = min(max(L * TossTuning.rollDecayPerS + 0.35, 1.0), 2.6)
             ball.vel = SIMD3(d.x * sp, 0, d.y * sp)
             ball.pos.y = max(ball.pos.y, ball.radius)
         }
