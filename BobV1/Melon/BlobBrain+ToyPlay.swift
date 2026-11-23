@@ -301,7 +301,7 @@ extension BlobBrain {
     /// The audience switch (dev: `-ToyAudience 0`; the tests: ToyAuditTests TOYAUDIENCE=0): off = the toys as they were.
     nonisolated(unsafe) static var audienceOn: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ToyAudience") != nil && UserDefaults.standard.integer(forKey: "ToyAudience") == 0)
     static let audienceKinds: Set<DecorKind> = [.drum, .spintop, .hoop, .bouncymat]
-    static func audienceChance(_ k: DecorKind) -> Float { switch k { case .drum: return 0.5; case .spintop: return 0.55; case .hoop: return 0.5; default: return 0.25 } }
+    static func audienceChance(_ k: DecorKind) -> Float { switch k { case .drum: return 0.4; case .spintop: return 0.45; case .hoop: return 0.4; default: return 0.2 } }
     static func audienceLimit(_ k: DecorKind) -> Int { k == .spintop ? 2 : 1 }
 
     /// `toyFree` without the mood clause: a grumpy one may watch too (the audience rolls at half the chance and keeps to looks: no dance, no cheer, no bounce).
@@ -340,6 +340,8 @@ extension BlobBrain {
 
     private func toyAudienceEnd(_ clock: Float, cool: Float = 40) {
         toy.audUID = -1; toy.audStage = 0; toy.audCool = clock + cool
+        // (watching counts as his toy moment: no other toy pick at once, and a short breather before the next idle: toys are not used more overall)
+        toy.lastDirect = max(toy.lastDirect, variety.now); idleState.cooldown = max(idleState.cooldown, rand(3, 6))
     }
 
     private func toyAudienceRun(_ sim: SoftBody, _ f: DecorField, _ clock: Float) -> Bool {
@@ -410,7 +412,7 @@ extension BlobBrain {
                 if let user, simd_distance(user.position, c) < 1.6 || simd_distance(user.position, position) < 1.3 { return true }
                 toyAudienceEnd(clock, cool: 60)
                 toy.shared += 1
-                toyGo(uid, sim)
+                if rand() < 0.5 { toyGo(uid, sim) }          // (half the time he takes the turn: the mat is not used more overall)
                 return false
             }
             if clock >= toy.audNext, arrived {
