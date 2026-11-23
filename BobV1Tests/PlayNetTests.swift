@@ -516,4 +516,40 @@ final class PlayNetTests: XCTestCase {
         XCTAssertTrue(moved, "a Jelmiko plays it (kick / return)")
         p.end()
     }
+
+    // MARK: return round (a body on the lane: a high lob; nobody strikes the return flight)
+
+    func testAReturnWithABodyOnTheLaneIsALobThatClearsHimAndReachesTheCatchZone() {
+        let (p, rs, _, js) = netGame(); _ = rs
+        let n = p.net.spec!
+        let start = SIMD3<Float>(0, p.ball.radius + 0.02, n.mouthZ + 0.45)
+        let target = SIMD2<Float>(0, p.catchZ() + 0.6)
+        let v = p.netArc(from: start, to: target)
+        let g = TossTuning.gravity
+        var onLane = 0
+        for j in js() where PlayToss.segDist(j.pos, SIMD2(start.x, start.z), target) < 1.0 {
+            onLane += 1
+            let d = target - SIMD2(start.x, start.z), t = min(max(simd_dot(j.pos - SIMD2(start.x, start.z), d) / simd_dot(d, d), 0), 1)
+            let tt = t * d.y / v.z
+            XCTAssertGreaterThanOrEqual(start.y + v.y * tt - 0.5 * g * tt * tt, TossTuning.bodyTop + 0.7 - 1e-3, "the lob passes 0.7 above his crown")
+        }
+        XCTAssertGreaterThan(onLane, 0, "the middle Jelmiko stands on the lane")
+        let T = (v.y + (v.y * v.y + 2 * g * (start.y - p.ball.radius)).squareRoot()) / g
+        XCTAssertEqual(start.x + v.x * T, target.x, accuracy: 0.05); XCTAssertEqual(start.z + v.z * T, target.y, accuracy: 0.05, "it comes down in the catch zone")
+        XCTAssertLessThan(T, 2.6 * TossTuning.slow, "a lob of about a second and a half")
+        p.end()
+    }
+
+    func testABodyCannotStrikeTheBallDuringTheNetsReturnFlight() {
+        var w = TossWorld(); w.xHalf = 6; w.bodies = [TossBody(id: 0, pos: SIMD2(0, 0), top: TossTuning.bodyTop)]
+        func lowest(ignoreAll: Bool) -> (Float, Bool) {
+            var b = TossBall(pos: SIMD3(0, 2.0, 0), radius: 0.18); b.vel = SIMD3(0, -1, 0); b.ignoreAll = ignoreAll
+            var hit = false, low: Float = 9
+            for _ in 0..<150 { for e in b.step(1.0 / 120, in: w) { if case .headHit = e { hit = true } }; low = min(low, b.pos.y) }
+            return (low, hit)
+        }
+        let on = lowest(ignoreAll: true), off = lowest(ignoreAll: false)
+        XCTAssertFalse(on.1, "no head hit while the return flight is struck by nobody"); XCTAssertLessThan(on.0, 0.5, "it falls through where he stands")
+        XCTAssertTrue(off.1 || off.0 > 0.5, "an ordinary ball is struck (sanity)")
+    }
 }
