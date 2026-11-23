@@ -18,7 +18,7 @@ final class HoldWearTests: XCTestCase {
     override func setUp() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
-    static let hat = WearLook.partyHat, neck = WearLook.pearls, shoes = WearLook.glitterShoes
+    static let hat = WearLook.partyHat, neck = WearLook.diamondJ, shoes = WearLook.glitterShoes
     static let speciesIDs = [0, 1]                       // Bob (no feature) and Pip (the yellow tail + spikes)
     static let speciesNames = ["Bob", "Pip"]
     /// Prints to the console AND appends to /tmp/dd_holdwear/holdwear_prints.txt (the simulator test's stdout is not kept by xcodebuild).
@@ -201,7 +201,7 @@ final class HoldWearTests: XCTestCase {
                 XCTAssertGreaterThan(t.n[phase] ?? 0, 3, "\(name) \(phase): sampled")
                 XCTAssertTrue(t.undrawn.filter { $0.key.hasPrefix(phase) }.isEmpty, "\(name) \(phase): every worn piece and the feature stays drawn")
                 XCTAssertLessThanOrEqual(w[0], Self.tol, "\(name) \(phase): the hat stays on his head (body frame)")
-                XCTAssertLessThanOrEqual(w[1], Self.tol, "\(name) \(phase): the pearls stay round his middle (body frame)")
+                XCTAssertLessThanOrEqual(w[1], Self.tol, "\(name) \(phase): the Diamond J stays round his middle (body frame)")
                 XCTAssertEqual(t.mouth[phase] ?? 0, 0, "\(name) \(phase): nothing in the mouth keep-out")
                 XCTAssertLessThanOrEqual(t.feet[phase] ?? 0, Self.feetLimit, "\(name) \(phase): the shoes stay at the feet")
                 // OPEN FAULT (found in phase 2, real-app frames + this number): when he is held / flipped / thrown the tail spikes are carried 0.5 to 0.7 m away from their

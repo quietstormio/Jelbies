@@ -15,7 +15,7 @@ final class NecklaceTiltTests: XCTestCase {
     override func setUp() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
-    static let necklaces: [WearLook] = [.diamondJ, .pearls]      // (SHIP 2026-11-06: the gold chain is removed from the game)
+    static let necklaces: [WearLook] = [.diamondJ]      // (SHIP 2026-11-06: the gold chain is removed from the game)
     static let tiltedPieces: [WearLook] = necklaces + [.bandanaCoral, .bandanaMint, .bandanaSun]
     static let names = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl", "Panda"]
 
@@ -169,7 +169,7 @@ final class NecklaceTiltTests: XCTestCase {
         let ids = ProcessInfo.processInfo.environment["NECK_IDS"]?.split(separator: ",").compactMap({ Int($0) }) ?? [0, 1, 3, 4, 6]
         var s = "", failures: [String] = []
         s += "tilt side \(WearLevel.tiltSideY) at \(WearLevel.tiltSideAt) back \(WearLevel.tiltBackY) from \(WearLevel.tiltFrom); sideY bandanas \(WearLevel.sideY(.bandanaCoral)) J \(WearLevel.sideY(.diamondJ)) pearls \(WearLevel.sideY(.pearls))\n"
-        for look in [WearLook.bandanaCoral, .bandanaMint, .bandanaSun, .pearls, .diamondJ] {
+        for look in [WearLook.bandanaCoral, .bandanaMint, .bandanaSun, .diamondJ] {
             guard let p = WearMeshes.prepare(look, body: WearBody.shared) else { XCTFail("no art"); continue }
             XCTAssertTrue(p.tilted, "\(look)")
             var least: [String: (Float, String)] = [:], topY: Float = -9
@@ -207,11 +207,14 @@ final class NecklaceTiltTests: XCTestCase {
                         if abs(r.centreFront.y - p.tiltFrontY) > 0.01 { failures.append("\(tag): front centre moved to \(r.centreFront.y) (authored \(p.tiltFrontY))") }
                         // round 2: air between the loop and the arm roots at rest (measured against the drawn arm capsules; round 1 measures 0.0050 for the pearls, so the floor is 4 mm: it catches a regression, it does not prove the look)
                         if r.armClear < 0.004 { failures.append("\(tag): only \(r.armClear) of air over an arm at \(r.whereArm)") }
-                        if abs(r.centreBack.y - WearLevel.tiltBackY) > 0.03 { failures.append("\(tag): back at \(r.centreBack.y), want \(WearLevel.tiltBackY)") }
-                        if r.centreBack.y - r.centreFront.y < (WearLevel.tiltBackY - p.tiltFrontY) - 0.04 { failures.append("\(tag): back is only \(r.centreBack.y - r.centreFront.y) above the front") }
+                        // (necklace-r1: the Diamond J is a front-only chain: it has no back and no sides, so the back / side height checks do not apply; its own checks are WearBandTests.testDiamondJFrontChainIsClean)
+                        let frontOnly = look == .diamondJ && WearRules.diamondArc < 900
+                        if frontOnly, r.centreBack.a * 180 / .pi > WearRules.diamondArc + 1 { failures.append("\(tag): a stone at \(r.centreBack.a * 180 / .pi) degrees, past the chain's \(WearRules.diamondArc)") }
+                        if !frontOnly, abs(r.centreBack.y - WearLevel.tiltBackY) > 0.03 { failures.append("\(tag): back at \(r.centreBack.y), want \(WearLevel.tiltBackY)") }
+                        if !frontOnly, r.centreBack.y - r.centreFront.y < (WearLevel.tiltBackY - p.tiltFrontY) - 0.04 { failures.append("\(tag): back is only \(r.centreBack.y - r.centreFront.y) above the front") }
                         // at the sides the loop is ABOVE the arm: at rest no side link is inside an arm or the body (6 mm of skin relief)
                         // (pearls: a 1.5 cm pearl is a rigid ball on the sloping shoulder, where the rest skin is the arm-root nub: its inner edge dips up to 4 cm into that slope. Measured 3.6 cm.)
-                        let restSink: Float = look == .pearls ? 0.040 : 0.010
+                        let restSink: Float = 0.010
                         if r.side.minGap < -restSink { failures.append("\(tag): a side link is \(r.side.minGap) inside the arm / body") }
                         if r.minEgg < -restSink { failures.append("\(tag): sinks \(r.minEgg) into the body skin at rest") }
                     }

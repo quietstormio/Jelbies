@@ -32,7 +32,7 @@ final class WearSweepTests: XCTestCase {
 
     /// Shipped pieces rebuilt in this sweep.
     static let upgraded: [WearLook] = [.glassesRound, .sunglassesStar, .heartShades, .gogglesAviator, .monocleGold, .sashPink, .sashSky, .bibPink, .bibSky, .bandanaCoral, .bandanaMint,
-                                       .capeHero, .pearls, .lei, .whistleCoach, .backpackSky, .scarfCosy, .scarfSky, .bowtiePink, .bowtieSky]
+                                       .capeHero, .backpackSky, .scarfCosy, .scarfSky, .bowtiePink, .bowtieSky]
 
     private func env(_ k: String) -> String? { ProcessInfo.processInfo.environment[k].flatMap { $0.isEmpty ? nil : $0 } }
     private func dir() throws -> String {
@@ -451,7 +451,7 @@ final class WearSweepTests: XCTestCase {
     func testAuditMotionStrips() throws {
         guard let d = env("WEAR_AUDIT_DIR") else { throw XCTSkip("WEAR_AUDIT_DIR not set") }
         try FileManager.default.createDirectory(atPath: d + "/motion", withIntermediateDirectories: true)
-        let names = env("WEAR_AUDIT_MOTION")?.split(separator: ",").map(String.init) ?? ["whistleCoach", "pearls", "lei", "diamondJ", "bandanaCoral", "scarfCosy"]
+        let names = env("WEAR_AUDIT_MOTION")?.split(separator: ",").map(String.init) ?? ["diamondJ", "bandanaCoral", "scarfCosy"]
         let list = names.compactMap { WearLook(rawValue: $0) }
         guard !list.isEmpty else { throw XCTSkip("nothing selected") }
         for l in list {
@@ -487,6 +487,62 @@ final class WearSweepTests: XCTestCase {
                 }
             }
             try stack(rows, header: "\(l.rawValue): Bob then Pip; walk, happy bounce, asleep; six frames each").jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/motion/\(l.rawValue).jpg"))
+        }
+    }
+
+    /// Capture-only (necklace-r1): NECK_STRIP_DIR=<dir>, NECK_STRIP_MOTIONS=walk,turn,run,header: <dir>/strip_<motion>.jpg = two rows of six frames of the Diamond J on Bob, the old closed loop (top)
+    /// and the front-only chain (bottom), the SAME six frames (the three where the old chain was deepest inside a limb, three evenly spaced), each captioned with the measured depth inside a limb.
+    func testNecklaceStrips() throws {
+        guard let d = env("NECK_STRIP_DIR") else { throw XCTSkip("NECK_STRIP_DIR not set") }
+        try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+        let motions = env("NECK_STRIP_MOTIONS")?.split(separator: ",").map(String.init) ?? ["walk", "turn", "run", "header"]
+        let look = WearLook.diamondJ
+        let afterArc = env("NECK_STRIP_AFTER_ARC").flatMap { Float($0) } ?? WearRules.diamondArcDefault
+        defer { WearRules.diamondArcOverride = nil; WearMeshes.clearCache() }
+        func run(_ motion: String, arc: Float, capture: [Int]) throws -> (depths: [Float], images: [Int: UIImage]) {
+            WearRules.diamondArcOverride = arc; WearMeshes.clearCache()
+            DayClock.shared.forcedHour = 12
+            let st = try makeStage(0); let r = st.rig
+            r.brain.autonomy = false; r.brain.expr.enabled = false
+            dress(st, look, ticks: 70, settleSim: true)
+            for _ in 0..<40 { st.lab.tick(watching: false); tick(st, look) }
+            let p0 = r.sim.bodyPose(iterations: 3).centroid
+            var frames = 150
+            switch motion {
+            case "walk": r.brain.script = .walk(target: SIMD2(p0.x - 3, p0.z + 0.2), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0
+            case "run": r.brain.hurry = true; r.brain.script = .walk(target: SIMD2(p0.x - 3.5, p0.z + 0.2), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0; frames = 130
+            case "turn": r.brain.script = .walk(target: SIMD2(p0.x, p0.z - 2.5), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0; frames = 120
+            case "header": r.brain.tossHeaderStart(r.sim, r.skinner, jump: true); frames = 100
+            default: r.brain.idleForced = true; _ = r.brain.idleStart(IdleKind(rawValue: motion) ?? .bounce, r.sim)
+            }
+            var depths: [Float] = [], images: [Int: UIImage] = [:]
+            for f in 0..<frames {
+                st.lab.tick(watching: false); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); tick(st, look)
+                let sk = skin(r)
+                st.worn.syncCarry(0, sim: r.sim)
+                let fr = sk.withUnsafeBufferPointer { q in st.worn.frame(theme: RoomTheme(), time: 0.4) { _ in q.baseAddress } }
+                let verts = fr.opaque.vertices.map { SIMD3($0.pos.x, $0.pos.y, $0.pos.z) }
+                let field = SkinField(skin: sk)
+                var worst: Float = 0
+                for i in stride(from: 0, to: verts.count, by: 3) { let (dd, owner) = field.sdOwner(verts[i]); if -dd > worst, !owner.hasPrefix("egg") { worst = -dd } }
+                depths.append(worst)
+                if capture.contains(f) { images[f] = caption(shot(st, look, yaw: 0.65, focus: auditFocus(look.slot), lift: 0.15), String(format: "%@ f%d: %.1f cm in a limb", arc > 900 ? "old loop" : "front chain", f, worst * 100)) }
+            }
+            return (depths, images)
+        }
+        for m in motions {
+            let a = try run(m, arc: 999, capture: [])
+            let order = a.depths.indices.sorted { a.depths[$0] > a.depths[$1] }
+            var pick: [Int] = []
+            for i in order where pick.allSatisfy({ abs($0 - i) > 6 }) { pick.append(i); if pick.count == 3 { break } }
+            for k in 0..<3 { let i = (a.depths.count - 1) * (k + 1) / 4; if !pick.contains(i) { pick.append(i) } }
+            pick = Array(pick.prefix(6)).sorted()
+            let before = try run(m, arc: 999, capture: pick), after = try run(m, arc: afterArc, capture: pick)
+            let rows = [pick.compactMap { before.images[$0] }, pick.compactMap { after.images[$0] }]
+            let worstB = before.depths.max() ?? 0, worstA = after.depths.max() ?? 0
+            let img = stack(rows, header: String(format: "Diamond J, Bob, %@: top = old closed loop (worst %.1f cm inside a limb over the run), bottom = front-only chain (worst %.1f cm)", m, worstB * 100, worstA * 100))
+            try img.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/strip_\(m.replacingOccurrences(of: " ", with: "_")).jpg"))
+            print("[necklace] strip \(m): old worst \(worstB) new worst \(worstA) frames \(pick)")
         }
     }
 
