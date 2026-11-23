@@ -101,6 +101,9 @@ struct TownFlow: View {
     /// Back from the current screen: out of the flow when it is the root, else to `target`.
     private func up(_ target: TownScreen) { if (screen ?? .town) == root { goHome() } else { screen = target } }
 
+    /// The Profile's back button leaves the flow (to the room as it was) when it came from the close-up or from the room; from the Jelly Show lobby it goes back there.
+    static func profileBackLeaves(focusActive: Bool, root: TownScreen) -> Bool { focusActive || root == .condition }
+
     var currentScreen: TownScreen { screen ?? .town }
     func chooseCafe() { goHome(); cafe() }
     func choosePark() { goHome(); park() }
@@ -116,7 +119,8 @@ struct TownFlow: View {
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome).tipScreen("shop")
             case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, shop: { screen = .shop }, race: { goHome(); care.startRace(jelly: who) }).tipScreen("race")
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) }).tipScreen("show")
-            case .condition: ProfileScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.requestClean(jelly: who) }, feed: chooseFeed, drink: chooseDrink).tipScreen("trophies")
+            // Back: from the close-up (focus) or from the room (roster card / name header: the flow's root is .condition) it leaves the flow and the room is as it was; from the Jelly Show lobby it goes back there.
+            case .condition: ProfileScreen(care: care, who: $who, back: { if TownFlow.profileBackLeaves(focusActive: care.focus.isActive, root: root) { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.requestClean(jelly: who) }, feed: chooseFeed, drink: chooseDrink).tipScreen("trophies")
             case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, shop: { screen = .shop }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }).tipScreen("volley")
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
