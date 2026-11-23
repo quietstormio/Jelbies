@@ -17,6 +17,8 @@ nonisolated enum BoutMath {
     nonisolated(unsafe) static var missEvery: Float = 6
     /// A spot nobody else stands nearer than this to (bodies keep apart).
     static let keepAway: Float = 1.75
+    /// A ball never comes down further out sideways than this (a wide landscape floor: a ball against a side wall is not reachable from behind).
+    static let sideLimit: Float = 2.5
 
     /// A spot `0.6...1.2` from where the receiver stands (`miss`: 2.2...2.8, out of reach), inside the floor, at least `keepAway` from everybody else.
     static func pickFree(near c: SIMD2<Float>, keepOff: [SIMD2<Float>], miss: Bool, reach: (Float) -> Float, zlo: Float, zhi: Float, rnd: () -> Float) -> SIMD2<Float> {
@@ -24,7 +26,7 @@ nonisolated enum BoutMath {
         for _ in 0..<60 {
             let a = rnd() * 2 * .pi, rad = miss ? 2.2 + 0.6 * rnd() : 0.6 + 0.6 * rnd()
             let p = c + SIMD2(cosf(a), sinf(a)) * rad
-            guard p.y >= zlo, p.y <= zhi, abs(p.x) <= reach(p.y) - 0.17 else { continue }
+            guard p.y >= zlo, p.y <= zhi, abs(p.x) <= min(reach(p.y) - 0.17, sideLimit) else { continue }
             let clear = keepOff.map { simd_distance($0, p) }.min() ?? 9
             if clear >= keepAway { return p }
             if best == nil || clear > best!.0 { best = (clear, p) }
@@ -127,7 +129,7 @@ extension PlayToss {
             let vEnd = vel.y - g * T
             let tf = H > r + 0.05 ? (vEnd + (vEnd * vEnd + 2 * g * (H - r)).squareRoot()) / g : 0
             let land = spot + SIMD2(vel.x, vel.z) * tf
-            let out = max(0, (TossTuning.zBack + 2.2) - land.y, land.y - (zhi + 0.1), abs(land.x) - (Self.bodyReach(min(max(land.y, zlo), zhi)) - 0.5))
+            let out = max(0, (TossTuning.zBack + 2.2) - land.y, land.y - (zhi + 0.1), abs(land.x) - min(Self.bodyReach(min(max(land.y, zlo), zhi)) - 0.5, BoutMath.sideLimit - 0.1))
             if out < 0.01 || attempt == 7 { break }
         }
         ball.vel = vel
