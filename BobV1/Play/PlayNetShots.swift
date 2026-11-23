@@ -75,7 +75,7 @@ extension PlayToss {
                 NSLog("[playnet] shot-back shot=%@ launch-to-hand=%.1f s hand=%d", s.name, clock - launchClock, phase == .inHand ? 1 : 0)
             }
         }
-        NSLog("[playnet] shots done closest-body-to-footprint=%.2f dead-returns=%d", net.minBodyDist, net.deadReturns)
+        NSLog("[playnet] shots done closest-body-to-footprint=%.2f dead-returns=%d keepout-body-samples=%d", net.minBodyDist, net.deadReturns, net.keepOutSamples)
     }
 }
 #endif

@@ -36,9 +36,9 @@ nonisolated enum PlayNetTuning {
     /// How many seconds a celebration waits for a busy Jelmiko before it is given up.
     static let cheerWait: Float = 3.0
     /// Keep-out round: no body is sent into the goal's footprint plus this margin; a stand there is moved to this far in front of the mouth line.
-    static let keepOutMargin: Float = 0.35, standFront: Float = 0.6
+    static let keepOutMargin: Float = 0.35, keepOutFront: Float = 1.0, standFront: Float = 1.05
     /// A ball at rest, or on its second floor contact, in the keep-out or up to this far in front of the mouth line (anywhere across the floor) without having scored is returned by the net (no cheer).
-    static let deadFront: Float = 0.85
+    static let deadFront: Float = 1.4
 }
 
 nonisolated enum TossNetEvent: Equatable, Sendable {
@@ -201,7 +201,7 @@ struct PlayNetState {
     var awaitHand = false
     /// Keep-out round: the closest any body came to the footprint (0 = inside), the ball's floor contacts inside the dead zone, and the dead returns.
     var minBodyDist: Float = 99
-    var floorHits = 0, prevVy: Float = 0, deadReturns = 0
+    var floorHits = 0, prevVy: Float = 0, deadReturns = 0, keepOutSamples = 0
     var goals = 0
     /// Bodies that stay where they are while the net is up (sleepers): the net is placed clear of them.
     var blockers: [SIMD2<Float>] = []
@@ -220,7 +220,7 @@ extension PlayToss {
     /// play-net keep-out: the goal's footprint plus `keepOutMargin` (the posts, the mouth, and everything behind the mouth line back to the wall). False without the net.
     func netKeepOut(_ p: SIMD2<Float>) -> Bool {
         guard netUp, let n = net.spec else { return false }
-        return abs(p.x - n.centre.x) < n.outerHalf + PlayNetTuning.keepOutMargin && p.y < n.frontZ + PlayNetTuning.keepOutMargin
+        return abs(p.x - n.centre.x) < n.outerHalf + PlayNetTuning.keepOutMargin && p.y < n.mouthZ + PlayNetTuning.keepOutFront
     }
 
     /// play-net keep-out: a stand / walk target in the keep-out is moved to the nearest spot outside: in front of the mouth (at least `standFront` from the mouth line), or to the side when that is nearer.
@@ -390,6 +390,7 @@ extension PlayToss {
         netDeadTick()          // (play-net keep-out)
         for j in jellies where !j.free {          // (the closest any body came to the footprint: the keep-out's proof)
             let d = netDistance(j.pos)
+            if netKeepOut(j.pos) { net.keepOutSamples += 1 }
             if d < net.minBodyDist - 0.03 { net.minBodyDist = d; NSLog("[playnet] closest body to the footprint: %.2f (id %d at %.2f,%.2f) clock=%.1f", d, j.id, j.pos.x, j.pos.y, clock) }
         }
         if let n = net.spec {
