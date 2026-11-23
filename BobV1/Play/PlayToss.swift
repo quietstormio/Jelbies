@@ -713,7 +713,7 @@ final class PlayToss {
             if best == nil || d < best!.d { best = (j, a.t, a.xz, d) }
         }
         // the one already going for it keeps it (two Jelmiko about as near as each other must not hand it back and forth every step: each hand-over releases the other's stand and nobody gets there)
-        if !PlayTuning.ballReturnOld, let c = headChoice, c != best?.j.id, let jc = jelly(c), let a = arrival(jc), simd_distance(jc.pos, a.xz) < Self.interceptReach, !netKeepOut(a.xz) {          // (play-net keep-out) best = (jc, a.t, a.xz, simd_distance(jc.pos, a.xz)) }
+        if !PlayTuning.ballReturnOld, let c = headChoice, c != best?.j.id, let jc = jelly(c), let a = arrival(jc), simd_distance(jc.pos, a.xz) < Self.interceptReach, !netKeepOut(a.xz) { best = (jc, a.t, a.xz, simd_distance(jc.pos, a.xz)) }          // (play-net keep-out)
         headChoice = best?.j.id
         if PlayTuning.ballReturnOld || best == nil {
             support(toward: ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: [])
