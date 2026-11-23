@@ -38,6 +38,8 @@ struct SoccerIdle {
     var kickSpeed: Float = 0
     /// A dribble leg re-aimed after a nudge: taken up between steps (a walk re-targeted mid-step pulls the feet off the locked gait).
     var pendingWalk: SIMD2<Float>?
+    /// soccer-room-r1: a directed kick (a session's pass): the ball is to roll this far along `dir` (-1 = an ordinary kick).
+    var roll: Float = -1
     var isDribbling: Bool { mode == .dribble || mode == .rescue }
 }
 
@@ -48,6 +50,9 @@ extension BlobBrain {
     private func rotate(_ v: SIMD2<Float>, _ a: Float) -> SIMD2<Float> { SIMD2(v.x * cosf(a) - v.y * sinf(a), v.x * sinf(a) + v.y * cosf(a)) }
     /// A spot he can stand on (the floor rules leave it alone, nobody is there).
     private func standable(_ p: SIMD2<Float>) -> SIMD2<Float>? { let q = fixed(p); return simd_distance(p, q) < 0.08 && peerFree(q) ? q : nil }
+
+    /// soccer-room-r1 (log only): can he stand at `p`, and why not.
+    func sessStandProbe(_ p: SIMD2<Float>) -> String { let q = fixed(p); return "fixedShift=\(String(format: "%.2f", simd_distance(p, q))) peerFree=\(peerFree(q)) reachable=\(reachable(position, q))" }
 
     /// The nearest goal to `p`.
     func nearestGoal(to p: SIMD2<Float>) -> DecorFoot? { DecorField.shared.goals.min { simd_distance($0.centre, p) < simd_distance($1.centre, p) } }
@@ -79,6 +84,23 @@ extension BlobBrain {
         let goal = nearestGoal(to: ball)
         var underButton: SIMD2<Float>?
         let rfBall = roamProvider?()
+        if let sk = mix.sessKick {          // (soccer-room-r1: a session's directed kick: stand behind the ball on the line to the friend; no other line will do)
+            mix.sessKick = nil
+            plan.mode = .kick; plan.dir = sk.dir; plan.roll = sk.roll
+            guard let q = standable(ball - sk.dir * SoccerTuning.standBack) else { return nil }
+            soccerPlan = plan
+            return q
+        }
+        if let to = mix.sessDribbleTo {          // (soccer-room-r1: dribble the ball a short way to a chosen spot, then he is done: the pass is the next turn)
+            mix.sessDribbleTo = nil
+            let d = to - ball, L = simd_length(d)
+            guard L > 0.6 else { return nil }
+            plan.mode = .dribble; plan.target = to; plan.dir = d / L
+            guard let q = standable(ball - plan.dir * SoccerTuning.standBack) else { return nil }
+            soccerPlan = plan
+            return q
+        }
+        let sessShoot = mix.sessShoot; mix.sessShoot = false
         let offFloor = rfBall.map { !$0.contains(ball) || $0.halfWidth(at: ball.y) - abs(ball.x) < 0.3 } ?? false          // (against a wall / outside the floor the Jelmiko walk on: nobody can stand behind it)
         if MoveMix.on, force == nil, MoveMix.ballNeedsRoom, let rf = rfBall {          // (round 3c: no clear line for a pass from here: the ball is dribbled out toward the middle of the floor first, the pass starts from there)
             MoveMix.ballNeedsRoom = false
@@ -95,7 +117,7 @@ extension BlobBrain {
         } else if force == 3 || (force == nil && SoccerState.shared.isStuck(f.uid)) {
             guard let open = field.nearestOpenFloor(to: ball) else { return nil }
             plan.mode = .rescue; plan.target = open
-        } else if let g = goal, force == 1 || force == 2 || (force == nil && rand() < 0.7) {
+        } else if let g = goal, force == 1 || force == 2 || (force == nil && (sessShoot || rand() < 0.7)) {
             let spots = field.kickSpots(g)
             guard let near = spots.min(by: { simd_distance($0.ball, ball) < simd_distance($1.ball, ball) }) else { return nil }
             plan.goal = g.uid
@@ -327,7 +349,7 @@ extension BlobBrain {
         let rel = ball - position, dist = simd_length(rel)
         let fwd = SIMD2(sinf(yaw), cosf(yaw))
         let inReach = dist < SoccerTuning.kickReach && dist > 1e-3 && simd_dot(rel / dist, fwd) > 0.45
-        if !inReach || (soccerModeForce == nil && s.mode == .kick && rand() < 0.10) {
+        if !inReach || (soccerModeForce == nil && s.mode == .kick && s.roll < 0 && rand() < 0.10) {
             // a fumble: the toe grazes it (or meets air): a wobble, the ball barely moves
             s.fumble = true
             if inReach { field.kickBall(f.uid, direction: s.dir, speed: 0.45, by: steerID); SoccerState.shared.newKick(f.uid) }
@@ -349,6 +371,9 @@ extension BlobBrain {
             dir = L > 1e-3 ? d / L : s.dir
             // reaches the net with some pace (the roll is v / 1.15)
             speed = min(max((L + 0.9) * SoccerTuning.linearDecayPerS, SoccerTuning.kickSpeed.lowerBound), SoccerTuning.kickSpeed.upperBound)
+        } else if s.roll >= 0 {          // (a session's pass: straight at the friend, stopping a body-length short of him)
+            dir = rotate(dir, rand(-0.04, 0.04))
+            speed = min(max(SoccerTuning.linearDecayPerS * s.roll + 0.1, SoccerTuning.kickSpeed.lowerBound), SoccerTuning.kickSpeed.upperBound)
         } else {
             dir = rotate(dir, rand(-0.18, 0.18))
             speed = rand(SoccerTuning.kickSpeed.lowerBound, SoccerTuning.kickSpeed.upperBound)

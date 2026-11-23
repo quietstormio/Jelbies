@@ -936,6 +936,7 @@ final class BlobBrain {
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
+        if mix.sess { restTimer = 0.25; return }          // (soccer-room-r1: a member of a soccer session stands where the director put him)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         if !emoteSpotLive || reserved { emoteSpot.soloKind = nil; emoteMeetEnd(); socialBook.meetHeldBy = -1 }          // (EmoteSpot.swift: a meal, a bath or the park drops what was waiting for a spot)
         if emoteSoloArrived(sim) { mixNoteIdle(); return }          // (EmoteSpot.swift: he has walked to the spot of a solo emote)

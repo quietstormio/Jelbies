@@ -117,6 +117,14 @@ struct MixBook {
     var passWhy = ""
     var soccerNudgeT: Float = -99, soccerStuck = 0
     var soccerNudgeBall = SIMD2<Float>.zero
+    /// soccer-room-r1 (Melon/SoccerSession.swift): a director's order to this body, whether he is a member of a session, and the directed kick for the next stand-spot pick.
+    var sess = false
+    var order = SessOrder()
+    var sessKick: SessKick?
+    /// The next stand-spot pick shoots at a goal (when one is placed) / dribbles to this spot; where a waiting member looks (nil = the ball).
+    var sessShoot = false
+    var sessDribbleTo: SIMD2<Float>?
+    var sessFace: SIMD2<Float>?
     var windowUntil: Float = -1
     /// A run covers the first `runShare` of a leg; the rest is walked at the normal blend (afterRun = the real goal), so a run never ends in a stop.
     var afterRun: SIMD2<Float>?
