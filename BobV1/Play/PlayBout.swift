@@ -14,7 +14,7 @@ import simd
 nonisolated enum BoutMath {
     /// The most touches in one bout; after them the last header goes to the player. One header in this many is aimed out of reach (the ball comes down).
     nonisolated(unsafe) static var touchCap = 8
-    nonisolated(unsafe) static var missEvery: Float = 4.5
+    nonisolated(unsafe) static var missEvery: Float = 8
     /// A spot nobody else stands nearer than this to (bodies keep apart).
     static let keepAway: Float = 1.75
     /// A ball never comes down further out sideways than this (a wide landscape floor: a ball against a side wall is not reachable from behind).
