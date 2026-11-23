@@ -112,8 +112,11 @@ extension BlobBrain {
         if underButton == nil, MoveMix.on, force == nil, !mixStopOK(ball) || offFloor {          // (the ball lies under a HUD button, where it cannot be seen, or out at the wall: it is dribbled out to floor that can be used)
             outer: for r in [Float(1.6), 2.4, 3.2] { for k in 0..<12 { let a = Float(k) * .pi / 6; let p = ball + SIMD2(sinf(a), cosf(a)) * r; if field.openFloor(p), mixStopOK(p), rfBall.map({ $0.contains(p) && $0.halfWidth(at: p.y) - abs(p.x) > 0.5 }) ?? true { underButton = p; break outer } } }
         }
-        if underButton == nil, mix.sessFetch, SoccerSessionTuning.on, let open = field.nearestOpenFloor(to: ball) { underButton = open }          // (soccer-room-r1: a fetch always brings it out to open floor)
-        if let ub = underButton {
+        var fetchTo: SIMD2<Float>?
+        if mix.sessFetch, SoccerSessionTuning.on, let rf = rfBall { fetchTo = sessFetchTarget(ball: ball, rf: rf) }          // (soccer-room-r1: a fetch dribbles it 2 or more out to open floor, whatever the floor rules say about where it lies now)
+        if let ft = fetchTo {
+            plan.mode = .dribble; plan.target = ft
+        } else if let ub = underButton {
             plan.mode = .rescue; plan.target = ub
         } else if force == 3 || (force == nil && SoccerState.shared.isStuck(f.uid)) {
             guard let open = field.nearestOpenFloor(to: ball) else { return nil }
@@ -157,6 +160,30 @@ extension BlobBrain {
         }
         soccerPlan = plan
         return q
+    }
+
+    /// soccer-room-r1: where a fetched ball is dribbled to: 2...3.2 from where it lies, open floor 0.6 clear, 1.2 from the walls, toward the middle of the floor, nobody standing there, a clear roll to it.
+    func sessFetchTarget(ball: SIMD2<Float>, rf: GameCamera.RoamFloor) -> SIMD2<Float>? {
+        let f = DecorField.shared
+        let mid = SIMD2<Float>(0, (rf.minZ + rf.maxZ) / 2)
+        let others = socialOthers().filter { $0 !== self }.map { $0.position }
+        var best: (SIMD2<Float>, Float)?
+        for r in [Float(2.0), 2.6, 3.2] {
+            for k in 0..<16 {
+                let a = Float(k) * .pi / 8
+                let p = ball + SIMD2(sinf(a), cosf(a)) * r
+                guard sessRestFloor(rf, p), f.openFloor(p, margin: 0.6), !mixBallSpotBad(p), !others.contains(where: { simd_distance($0, p) < 1.0 }), f.clearRoll(from: ball, to: p) else { continue }
+                let sc = -simd_distance(p, mid) - 0.3 * r
+                if best == nil || sc > best!.1 { best = (p, sc) }
+            }
+            if best != nil { break }
+        }
+        return best?.0
+    }
+
+    /// soccer-room-r1: floor a ball may be left on: well inside the walls and the front and back of the floor, not under a HUD button.
+    func sessRestFloor(_ rf: GameCamera.RoamFloor, _ p: SIMD2<Float>) -> Bool {
+        rf.contains(p) && rf.halfWidth(at: p.y) - abs(p.x) >= 1.2 && p.y >= rf.minZ + 1.2 && p.y <= rf.maxZ - 1.5 && rf.stopOK(p)
     }
 
     /// soccer-room-r1: a kick spot of a goal he can use: the ball's spot is open floor 0.6 from the walls, the stand behind it is floor.

@@ -208,7 +208,8 @@ extension BlobBrain {
                 while d <= D { let p = c + v * d; if !field.openFloor(p) { why["lineFurniture", default: 0] += 1; clear = false; break }; if mixBallSpotBad(p) { why["lineSleeperHud", default: 0] += 1; clear = false; break }; if others.contains(where: { simd_distance($0.position, p) < 0.9 }) { why["lineBody", default: 0] += 1; clear = false; break }; d += 0.4 }
                 guard clear else { continue }
                 guard reachable(position, pk), reachable(o.position, pr) else { why["unreachable", default: 0] += 1; continue }
-                let score = -(simd_distance(position, pk) + simd_distance(o.position, pr))
+                let wk = simd_distance(position, pk), wr = simd_distance(o.position, pr)
+                let score = -(max(wk, wr) + 0.25 * (wk + wr))          // (the kick waits for the slower walker)
                 if best == nil || score > best!.score { best = (pk, pr, score) }
             }
             if best != nil { break }

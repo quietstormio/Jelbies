@@ -51,6 +51,7 @@ nonisolated enum SoccerSessionTuning {
     static let openingWait: ClosedRange<Float> = 20...40
     static let kickoffWait: ClosedRange<Float> = 0.3...0.8
     static let passKicks: ClosedRange<Float> = 5...8
+    nonisolated(unsafe) static var roomShots = false          // (tests turn it on)
 }
 
 @MainActor
@@ -195,8 +196,8 @@ final class SoccerSession {
         members = ready.map { $0.steerID }.sorted()
         let serial = DecorField.shared.toys.news.last?.serial ?? 0
         for m in ready { m.mix.sess = true; m.mix.order = SessOrder(); m.toy.handled = max(m.toy.handled, serial); m.toy.noticeUID = -1; m.toy.chaseSpot = nil }
-        for m in ready { m.sessSpectate(ball: DecorField.shared.position(ball), avoid: []) }          // (everybody comes over and spreads out, 2.2 or more apart, before the first turn is planned)
-        log("start #\(sessions) kickoff=\(kickoffSession) members=\(members) len=\(String(format: "%.0f", endsAt - clock))")
+        if !kickoffSession { for m in ready { m.sessSpectate(ball: DecorField.shared.position(ball), avoid: []) } }          // (everybody comes over and spreads out, 2.2 or more apart, before the first turn is planned; at a kick-off the turn is planned at once: the two nearest walk straight to their places)
+        log("start #\(sessions) kickoff=\(kickoffSession) members=\(members) len=\(String(format: "%.0f", endsAt - clock)) floorZ=\(String(format: "%.1f", b.roamProvider?()?.minZ ?? 0))...\(String(format: "%.1f", b.roamProvider?()?.maxZ ?? 0))")
         if kickoffSession, ready.count >= 2, forceGame == nil { forceGame = .pass }          // (the kick-off is a pass: the simplest game first)
         let kickoffSessionWas = kickoffSession
         kickoffSession = false
@@ -217,8 +218,8 @@ final class SoccerSession {
     private func gamesFor(_ n: Int, _ goal: Bool) -> [Game] {
         var g: [Game] = []
         if n >= 2 { g += [.pass, .dribblePass] }
-        if goal, goalPlayable() { g.append(.shots) }
-        if n == 1 && !goal { g.append(.solo) }
+        if goal, SoccerSessionTuning.roomShots, goalPlayable() { g.append(.shots) }          // (owner 11-23: no goal in the room; the shots game waits for the Play view's bought net)
+        if n == 1 && (!goal || !SoccerSessionTuning.roomShots) { g.append(.solo) }
         return g
     }
 
@@ -241,6 +242,7 @@ final class SoccerSession {
         for m in ms { m.mix.sessFace = nil }
         phase = .plan; kIdx = 0; rIdx = 1 % max(ms.count, 1); kicks = 0; failures = 0; planAt = -9; restSince = -1
         kickTarget = Int(ms[0].rand(SoccerSessionTuning.passKicks.lowerBound, SoccerSessionTuning.passKicks.upperBound))          // (shots: 3...6 of them)
+        if game == .pass || game == .dribblePass { kickTarget = ms.count + Int(ms[0].rand(0, 3)) }          // (a ring: one kick each and up to two more; the next game follows sooner)
         soloNextAt = clock + 0.8; soloWaiting = false
         gameEnds = clock + max(Float(max(ms.count, 2)) * 9, (endsAt - clock) * 0.6)          // (long enough for a whole ring: each kick takes about 8 s)          // (each game of the playlist gets its share of the session)
         for m in ms { m.mix.order = SessOrder() }
@@ -271,6 +273,7 @@ final class SoccerSession {
             // both must be standing free (a walking one is asked to stop once); an emote in progress runs out
             var ready = true
             for m in [K, R] where !m.socialFreeBase {
+                if kickoffTurn, m.scriptIsWalking || m.socialWandering { continue }          // (a kick-off: a walker is simply given his place; the order stops him first)
                 ready = false
                 if !m.mix.order.beckoned, m.socialWandering || m.scriptIsWalking { m.mix.order.beckoned = true; _ = m.socialBeckonStop() }
             }
@@ -286,7 +289,7 @@ final class SoccerSession {
             let rf0 = K.roamProvider?()
             let restOK: (SIMD2<Float>) -> Bool = { p in          // (where the ball will stop must be open floor: 0.9 from the walls, clear of furniture and the goal)
                 guard let rf = rf0 else { return true }
-                return rf.contains(p) && rf.halfWidth(at: p.y) - abs(p.x) >= 0.9 && p.y > rf.minZ + 0.9 && p.y < rf.maxZ - 0.9 && rf.stopOK(p) && field.openFloor(p, margin: 0.6) && field.goals.allSatisfy { simd_distance($0.centre, p) > 1.3 }
+                return K.sessRestFloor(rf, p) && field.openFloor(p, margin: 0.6) && field.goals.allSatisfy { simd_distance($0.centre, p) > 1.3 }
             }
             guard let plan = K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6, dists: kickoffTurn ? [2.4, 2.2, 2.0, 2.6, 3.0] : nil) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK, dists: kickoffTurn ? [2.4, 2.2, 2.0, 2.6, 3.0] : nil) else {
                 failures += 1
@@ -438,7 +441,7 @@ final class SoccerSession {
                 let a = (k % 2 == 0 ? 1 : -1) * Float((k + 1) / 2) * 0.5
                 let v = SIMD2(u.x * cosf(a) - u.y * sinf(a), u.x * sinf(a) + u.y * cosf(a))
                 let p = c + v * r
-                guard rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 1.0, rf.stopOK(p), field.openFloor(p), simd_distance(K.fixed(p), p) < 0.08, !K.mixBallSpotBad(p),
+                guard K.sessRestFloor(rf, p), field.openFloor(p, margin: 0.6), simd_distance(K.fixed(p), p) < 0.08, !K.mixBallSpotBad(p),
                       !ms.contains(where: { $0 !== K && simd_distance($0.position, p) < 1.4 }) else { continue }
                 var clear = true
                 var d: Float = 0.4
@@ -528,6 +531,7 @@ final class SoccerSession {
         if g != lastGoals {
             lastGoals = g
             guard let lg = SoccerState.shared.lastGoal else { return }
+            if lg.scorer < 0 { log("a ball rolled in by itself: no cheer"); return }          // (nobody kicked it: nothing to cheer)
             goals += 1; goalAt = clock; goalReported = false
             AudioHub.shared.play(.volleyPoint); AudioHub.shared.play(.cheerSmall, volume: 0.6)          // (the volleyball's point sound + a small cheer: no new audio)
             Haptic.impact(.medium)

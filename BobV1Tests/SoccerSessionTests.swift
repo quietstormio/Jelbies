@@ -12,11 +12,11 @@ import simd
 final class SoccerSessionTests: XCTestCase {
     override func setUp() {
         SoccerState.shared.reset(); SoccerEvents.clear(); SoccerEvents.sink = nil; DecorField.shared.clear(); DecorField.shared.bodies = []
-        SoccerSession.shared.reset(); MoveMix.soccerNextAt = 0; MoveMix.ballBadSince = -1
+        SoccerSession.shared.reset(); MoveMix.soccerNextAt = 0; MoveMix.ballBadSince = -1; SoccerSessionTuning.roomShots = true
     }
     override func tearDown() {
         SoccerEvents.sink = nil; DecorField.shared.clear(); DecorField.shared.bodies = []; SoccerState.shared.reset(); SoccerSession.shared.reset()
-        GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
+        GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); SoccerSessionTuning.roomShots = false
     }
 
     /// n Jelmiko in the room, happy and free; a soccer ball (uid 7) in the middle, a goal (uid 8) when asked.
