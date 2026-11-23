@@ -374,6 +374,7 @@ final class PlayToss {
     private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>, foot: Bool = false) {
         footFlight = foot; footChoice = nil; footPlan = [:]; kickHeightT = nil
         ownGame = .none; passPlan = nil; recallAt = nil; pendingPasses = rollChain()
+        if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playchain] throw=%d planned=%d foot=%d", throwSerial + 1, pendingPasses, foot ? 1 : 0) }
         ball.pos = start; ball.vel = v; ball.floorBounces = 0; ball.ignoring = nil
         phase = .flying
         rally = 0; nudges = 0; looseT = 0; flightT = 0; leftHand = false; touched = false; bumper = nil; passTo = nil; headers = 0; rescues = 0; passes = 0
@@ -795,13 +796,16 @@ final class PlayToss {
         case .passing(let l, let from, _): left = l; prev = from
         }
         let styled = PlayTuning.style(ballKind).headShare < 1 && !PlayTuning.ballReturnOld
+        if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playchain] hop by=%d left=%d", j.id, left) }
         guard styled, left > 0 else { ownGame = .none; return nil }
         let line = jellies.filter { !$0.free && $0.id != j.id && simd_distance($0.pos, j.pos) >= PlayTuning.passMinDist }
         // never back to the one who just passed, unless there are only two of them
         let others = line.filter { $0.id != prev }
         let pool = (others.isEmpty && jellies.filter({ !$0.free }).count <= 2) ? line : others
         guard !pool.isEmpty else { ownGame = .none; return nil }
-        let o = pool[min(Int(rand() * Float(pool.count)), pool.count - 1)]
+        let still = pool.filter { Self.canHop($0.brain) && !$0.brain.tossBusy }          // (one who is standing is better than one still walking home: he can turn to the pass at once)
+        let pick = still.isEmpty ? pool : still
+        let o = pick[min(Int(rand() * Float(pick.count)), pick.count - 1)]
         ownGame = .passing(left: left - 1, from: j.id, to: o.id)
         return o
     }
@@ -811,12 +815,17 @@ final class PlayToss {
         let r = ball.radius, cd = Self.contactDist(r)
         let ballXZ = SIMD2(ball.pos.x, ball.pos.z)
         let toPlayer = playerPoint() - o.pos, toPasser = j.pos - o.pos
-        var dirO = (simd_length(toPlayer) > 1e-3 ? simd_normalize(toPlayer) : SIMD2<Float>(0, 1)) + (simd_length(toPasser) > 1e-3 ? simd_normalize(toPasser) * 0.7 : .zero)
-        dirO = simd_length(dirO) > 1e-3 ? simd_normalize(dirO) : SIMD2(0, 1)
-        var spot = o.pos + dirO * cd
-        let lim = Self.ballReach(spot.y) - r - 0.1
-        spot.x = min(max(spot.x, -lim), lim)
-        let D = simd_length(spot - ballXZ)
+        // he turns a little toward the ball (0.25 of the way to the passer), more would put the spot nearer the passer than 1.3 u: then none
+        var dirO = SIMD2<Float>(0, 1), spot = o.pos, D: Float = 0
+        for tilt in [Float(0.25), 0] {
+            var d = (simd_length(toPlayer) > 1e-3 ? simd_normalize(toPlayer) : SIMD2<Float>(0, 1)) + (simd_length(toPasser) > 1e-3 ? simd_normalize(toPasser) * tilt : .zero)
+            d = simd_length(d) > 1e-3 ? simd_normalize(d) : SIMD2(0, 1)
+            var sp = o.pos + d * cd
+            let lim = Self.ballReach(sp.y) - r - 0.1
+            sp.x = min(max(sp.x, -lim), lim)
+            dirO = d; spot = sp; D = simd_length(sp - ballXZ)
+            if D >= 1.3 { break }
+        }
         guard D >= 1.3 else { ownGame = .none; liveKick(by: j); return }          // (never a pass that close: the ball goes back)
         let k = TossTuning.rollDecayPerS
         let T = min(max(0.7 + 0.1 * D, 0.8), 1.1)
@@ -852,6 +861,8 @@ final class PlayToss {
             footChoice = o.id; footPlan[o.id] = (pp.spot, pp.dir, clock, pp.until); bumper = o.id
             passPlan = nil
             NSLog("[playpass] prepared clock=%.3f id=%d", clock, o.id)
+        } else if clock - (interceptAt[o.id]?.t ?? -9) > 0.3 {          // (he is on a walk home: stopped where he is, then the stand starts)
+            o.brain.requestNow(.goTo(o.pos)); interceptAt[o.id] = (o.pos, clock)
         }
     }
 
