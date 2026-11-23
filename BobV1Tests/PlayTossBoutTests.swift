@@ -18,7 +18,7 @@ extension PlayTossTests {
         runTrio(t, p, seconds: 3) { false }
         return (t, p)
     }
-    func endBoutTest() { PlayTuning.boutRoll = 0.6; BoutMath.touchCap = 12; BoutMath.missEvery = 6 }
+    func endBoutTest() { PlayTuning.boutRoll = 0.6; BoutMath.touchCap = 8; BoutMath.missEvery = 4.5; BoutMath.safeTouches = 2 }
 
     func testOnlyTheBeachBallWithTwoOrMoreStartsABout() {
         defer { endBoutTest() }
