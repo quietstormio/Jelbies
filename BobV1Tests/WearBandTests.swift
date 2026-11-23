@@ -288,7 +288,7 @@ final class WearBandTests: XCTestCase {
                 m.start(lab)
                 var prev6: [SIMD3<Float>]? = nil, prevNear6: [Bool] = [], prev1: [SIMD3<Float>]? = nil, prevNear1: [Bool] = []
                 var all6: Float = 0, near6: Float = 0, all1: Float = 0, near1: Float = 0, far1: Float = 0, bul1: Float = 0, bul6: Float = 0
-                var prevB1: [Float] = [], prevB6: [Float] = []
+                var prevB1: [Float] = [], prevB6: [Float] = []; var bulAt = ""
                 for step in 0..<Int(m.seconds * 60) {
                     tick()
                     s.syncCarry(0, sim: r.sim)
@@ -307,7 +307,7 @@ final class WearBandTests: XCTestCase {
                     if let p0 = prev1, p0.count == cur.count { for i in cur.indices where !near[i] && !prevNear1[i] { far1 = max(far1, simd_distance(cur[i], p0[i])) } }
                     var bnow: [Float] = []
                     for lp in loopsL { for vi in lp.verts { bnow.append(vi < WearLevel.recBulge.count ? WearLevel.recBulge[vi] : 0) } }
-                    if prevB1.count == bnow.count { for i in bnow.indices { bul1 = max(bul1, abs(bnow[i] - prevB1[i])) } }
+                    if prevB1.count == bnow.count { for i in bnow.indices { let dd = abs(bnow[i] - prevB1[i]); if dd > bul1 { bul1 = dd; bulAt = "step \(step) vertex \(i) \(prevB1[i]) -> \(bnow[i])" } } }
                     prevB1 = bnow
                     if step % 6 == 0 { if prevB6.count == bnow.count { for i in bnow.indices { bul6 = max(bul6, abs(bnow[i] - prevB6[i])) } }; prevB6 = bnow }
                     prev1 = cur; prevNear1 = near
@@ -316,7 +316,7 @@ final class WearBandTests: XCTestCase {
                         prev6 = cur; prevNear6 = near
                     }
                 }
-                report += String(format: "%@ %@: body-frame move per 0.1 s: all %.4f near-arm %.4f | per frame (1/60 s): all %.4f near-arm %.4f, band vertices NOT near an arm %.4f | the arm-clearance bulge alone changes by at most %.4f per frame, %.4f per 0.1 s\n", look.rawValue, m.name, all6, near6, all1, near1, far1, bul1, bul6)
+                report += String(format: "%@ %@: body-frame move per 0.1 s: all %.4f near-arm %.4f | per frame (1/60 s): all %.4f near-arm %.4f, band vertices NOT near an arm %.4f | the arm-clearance bulge alone changes by at most %.4f per frame, %.4f per 0.1 s (at %@)\n", look.rawValue, m.name, all6, near6, all1, near1, far1, bul1, bul6, bulAt)
                 if m.name == "walk" { walkNear = max(walkNear, bul1); walkAll = max(walkAll, bul6) }
             }
         }

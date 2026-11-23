@@ -6,6 +6,7 @@
 
 import XCTest
 import simd
+import UIKit
 @testable import BobV1
 
 @MainActor
@@ -52,7 +53,7 @@ final class WearTests: XCTestCase {
         }
     }
 
-    static func ellipse(_ p: SIMD3<Float>) -> Float {
+    nonisolated static func ellipse(_ p: SIMD3<Float>) -> Float {
         let x = (p.x - 0) / 0.15, y = (p.y - 0.651) / 0.10
         return x * x + y * y
     }
@@ -478,9 +479,32 @@ final class WearTests: XCTestCase {
         }
         let m0 = px(SIMD3(-0.15, 0.75, 0.5)), m1 = px(SIMD3(0.15, 0.55, 0.5))
         let mouth = (SIMD2(min(m0.x, m1.x), min(m0.y, m1.y)), SIMD2(max(m0.x, m1.x), max(m0.y, m1.y)))
+        if let dir = ProcessInfo.processInfo.environment["WEAR_JERSEY_DIR"], !dir.isEmpty {          // (capture aid: plain | jersey | changed pixels, with the mouth and band test boxes drawn)
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            let bb0 = px(SIMD3(-0.4, 0.5, 0.35)), bb1 = px(SIMD3(0.4, 0.25, 0.35))
+            var changed = jersey
+            for i in stride(from: 0, to: 603 * 1311 * 4, by: 4) {
+                let d = abs(Int(plain.bgra[i]) - Int(jersey.bgra[i])) > 2 || abs(Int(plain.bgra[i + 1]) - Int(jersey.bgra[i + 1])) > 2
+                changed.bgra[i] = d ? 255 : 0; changed.bgra[i + 1] = d ? 255 : 0; changed.bgra[i + 2] = d ? 255 : 0; changed.bgra[i + 3] = 255
+            }
+            let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+            let board = UIGraphicsImageRenderer(size: CGSize(width: 603 * 3, height: 1311), format: fmt).image { ctx in
+                for (k, im) in [plain, jersey, changed].enumerated() { im.uiImage()!.draw(at: CGPoint(x: 603 * k, y: 0)) }
+                for k in 0..<3 {
+                    UIColor.red.setStroke(); ctx.cgContext.stroke(CGRect(x: CGFloat(603 * k) + CGFloat(min(m0.x, m1.x)), y: CGFloat(min(m0.y, m1.y)), width: CGFloat(abs(m1.x - m0.x)), height: CGFloat(abs(m1.y - m0.y))))
+                    UIColor.green.setStroke(); ctx.cgContext.stroke(CGRect(x: CGFloat(603 * k) + CGFloat(min(bb0.x, bb1.x)), y: CGFloat(min(bb0.y, bb1.y)), width: CGFloat(abs(bb1.x - bb0.x)), height: CGFloat(abs(bb1.y - bb0.y))))
+                }
+            }
+            try? board.jpegData(compressionQuality: 0.85)?.write(to: URL(fileURLWithPath: dir + "/jersey.jpg"))
+            print("JERSEY band box px \(bb0) \(bb1), changed px in the band box: \(diff(in: (SIMD2(min(bb0.x, bb1.x), min(bb0.y, bb1.y)), SIMD2(max(bb0.x, bb1.x), max(bb0.y, bb1.y)))))")
+        }
         XCTAssertEqual(diff(in: mouth), 0, "the open mouth region is pixel-identical with the jersey on")
         let b0 = px(SIMD3(-0.4, 0.5, 0.35)), b1 = px(SIMD3(0.4, 0.25, 0.35))
         let band = (SIMD2(min(b0.x, b1.x), min(b0.y, b1.y)), SIMD2(max(b0.x, b1.x), max(b0.y, b1.y)))
-        XCTAssertGreaterThan(diff(in: band), 1500, "the band is drawn on the belly")
+        // (wear-audit-r1 2026-11-22: the expectation was an absolute 1500 px, written for a nearer camera. The room camera is wider now, the Jelmiko is about 90 px wide and the whole band test box is
+        // only ~57 x 17 px = 969 px, so 1500 could never be met. The band IS drawn (blue over the belly, picture in scratchpad wearaudit/jersey.jpg): it fills 97% of the box. The test now asks for
+        // most of the box, whatever the camera.)
+        let bandArea = Float((Int(band.1.x) - Int(band.0.x) + 1) * (Int(band.1.y) - Int(band.0.y) + 1))
+        XCTAssertGreaterThan(Float(diff(in: band)), 0.8 * bandArea, "the band is drawn on the belly")
     }
 }

@@ -49,6 +49,7 @@ final class MoveLog {
         var idleMax3: Float = 0, idleMax6: Float = 0
         var idleCells3 = 9, idleCells6 = 36
         var napWhy: [String: Int] = [:]
+        var hardWhy: [String: Int] = [:]          // (round 3: hard stops by cause: walker / standing / solid / court / hud / edge / other)
         var napN = 0; var napSec: Float = 0          // (round 2b: daytime sleeps: starts and seconds, all bodies)
         var quietSec: Float = 0, huddleSec: Float = 0, chainMax: Float = 0          // (move-mix-r1: seconds with nobody in any emote, with every body within 2.5 u of every other, the longest run of pair emotes of the same two (gaps <= 6 s))
         var kindSec: [String: Float] = [:]          // seconds of body time per emote kind (idle kind, or social kind)
@@ -62,7 +63,7 @@ final class MoveLog {
         for c in 0..<36 { a.idleSum6[c] += o.idleSum6[c] }
         for c in 0..<11 { a.act[c] += o.act[c] }
         for c in 0..<3 { a.bump[c] += o.bump[c] }
-        for (k, v) in o.kindSec { a.kindSec[k, default: 0] += v }; a.kinds.formUnion(o.kinds); for (k, v) in o.napWhy { a.napWhy[k, default: 0] += v }; a.napN += o.napN; a.napSec += o.napSec; a.quietSec += o.quietSec; a.huddleSec += o.huddleSec; a.chainMax = max(a.chainMax, o.chainMax); a.kindCounts += o.kindCounts.isEmpty ? [o.kinds.count] : o.kindCounts
+        for (k, v) in o.kindSec { a.kindSec[k, default: 0] += v }; a.kinds.formUnion(o.kinds); for (k, v) in o.napWhy { a.napWhy[k, default: 0] += v }; for (k, v) in o.hardWhy { a.hardWhy[k, default: 0] += v }; a.napN += o.napN; a.napSec += o.napSec; a.quietSec += o.quietSec; a.huddleSec += o.huddleSec; a.chainMax = max(a.chainMax, o.chainMax); a.kindCounts += o.kindCounts.isEmpty ? [o.kinds.count] : o.kindCounts
         a.walkSec += o.walkSec; a.gameSec += o.gameSec; a.emoteN += o.emoteN; a.walkN += o.walkN
         a.arrN += o.arrN; a.arrSec += o.arrSec; a.arrDist += o.arrDist
         a.stands += o.stands; a.walkTimes += o.walkTimes; a.pairN += o.pairN; a.groupN += o.groupN; a.pairSec += o.pairSec; a.groupSec += o.groupSec
@@ -160,7 +161,7 @@ final class MoveLog {
             s.hardCool -= dt
             if h.count >= 25, s.hardCool <= 0, simd_distance(p, g) > 0.5 {
                 let v1 = simd_distance(h[24], h[12]) / 0.2, v0 = simd_distance(h[12], h[0]) / 0.2
-                if v0 > 0.5, v1 < 0.3 * v0 { Self.note(.hard); s.hardCool = 0.5 }
+                if v0 > 0.5, v1 < 0.3 * v0 { Self.note(.hard); s.hardCool = 0.5; let why = Self.hardCause(b, p: p, goal: g); total.hardWhy[why, default: 0] += 1; window.hardWhy[why, default: 0] += 1; if EmoteSpot.logOn { NSLog("[hardstop] t=%.1f id=%d x=%.2f z=%.2f cause=%@", b.variety.now, b.steerID, p.x, p.y, why) } }
             }
         } else { s.hist.removeAll(keepingCapacity: true); s.sideT = 0; s.backT = 0; s.sideDone = false; s.backDone = false }
         // overlaps: this body against the higher ids (each pair once)
@@ -191,6 +192,29 @@ final class MoveLog {
         if clock - lastFlush >= Self.windowSeconds { flush() }
     }
 
+    /// What a hard stop ran into (the logger only): a walker in front, a standing / fixed body in front, a park solid, a hopscotch court, a HUD keep-out, the floor edge.
+    static func hardCause(_ b: BlobBrain, p: SIMD2<Float>, goal g: SIMD2<Float>) -> String {
+        let d0 = simd_length(g - p), dir = d0 > 1e-3 ? (g - p) / d0 : SIMD2<Float>(0, 1)
+        var standing = false
+        for o in b.socialOthers() where o !== b {
+            let rel = o.position - p, d = simd_length(rel)
+            guard d < 1.9, d > 1e-3, simd_dot(rel / d, dir) > 0.25 else { continue }
+            if o.isWalkScript { return "walker" }
+            standing = true
+        }
+        if standing { return "standing" }
+        let ahead = p + dir * 0.8
+        if ParkClearSpot.inPark {
+            if DecorField.shared.feet.contains(where: { $0.spec.solid && $0.distance(ahead) < b.footprint * $0.spec.reach + 0.2 }) { return "solid" }
+            if ParkClearSpot.courts.contains(where: { $0.distance(ahead) < 0.3 }) { return "court" }
+        }
+        if let rf = GameCamera.roamFloor {
+            if !rf.stopOK(ahead) { return "hud" }
+            if !rf.contains(ahead + dir * 0.3) || rf.halfWidth(at: ahead.y) - abs(ahead.x) < 0.35 { return "edge" }
+        }
+        return "other"
+    }
+
     /// A walk ended (no goal now, or another goal): an arrival counts when the last sample was within 0.5 u of the goal.
     private func endWalk(_ s: inout Body) {
         defer { s.lastGoal = nil }
@@ -209,7 +233,8 @@ final class MoveLog {
         if case .walk = b.script { isWalkScript = true }
         if walkingAct, isWalkScript, b.social == nil { s.slowT = s.speed < 0.1 ? s.slowT + dt : 0 } else { s.slowT = 0 }
         var cat = 9
-        if let sn = b.social { cat = (sn.crew.count >= 3 || sn.idC >= 0) ? 5 : 4 }
+        if let sn = b.social { cat = sn.kind == .pass ? 6 : ((sn.crew.count >= 3 || sn.idC >= 0) ? 5 : 4) }          // (the ball pass is ball play: its own class)
+        else if k == .soccerKick { cat = 6 }
         else if let k, BlobBrain.travelKinds.contains(k) { cat = 10 }          // (round 2: run / trot / zoomies / slide ... are TRAVEL: a "moving" class of its own, not a solo emote)
         else if k == .sleep || k == .sit || k == .slump || k == .flop { cat = 7 }
         else if walkingAct && isWalkScript {
@@ -308,6 +333,7 @@ final class MoveLog {
         let g = max(t.gameSec, 0.01)
         s += String(format: " | nobody-emoting %.0f%% huddle(all within 2.5 u) %.0f%% longest same-pair chain %.0f s kinds/run %@", t.quietSec / max(t.gameSec, 0.01) * 100, t.huddleSec / max(t.gameSec, 0.01) * 100, t.chainMax, (t.kindCounts.isEmpty ? [t.kinds.count] : t.kindCounts).map(String.init).joined(separator: "/"))
         s += String(format: " | idleness 3x3 mean %.1f max %.1f s, 6x6 mean %.1f max %.1f s", t.idleSum3.reduce(0, +) / g / Float(max(t.idleCells3, 1)), t.idleMax3, t.idleSum6.reduce(0, +) / g / Float(max(t.idleCells6, 1)), t.idleMax6)
+        s += " | HARDWHY " + t.hardWhy.sorted { $0.value > $1.value }.map { "\($0.key)=\($0.value)" }.joined(separator: ",")
         s += String(format: " | NAPS %d starts %.0f s (per body per 10 min: %.1f starts) why %@", t.napN, t.napSec, Float(t.napN) / max(t.gameSec / 600, 0.01) / 3, t.napWhy.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: ","))
         let bs = max(t.bodySec.reduce(0, +), 0.001)
         s += " | 3x3 body% (back..front rows) " + (0..<3).map { r in (0..<3).map { String(format: "%.0f", t.bodySec[r * 3 + $0] / bs * 100) }.joined(separator: " ") }.joined(separator: " / ")

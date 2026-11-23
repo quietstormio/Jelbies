@@ -76,12 +76,12 @@ final class WearSweepTests: XCTestCase {
     }
 
     /// Fresh wardrobe + feature set wearing `look` (a few ticks so the carry settles).
-    private func dress(_ st: Stage, _ look: WearLook, ticks: Int = 3) {
+    private func dress(_ st: Stage, _ look: WearLook, ticks: Int = 3, settleSim: Bool = false) {
         let ticks = env("WEAR4_SETTLE").flatMap { Int($0) } ?? ticks          // capture-only: more ticks so a feature that pops in on a fresh FeatureSet (Moss's antennas) has finished
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; Self.keep.append(w)
         let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
         st.worn = w; st.feat = f
-        let settle = env("WEAR4_SETTLE") != nil
+        let settle = settleSim || env("WEAR4_SETTLE") != nil
         for _ in 0..<ticks { if settle { st.lab.tick(watching: false) }; tick(st, look) }          // (settle: the soft antennas live in the skinner and need the sim stepping too; the jelly.tick of the sleep loop crashed here)
     }
     private func tick(_ st: Stage, _ look: WearLook, dt: Float = 1.0 / 60) {
@@ -387,10 +387,10 @@ final class WearSweepTests: XCTestCase {
     /// Where the audit camera looks per slot: (look height above the centroid, distance). Tighter than `framing`: the piece fills about 300 px of a 400 px tile.
     private func auditFocus(_ slot: WearSlot) -> (Float, Float) {
         switch slot {
-        case .head: return (0.60, 1.75)
-        case .face: return (0.50, 1.45)
-        case .neck: return (0.22, 1.95)
-        case .body: return (0.10, 2.25)
+        case .head: return (0.55, 2.2)
+        case .face: return (0.28, 2.0)
+        case .neck: return (-0.18, 2.3)
+        case .body: return (-0.1, 2.6)
         case .hands: return (0.05, 2.0)
         case .feet: return (-0.2, 2.0)
         }
@@ -405,18 +405,26 @@ final class WearSweepTests: XCTestCase {
         let list = looks()
         guard !list.isEmpty else { throw XCTSkip("nothing selected") }
         let views: [(String, Float, Float)] = [("front", 0, 0.05), ("3/4", 0.65, 0.1), ("side", 1.5, 0.1), ("back", .pi, 0.1), ("room cam 35 down", 0.25, 0.7), ("low cam up", 0.25, -0.25)]
-        var tiles: [WearLook: [[UIImage]]] = [:]
-        for id in fams {
-            DayClock.shared.forcedHour = 12
-            let st = try makeStage(id)
-            for l in list {
-                dress(st, l, ticks: 8)
-                let f = auditFocus(l.slot)
-                tiles[l, default: []].append(views.map { v in caption(shot(st, l, yaw: v.1, focus: f, lift: v.2), "\(Self.names[id]) \(l.rawValue) \(v.0)") })
-            }
-        }
+        // hands: the whole front, then a close-up of each arm (front, 3/4), then the back and the room camera
+        let handViews: [(String, Float, Float, Float, Float, Float)] = [("front", 0, 0.05, 0, 0.05, 2.0), ("left arm close", 0, 0.05, -0.8, -0.1, 1.2), ("right arm close", 0, 0.05, 0.8, -0.1, 1.2),
+                                                                         ("left arm 3/4", 0.7, 0.1, -0.8, -0.1, 1.2), ("right arm 3/4", -0.7, 0.1, 0.8, -0.1, 1.2), ("room cam 35 down", 0.25, 0.7, 0, 0.05, 2.0)]
+        var stages: [Stage] = []
+        for id in fams { DayClock.shared.forcedHour = 12; stages.append(try makeStage(id)) }
+        var small: [WearLook: [UIImage]] = [:]          // the 3/4 tile of each family, for the overviews
         for l in list {
-            let img = stack(tiles[l] ?? [], header: "\(l.title) (\(l.rawValue), \(l.slot.rawValue)): rows \(fams.map { Self.names[$0] }.joined(separator: ", ")); columns front | 3/4 | side | back | room cam 35 down | low cam up")
+            var rows: [[UIImage]] = []
+            for (k, id) in fams.enumerated() {
+                let st = stages[k]
+                dress(st, l, ticks: 70, settleSim: true)
+                let f = auditFocus(l.slot)
+                if l.slot == .hands {
+                    rows.append(handViews.map { v in caption(shot(st, l, yaw: v.1, focus: (v.4, v.5), side: v.3, lift: v.2), "\(Self.names[id]) \(l.rawValue) \(v.0)") })
+                } else {
+                    rows.append(views.map { v in caption(shot(st, l, yaw: v.1, focus: f, lift: v.2), "\(Self.names[id]) \(l.rawValue) \(v.0)") })
+                }
+            }
+            small[l] = rows.map { $0[1] }
+            let img = stack(rows, header: "\(l.title) (\(l.rawValue), \(l.slot.rawValue)): rows \(fams.map { Self.names[$0] }.joined(separator: ", ")); columns front | 3/4 | side | back | room cam 35 down | low cam up")
             try img.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/sheets/\(l.rawValue).jpg"))
         }
         // one overview per slot: the 3/4 tile of every look on every family (small)
@@ -430,13 +438,81 @@ final class WearSweepTests: XCTestCase {
                 UIColor(white: 0.12, alpha: 1).setFill(); UIRectFill(CGRect(origin: .zero, size: size))
                 for (k, l) in ls.enumerated() {
                     let row = CGFloat(k / 2), half = CGFloat(k % 2) * CGFloat(fams.count)
-                    for (fi, rowTiles) in (tiles[l] ?? []).enumerated() where rowTiles.count > 1 {
-                        rowTiles[1].draw(in: CGRect(x: (half + CGFloat(fi)) * cell, y: row * cell, width: cell, height: cell))
+                    for (fi, tile) in (small[l] ?? []).enumerated() {
+                        tile.draw(in: CGRect(x: (half + CGFloat(fi)) * cell, y: row * cell, width: cell, height: cell))
                     }
                 }
             }
             try img.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/overview_\(slot.rawValue).jpg"))
         }
+    }
+
+    /// Capture-only: WEAR_AUDIT_DIR=<dir> + WEAR_AUDIT_MOTION=look,look writes <dir>/motion/<look>.jpg: rows = Bob / Pip x (walk, happy bounce, sleep), six frames each, 3/4 view.
+    func testAuditMotionStrips() throws {
+        guard let d = env("WEAR_AUDIT_DIR") else { throw XCTSkip("WEAR_AUDIT_DIR not set") }
+        try FileManager.default.createDirectory(atPath: d + "/motion", withIntermediateDirectories: true)
+        let names = env("WEAR_AUDIT_MOTION")?.split(separator: ",").map(String.init) ?? ["whistleCoach", "pearls", "lei", "diamondJ", "bandanaCoral", "scarfCosy"]
+        let list = names.compactMap { WearLook(rawValue: $0) }
+        guard !list.isEmpty else { throw XCTSkip("nothing selected") }
+        for l in list {
+            var rows: [[UIImage]] = []
+            for id in [0, 1] {
+                for motion in (env("WEAR_AUDIT_MOTIONS")?.split(separator: ",").map(String.init) ?? ["walk", "bounce", "sleep"]) {
+                    DayClock.shared.forcedHour = 12
+                    let st = try makeStage(id)
+                    let r = st.rig
+                    dress(st, l, ticks: 70, settleSim: true)
+                    for _ in 0..<40 { st.lab.tick(watching: false) }
+                    var which = 0
+                    let tg: [SIMD2<Float>] = [SIMD2(1.6, 0.4), SIMD2(-1.2, 1.0)]
+                    switch motion {
+                    case "walk": r.brain.request(.goTo(tg[0]))
+                    case "run": r.brain.hurry = true; r.brain.request(.goTo(tg[0]))
+                    case "bounce": r.brain.idleForced = true; _ = r.brain.idleStart(.bounce, r.sim)
+                    default:
+                        r.brain.sleepEnabled = false; r.brain.idleForced = true
+                        if r.brain.idleStart(.sleep, r.sim) { r.brain.sleep.hold = 5000; var f = 0; while !r.brain.isNapping && f < 60 * 40 { st.lab.tick(watching: false); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); f += 1 } }
+                    }
+                    var row: [UIImage] = []
+                    for k in 0..<6 {
+                        for _ in 0..<9 {
+                            st.lab.tick(watching: false)
+                            if motion == "sleep" { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }
+                            if motion == "walk" || motion == "run", r.brain.activity != .walking && r.brain.activity != .coming { which = 1 - which; r.brain.request(.goTo(tg[which])) }
+                            tick(st, l)
+                        }
+                        row.append(caption(shot(st, l, yaw: 0.65, focus: auditFocus(l.slot), lift: 0.15), "\(Self.names[id]) \(l.rawValue) \(motion) \(k)"))
+                    }
+                    rows.append(row)
+                }
+            }
+            try stack(rows, header: "\(l.rawValue): Bob then Pip; walk, happy bounce, asleep; six frames each").jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/motion/\(l.rawValue).jpg"))
+        }
+    }
+
+    /// Capture-only: WEAR_AUDIT_DIR=<dir>, WEAR_AUDIT_HAT=cowboyHat, WEAR_AUDIT_FITS="0:0,0.03:0.1,0.05:0.12" (dy:tip pairs; "off" = no seat correction) writes <dir>/hatfit_<look>.jpg:
+    /// one row per fit and family (Bob, Moss, Teddy), columns front | 3/4 | side | room cam | low cam. The shipped fit is whatever `WearRules.hatFit` says when WEAR_AUDIT_FITS is "ship".
+    func testAuditHatFits() throws {
+        guard let d = env("WEAR_AUDIT_DIR"), let look = env("WEAR_AUDIT_HAT").flatMap({ WearLook(rawValue: $0) }) else { throw XCTSkip("WEAR_AUDIT_DIR / WEAR_AUDIT_HAT not set") }
+        try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+        let fits = (env("WEAR_AUDIT_FITS") ?? "ship").split(separator: ",").map(String.init)
+        let fams = env("WEAR_AUDIT_SP")?.split(separator: ",").compactMap { Int($0) } ?? [0, 2, 4]
+        let views: [(String, Float, Float)] = [("front", 0, 0.05), ("3/4", 0.65, 0.1), ("side", 1.5, 0.1), ("room cam", 0.25, 0.7), ("low cam", 0.25, -0.25)]
+        var stages: [Stage] = []
+        for id in fams { DayClock.shared.forcedHour = 12; stages.append(try makeStage(id)) }
+        let saved = WearRules.hatFitOverride; defer { WearRules.hatFitOverride = saved; WearMeshes.clearCache(); AntennaFit.clearCache() }
+        var rows: [[UIImage]] = []
+        for f in fits {
+            if f == "ship" { WearRules.hatFitOverride = [:] }
+            else if f == "off" { WearRules.hatFitOverride = [look: WearRules.HatFit(dy: 0, tip: 0)] }
+            else { let p = f.split(separator: ":").compactMap { Float($0) }; WearRules.hatFitOverride = [look: WearRules.HatFit(dy: p[0], tip: p.count > 1 ? p[1] : 0, pivotY: p.count > 3 ? p[3] : -0.15, stretch: p.count > 2 ? p[2] : 1, bandScale: p.count > 4 ? p[4] : 1)] }
+            WearMeshes.clearCache(); AntennaFit.clearCache()
+            for (k, id) in fams.enumerated() {
+                dress(stages[k], look, ticks: 70, settleSim: true)
+                rows.append(views.map { v in caption(shot(stages[k], look, yaw: v.1, focus: auditFocus(look.slot), lift: v.2), "\(Self.names[id]) fit \(f) \(v.0)") })
+            }
+        }
+        try stack(rows, header: "\(look.rawValue): fits \(fits.joined(separator: " | ")) x \(fams.map { Self.names[$0] }.joined(separator: ", "))").jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/hatfit_\(look.rawValue).jpg"))
     }
 
     /// Writes Pip's shipped spike + tail geometry (rest space) to WEAR4_DIR/pip_geometry.json: the Blender generator of the Pip wardrobe variants clears it

@@ -85,6 +85,28 @@ nonisolated enum WearRules {
         return NeckLift(up: up, from: 0.44, full: 1.48)
     }
 
+    /// wear-audit-r1 (2026-11-22): a per-hat seat correction applied to the authored mesh before it is bound (not in WearGenerated.swift, which the converter rewrites): the whole hat
+    /// is raised `dy` and tipped back `tip` rad (the front rim rises, the back dips) about the point `pivotY` below the anchor, so a rim the art drew above the brows clears them on the
+    /// real head. The cowboy hat's brim came down over the brows (audit AUDIT.md); tests and captures can override the table (`hatFitOverride`).
+    struct HatFit: Equatable { var dy: Float; var tip: Float; var pivotY: Float = -0.15; var stretch: Float = 1; var bandScale: Float = 1 }
+    nonisolated(unsafe) static var hatFitOverride: [WearLook: HatFit] = [:]
+    static func hatFit(_ l: WearLook) -> HatFit? {
+        if let o = hatFitOverride[l] { return o }
+        switch l {
+        case .cowboyHat: return HatFit(dy: 0.05, tip: 0.12, pivotY: -0.2, stretch: 1.35)          // brim clears the brows, a taller crown (audit round 2: raised 5 cm, tipped back 7 degrees)
+        case .chefHat: return HatFit(dy: -0.015, tip: 0, pivotY: -0.22, stretch: 1.15, bandScale: 0.96)          // seated lower, the band drawn a touch narrower so no ring of air shows from above, a little taller
+        default: return nil
+        }
+    }
+    /// The offset of authored vertex `v` (relative to the anchor) after the hat's seat correction.
+    @inline(__always) static func seated(_ v: SIMD3<Float>, _ f: HatFit) -> SIMD3<Float> {
+        var y = v.y - f.pivotY
+        var x = v.x, z = v.z
+        if y > 0 { y *= f.stretch } else if f.bandScale != 1 { x *= f.bandScale; z *= f.bandScale }          // (below the pivot: the band / brim ring)                                           // (stretch: the part above the pivot is made taller, a chef's pouf)
+        let c = cosf(f.tip), s = sinf(f.tip)
+        return SIMD3(x, y * c + z * s + f.pivotY + f.dy, -y * s + z * c)
+    }
+
     static func hide(_ l: WearLook) -> WearHide {
         var h: WearHide = [.wash]
         switch l.slot {

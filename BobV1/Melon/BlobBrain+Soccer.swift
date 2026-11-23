@@ -62,7 +62,7 @@ extension BlobBrain {
             let a = ring * 0.45 * side
             let u = rotate(base, a)
             var open: Float = 0
-            for d in [Float(0.8), 1.6, 2.4] where field.openFloor(ball + u * d) { open += 1 }
+            for d in [Float(0.8), 1.6, 2.4] where field.openFloor(ball + u * d) && !mixBallSpotBad(ball + u * d) { open += 1 }          // (MoveMix: never toward a sleeper, nor to where the ball would lie under a HUD button)
             let score = open - 0.15 * abs(a)
             if score > bestScore { bestScore = score; best = u }
             if open == 3 { break }
@@ -77,7 +77,22 @@ extension BlobBrain {
         var plan = SoccerIdle()
         let force = soccerModeForce
         let goal = nearestGoal(to: ball)
-        if force == 3 || (force == nil && SoccerState.shared.isStuck(f.uid)) {
+        var underButton: SIMD2<Float>?
+        let rfBall = roamProvider?()
+        let offFloor = rfBall.map { !$0.contains(ball) || $0.halfWidth(at: ball.y) - abs(ball.x) < 0.3 } ?? false          // (against a wall / outside the floor the Jelmiko walk on: nobody can stand behind it)
+        if MoveMix.on, force == nil, MoveMix.ballNeedsRoom, let rf = rfBall {          // (round 3c: no clear line for a pass from here: the ball is dribbled out toward the middle of the floor first, the pass starts from there)
+            MoveMix.ballNeedsRoom = false
+            let mid = SIMD2<Float>(0, (rf.minZ + rf.maxZ) / 2 + 0.5)
+            var bestP: (SIMD2<Float>, Float)?
+            for r in [Float(1.6), 2.4, 3.2, 4.0] { for k in 0..<16 { let a = Float(k) * .pi / 8; let p = ball + SIMD2(sinf(a), cosf(a)) * r; if rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 1.6, mixStopOK(p), field.openFloor(p) { let sc = -simd_distance(p, mid); if bestP == nil || sc > bestP!.1 { bestP = (p, sc) } } } }
+            if let bp = bestP { underButton = bp.0 }
+        }
+        if underButton == nil, MoveMix.on, force == nil, !mixStopOK(ball) || offFloor {          // (the ball lies under a HUD button, where it cannot be seen, or out at the wall: it is dribbled out to floor that can be used)
+            outer: for r in [Float(1.6), 2.4, 3.2] { for k in 0..<12 { let a = Float(k) * .pi / 6; let p = ball + SIMD2(sinf(a), cosf(a)) * r; if field.openFloor(p), mixStopOK(p), rfBall.map({ $0.contains(p) && $0.halfWidth(at: p.y) - abs(p.x) > 0.5 }) ?? true { underButton = p; break outer } } }
+        }
+        if let ub = underButton {
+            plan.mode = .rescue; plan.target = ub
+        } else if force == 3 || (force == nil && SoccerState.shared.isStuck(f.uid)) {
             guard let open = field.nearestOpenFloor(to: ball) else { return nil }
             plan.mode = .rescue; plan.target = open
         } else if let g = goal, force == 1 || force == 2 || (force == nil && rand() < 0.7) {
@@ -219,6 +234,12 @@ extension BlobBrain {
         let atToe = (dist < SoccerTuning.dribbleTouch && ahead > 0.5 * dist) || (dist < 0.5 && ahead > -0.1 && !stepping)          // (facing it within ~60 degrees, or right under him)
         let standTouch = standing && dist < SoccerTuning.dribbleReach && ahead > 0.8 * dist
         if footfall || atToe || standTouch {
+            if MoveMix.on {          // (round 3b: a nudge at most every half second, and a ball that does not move for three nudges (against the goal frame / a wall) ends the dribble: no endless pushing)
+                if variety.now - mix.soccerNudgeT < 0.5 { return }
+                if simd_distance(ball, mix.soccerNudgeBall) < 0.06 { mix.soccerStuck += 1 } else { mix.soccerStuck = 0 }
+                mix.soccerNudgeT = variety.now; mix.soccerNudgeBall = ball
+                if mix.soccerStuck >= 3 { mix.soccerStuck = 0; idleFinish(skinner); return }
+            }
             let toT = s.target - ball, L = simd_length(toT)
             let u = L > 0.05 ? toT / L : fwd
             // a nudge that leaves the ball a stride ahead of him (and never past the target)
@@ -253,9 +274,13 @@ extension BlobBrain {
             let turning = turnSteps(goal: idleState.goalYaw, tol: 0.08)
             if !turning && !feet.active && t > 0.12 {
                 let ball = field.position(f)
-                if simd_distance(ball, position) > SoccerTuning.kickReach + 0.3 || field.anim[f.uid]?.moving == true {
+                let rolling = field.anim[f.uid]?.moving == true
+                if MoveMix.on, rolling, t < 3.0, simd_distance(ball, position) < 3.5 { idleState.soccer = s; return }          // (MoveMix: the ball is still rolling from a bump: he waits a moment for it, he does not walk off)
+                if simd_distance(ball, position) > SoccerTuning.kickReach + 0.3 || rolling {
                     // the ball is not where he lined up for it (bumped away): once more, or done
-                    if s.reps > 0, soccerAgain(f) { idleState.soccer.reps = s.reps - 1 } else { idleFinish(skinner) }
+                    if s.reps > 0, soccerAgain(f) { idleState.soccer.reps = s.reps - 1 }
+                    else if MoveMix.on, s.legs < 2 { let tries = s.legs; if soccerAgain(f) { idleState.soccer.legs = tries + 1 } else { idleFinish(skinner) } }          // (MoveMix: up to two more goes at a ball that moved on)
+                    else { idleFinish(skinner) }
                     return
                 }
                 s.stage = 1; s.fired = false; idleState.phaseT = 0

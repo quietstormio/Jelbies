@@ -131,8 +131,8 @@ extension BlobBrain {
         emoteSpot.logT = 0
         let st: String
         if held { st = "held" }
-        else if let s = social { st = (s.kind.isGroup ? "group:" : "pair:") + s.kind.rawValue + (s.kind.isGroup ? "" : ">\(s.idA == steerID ? s.idB : s.idA)") }          // (best-friend-r1: a pair line names the partner)
-        else if let k = idleState.kind { st = (k == .sleep || k == .sit ? "rest:" : (Self.travelKinds.contains(k) ? "move:" : "solo:")) + k.rawValue }
+        else if let s = social { st = (s.kind == .pass ? "play:" : (s.kind.isGroup ? "group:" : "pair:")) + s.kind.rawValue + (s.kind.isGroup || s.kind == .pass ? "" : ">\(s.idA == steerID ? s.idB : s.idA)") }          // (best-friend-r1: a pair line names the partner)
+        else if let k = idleState.kind { st = (k == .sleep || k == .sit ? "rest:" : (Self.travelKinds.contains(k) ? "move:" : (k == .soccerKick ? "play:" : "solo:"))) + k.rawValue }
         else if activity == .walking || activity == .coming { st = "walk" } else { st = "stand" }
         if !Self.floorLogged, let rf = roamProvider?() {          // (round 2b: once, the live floor: per row z, half width, the stop-clear spans (HUD buttons cut out) - the allowed / not allowed picture)
             Self.floorLogged = true
