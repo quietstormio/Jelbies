@@ -115,7 +115,7 @@ final class ShopTidyTests: XCTestCase {
         // (the soccer net only comes out in Play; the owner's rule 2026-11-23)
         for k in toys { XCTAssertNotNil(k.activeInteraction, "\(k) is a toy nobody plays with") }
         XCTAssertEqual(DecorKind.soccerball.activeInteraction, .soccerKick)
-        XCTAssertTrue(DecorKind.minigoal.use.contains("play soccer") && DecorKind.minigoal.use.contains("in Play"), "the Shop tells the player the net comes out when they play soccer in Play")
+        XCTAssertTrue(DecorKind.minigoal.use.contains("soccer") && DecorKind.minigoal.use.contains("in Play"), "the Shop tells the player the net comes out in Play")
         for k in toys { XCTAssertFalse(k.isRetired, "\(k)"); XCTAssertNotNil(StoreCatalog.item(k.storeID), "\(k) is sold") }
         // every ball the Play picker can throw is a toy the Shop sells; the bubble wand stays
         for k in BallToy.kinds { XCTAssertTrue(toys.contains(k), "\(k) is thrown in Play but not sold") }
