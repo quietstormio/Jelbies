@@ -484,10 +484,10 @@ final class PlayNetTests: XCTestCase {
     }
 
     func testADeadBallInTheZoneIsReturnedWithoutACheerAndABallInFrontOfTheMouthIsPlayed() {
-        // (a) a ball that came to rest behind the mouth without scoring
+        // (a) a ball that came to rest beside the goal without scoring
         var (p, rs, w, js) = netGame()
         let n = p.net.spec!
-        p.ball.pos = SIMD3(0.3, p.ball.radius, n.rearZ + 0.2); p.ball.vel = .zero
+        p.ball.pos = SIMD3(n.centre.x + n.outerHalf + 0.15, p.ball.radius, n.centre.y + 0.2); p.ball.vel = .zero          // (beside the net, in the keep-out: no one may stand there to play it)
         p.phase = .loose; p.looseT = 0
         var dead = false, cheered = false, back = false
         for _ in 0..<900 {
