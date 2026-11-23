@@ -730,9 +730,11 @@ struct GameScreen: View {
             await sleep(3)
             let vid = d.integer(forKey: "InviteGuest") - 1
             care.parkBook.markSeen([vid], at: Date().timeIntervalSince1970)
-            for k in 0..<max(care.jellyCount, 1) { if let c = care.jelly(k)?.character { _ = care.parkBook.add(points: 100, visitor: vid, character: c) } }
+            // best-friend-r1 capture aid: -BestFriend <visitor>:<slot> makes him Best friend of that one Jelmiko only (not everybody's); -InviteKind sleepover asks him for a sleepover
+            if d.string(forKey: "BestFriend") != nil { care.devSeedBestFriend() }
+            else { for k in 0..<max(care.jellyCount, 1) { if let c = care.jelly(k)?.character { _ = care.parkBook.add(points: 100, visitor: vid, character: c) } } }
             NSLog("[arrival] invite")
-            care.inviteFriend(vid, kind: .playDate)
+            care.inviteFriend(vid, kind: d.string(forKey: "InviteKind") == "sleepover" ? .sleepover : .playDate)
             // capture aid: -GuestGoodbye <seconds> ends the visit that long after the invitation (the run-out through the left edge)
             if d.integer(forKey: "GuestGoodbye") > 0 {
                 await sleep(Double(d.integer(forKey: "GuestGoodbye")))

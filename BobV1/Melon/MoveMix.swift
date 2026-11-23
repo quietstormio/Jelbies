@@ -227,6 +227,7 @@ extension BlobBrain {
                     nearest = min(nearest, simd_distance(o.position, cand))
                     if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
                 }
+                if pass == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
                 if mixLegThroughSolid(here, cand) { continue }
                 var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) - mixBoardConflict(from: here, to: cand, speed: roomNominalWalk)
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
@@ -237,6 +238,7 @@ extension BlobBrain {
                 if mates.contains(where: { now - $0.mix.strollDirAt < 8 && $0.mix.strollThird == th }) { score -= MoveMix.strollThirdBonus }
                 if best == nil || score > best!.1 { best = (cand, score) }
             }
+            if best != nil { partDone() }
             if let b = best { roamVisits[roamKeyMix(b.0), default: 0] += 1; return b.0 }
         }
         return nil

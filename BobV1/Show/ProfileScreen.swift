@@ -577,9 +577,7 @@ struct ProfileScreen: View {
         let item = snack.flatMap { s in StoreCatalog.items.first { $0.food == s } ?? StoreCatalog.items.first { $0.id == s } }
         let powerUps = f.p?.perks.active ?? []
         let character = f.p?.character ?? who
-        let friend = care.parkBook.visitors.filter { $0.mergedInto == nil }
-            .compactMap { v -> (ParkVisitor, Float)? in let pts = v.friendship["\(character)"] ?? 0; return ParkFriendLevel.of(pts) >= .friend ? (v, pts) : nil }
-            .max { $0.1 < $1.1 }
+        let friend = ParkBestFriend.of(character: character, in: care.parkBook.visitors)          // (the one rule, Park/ParkModels.swift: the game's pairing reads it too)
         return card {
             VStack(alignment: .leading, spacing: 10) {
                 cardTitle("Favourites", icon: "heart.fill", color: SK.pink)

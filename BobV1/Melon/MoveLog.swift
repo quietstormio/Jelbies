@@ -175,6 +175,7 @@ final class MoveLog {
                     let me = s.speed > 0.15, he = (bodies[o.steerID]?.speed ?? 0) > 0.15
                     let k = (me ? 1 : 0) + (he ? 1 : 0)
                     total.bump[k] += 1; window.bump[k] += 1
+                    if EmoteSpot.logOn { NSLog("[push] t=%.1f ids=%d,%d walkers=%d a=%@ b=%@ blockA=%d blockB=%d", b.variety.now, b.steerID, o.steerID, k, b.socialKind?.rawValue ?? ((b.activity == .walking) ? "walk" : "-"), o.socialKind?.rawValue ?? ((o.activity == .walking) ? "walk" : "-"), b.socialBook.block == nil ? 0 : (b.socialBook.block!.running ? 2 : 1), o.socialBook.block == nil ? 0 : (o.socialBook.block!.running ? 2 : 1)) }          // (best-friend-r1 round 5: where a push happens; blockX 1 = walking / waiting for the meeting, 2 = in the chain)
                 }
             } else if g > 0.03 { s.touching.remove(o.steerID) }
         }

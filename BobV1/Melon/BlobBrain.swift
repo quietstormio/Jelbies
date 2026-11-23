@@ -952,6 +952,8 @@ final class BlobBrain {
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
         if footKeep { Self.slideFootTurnAways += 1 }
         if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { slideFootWalkTo = out; request(.goTo(out)); restTimer = 0.3; return }
+        if buddyPickDue(sim) { return }          // (best-friend-r1 round 4: a reserved buddy block takes its flag before every other urge)
+        if !footKeep, bondUrge(sim) { return }
         if !footKeep, mixSoccerFollowDue(sim) { return }
         if !footKeep, mixAfterRunDue(sim) { return }
         if !footKeep, mixStrollDue(sim) { return }          // (MoveMix.swift: a walk away after a pair / group emote)
@@ -1068,6 +1070,7 @@ final class BlobBrain {
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
+            if attempt == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
@@ -1096,6 +1099,7 @@ final class BlobBrain {
             if valid >= (MoveMix.on ? MoveMix.roamCandidates : 6) { break }
         }
         }
+        if best != nil { partDone() }
         if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
     }
@@ -1130,6 +1134,7 @@ final class BlobBrain {
         script = .none
         restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively * vJit()          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
         if bubbleLeash != nil { restTimer *= 0.3 }          // (bubble play: eager, the next little move comes quickly)
+        if socialBook.block != nil { restTimer = min(restTimer, 0.3) }          // (best-friend-r1 round 4: a reserved buddy body takes its flag at once)
         if let j = job { job = nil; onFinished?(j) }
         _ = served
     }
