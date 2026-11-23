@@ -194,6 +194,23 @@ extension PlayToss {
         if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let m = mt, m.t <= BlobBrain.tossCrouch + Self.riseTime(m.rise) + Self.goEarly { j.brain.idleState.toss.go = true }
     }
 
+    /// A header that goes to the player from the middle of the room may pass over a Jelmiko: the arc is lifted just enough to clear his crown where it enters his body's circle (as `liveKick` does for a kick).
+    func boutLift(_ v: inout SIMD3<Float>, from: SIMD3<Float>, by id: Int) {
+        let g = TossTuning.gravity, vh = SIMD2(v.x, v.z), sp = simd_length(vh)
+        guard sp > 1e-3 else { return }
+        for o in jellies where o.id != id {
+            let rel = o.pos - SIMD2(from.x, from.z)
+            let t = simd_dot(rel, vh) / (sp * sp)
+            guard t > 0.02, t < 3 else { continue }
+            let lateral = simd_length(rel - vh * t)
+            let ring = TossTuning.bodyRadius + ball.radius + 0.1
+            guard lateral < ring else { continue }
+            let te = max(0.04, t - (max(ring * ring - lateral * lateral, 0)).squareRoot() / sp)
+            let need = o.headTop + ball.radius + 0.12
+            v.y = max(v.y, (need - from.y + 0.5 * g * te * te) / te)
+        }
+    }
+
     // MARK: the end
 
     /// The bout's ball came down on the floor: it is over. A small "oops" from the one who missed, no cheer, no point; the nearest sends the ball back to the player as always.

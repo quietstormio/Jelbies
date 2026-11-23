@@ -637,6 +637,7 @@ final class PlayToss {
             }
         }
         v.y = max(v.y, (PlayTuning.ballReturnOld ? 2.6 : 1.75) / TossTuning.slow)          // (play-ball-r2: a lower, quicker departure; seen from the room's camera a high slow one cancels its own move toward the player and the ball seems to hang on the crown)
+        if inBout { boutLift(&v, from: from, by: id) }          // (beach-volley-r1: the last header of a bout comes from wherever he stands: lifted over any Jelmiko in its way)
         ball.vel = v
         ball.pos.y = max(ball.pos.y, j.headTop + ball.radius * 0.8)
         ball.ignoring = id; ball.ignoreT = 0.45
