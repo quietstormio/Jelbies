@@ -184,6 +184,7 @@ final class PlayToss {
         guard phase == .off else { return }
         ballKind = kind; toyTitle = title
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, let q = UserDefaults.standard.string(forKey: "PlayDemoQuality") { forceQuality = q == "weak" ? .weak : (q == "short" ? .short : .good) }
+        if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, UserDefaults.standard.object(forKey: "PlayDemoSeed") != nil { seed(UInt64(max(UserDefaults.standard.integer(forKey: "PlayDemoSeed"), 1))) }          // (capture aid: the same rolls every take)
         ball = TossBall(pos: SIMD3(0, kind.rollRadius, 3), radius: kind.rollRadius)
         jellies = js
         phase = .inHand
@@ -300,12 +301,23 @@ final class PlayToss {
         guard var t = TossAim.throwFor(f, bodies: bodies, radius: ball.radius) else { return }
         // the ball starts in the hand (never behind the camera or inside the catch band's far edge)
         t.start.y = max(t.start.y, ball.radius + 0.2)
-        ball.pos = t.start; ball.vel = t.velocity; ball.floorBounces = 0; ball.ignoring = nil
+        letGo(from: t.start, velocity: t.velocity)
+    }
+
+    /// Test / capture entry: the ball is let go at `start` with `velocity` exactly as a flick would (a roll or a low pass a finger cannot throw is made this way).
+    func launch(from start: SIMD3<Float>, velocity v: SIMD3<Float>) {
+        guard phase == .inHand else { return }
+        finger = nil
+        letGo(from: start, velocity: v)
+    }
+
+    private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>) {
+        ball.pos = start; ball.vel = v; ball.floorBounces = 0; ball.ignoring = nil
         phase = .flying
         rally = 0; nudges = 0; looseT = 0; flightT = 0; leftHand = false; touched = false; bumper = nil; passTo = nil; headers = 0; rescues = 0; passes = 0
         throwSerial += 1
         returnAim = nil; restT = 0
-        onEvent?(.release(speed: simd_length(t.velocity)))
+        onEvent?(.release(speed: simd_length(v)))
     }
 
     /// Lets go at `p` with `v` (points / second). Test and capture entry point for `flick`.
@@ -374,10 +386,17 @@ final class PlayToss {
     /// Every Jelbie keeps turning to the ball (the waiting pose); the one under it keeps his own legs.
     private func watch(_ p: SIMD3<Float>) {
         for j in jellies {
-            j.brain.trackPoint = SIMD2(p.x, p.z); j.brain.waitFocus = SIMD2(p.x, p.z)
+            // play-ball-r2: the head follows the ball everywhere, but the BODY keeps facing the player (a ball that flew past him to the back wall, or sideways along the row, turned the outer ones right round and the next ball found them 60-80 degrees off)
+            let body: SIMD2<Float> = PlayTuning.ballReturnOld ? SIMD2(p.x, p.z) : playerPoint()          // (the ball sweeps past the outer ones sideways: a body that turned to it was 75-80 degrees off the player when it arrived)
+            var look = SIMD2(p.x, p.z)
+            if !PlayTuning.ballReturnOld {          // (the head follows the ball while it is within about 45 degrees of the player's line from him; past that his look turns his whole body toward it, and the ball sweeping past the outer ones in landscape found them 75-80 degrees round)
+                let a = look - j.pos, b = playerPoint() - j.pos
+                if simd_length(a) > 1e-3, simd_length(b) > 1e-3, simd_dot(a, b) < 0.7 * simd_length(a) * simd_length(b) { look = playerPoint() }
+            }
+            j.brain.trackPoint = look; j.brain.waitFocus = body
             // turned well away from it (he walked back to his place with his back to the room): he turns to watch it, on the spot
             guard !j.brain.tossBusy, Self.canHop(j.brain), j.brain.idleState.kind == nil, case .none = j.brain.script, clock - (turnT[j.id] ?? -9) > 0.7 else { continue }
-            let want = j.brain.yawTo(SIMD2(p.x, p.z))
+            let want = j.brain.yawTo(body)
             if abs(wrapAngle(want - j.brain.yaw)) > 0.5 { turnT[j.id] = clock; j.brain.startTurn(to: want, sim: j.sim) }
         }
     }
@@ -388,6 +407,8 @@ final class PlayToss {
         world.bodies = jellies.map { TossBody(id: $0.id, pos: $0.pos, top: $0.headTop) }
         let before = ball.pos
         let events = ball.step(dt, in: world)
+        for j in jellies where !j.brain.tossBusy && !j.brain.feet.active && j.brain.idleState.kind == nil { standTop[j.id] = j.headTop }
+        if !PlayTuning.ballReturnOld { for o in jellies { let P = playerPoint() - o.pos; o.brain.tossFaceYaw = (o.brain.tossBusy && simd_length(P) > 1e-3) ? atan2f(P.x, P.y) : nil } }          // (the header's hop turns him toward the player in the air)
         watch(ball.pos)
         if simd_distance(ball.pos, handWorld()) > 1.5 || ball.pos.z < catchZ() - 0.6 { leftHand = true }
         var headed = false
@@ -398,6 +419,7 @@ final class PlayToss {
                 if phase == .flying { phase = .loose; looseT = 0 }
             case .bodyHit(let id, let s):
                 if s > 0.9 { onEvent?(.bodyBoop(id: id)) }
+                if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, let j = jelly(id) { NSLog("[playsoft] clock=%.3f throw=%d id=%d speed=%.2f ballY=%.2f headTop=%.2f idle=%@ stage=%d phase=%@", clock, throwSerial, id, s, ball.pos.y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, String(describing: phase)) }
                 if phase == .flying { phase = .loose; looseT = 0 }
             case .headHit(let id):
                 if !headed { headed = true; header(by: id) }
@@ -409,6 +431,8 @@ final class PlayToss {
         if leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
             caught(); return
         }
+        if phase == .loose { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) } }          // (a ball on the floor: nobody holds a header stand for it)
+        if phase != .flying { headChoice = nil }
         if phase == .flying { steerReturn(dt: dt); intercepts(dt: dt, before: before) }
         restWatch(dt: dt)
         if phase == .loose { looseT += dt; loose(dt: dt) }
@@ -420,6 +444,39 @@ final class PlayToss {
         if case .walk = b.script { return false }
         return true
     }
+
+    /// Capture aid (`-PlayDemo`): one line per strike with the striker's visible facing error toward the player (the hand), its lift and the screen points for cutting pictures.
+    private func touchLog(_ kind: String, _ j: PlayJelly) {
+        guard UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
+        let hand = handWorld()
+        let toHand = SIMD2(hand.x - j.pos.x, hand.z - j.pos.y)
+        let to = playerPoint() - j.pos
+        let ys = j.sim.yaw()
+        let fwd = SIMD2<Float>(sinf(ys), cosf(ys))
+        let err = acosf(max(-1, min(1, simd_dot(fwd, to) / max(simd_length(to), 1e-4)))) * 180 / .pi
+        // what the eye sees: in a jump the body's heading is the hop's attractor (the root heading `brain.yaw` is not updated in the air and `sim.yaw()` reads the soft body's tilt as turn)
+        let af = j.sim.attractor.rotation.act(SIMD3<Float>(0, 0, 1))
+        let vy = j.brain.idleState.kind == .tossHeader ? atan2f(af.x, af.z) : j.brain.yaw
+        let visErr = abs(wrapAngle(atan2f(to.x, to.y) - vy)) * 180 / .pi
+        let sz = viewSize
+        let js = GameCamera.screenPoint(floor: j.pos, y: j.sim.centroid().y, size: sz) ?? .zero
+        let bs = GameCamera.screenPoint(floor: SIMD2(ball.pos.x, ball.pos.z), y: ball.pos.y, size: sz) ?? .zero
+        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f visErr=%.1f handErr=%.1f yaw=%.0f pl=%.1f,%.1f pos=%.1f,%.1f centroidY=%.3f headTop=%.3f idle=%@ stage=%d rise=%.3f jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
+              clock, throwSerial, ballKind == .soccerball ? "soccer" : (ballKind == .beachball ? "beach" : "bouncy"), kind, j.id, err,
+              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, visErr, abs(wrapAngle(atan2f(toHand.x, toHand.y) - vy)) * 180 / .pi, vy * 180 / .pi, playerPoint().x, playerPoint().y, j.pos.x, j.pos.y, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, j.headTop - (standTop[j.id] ?? j.headTop), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
+    }
+
+    /// Where the player stands: the hand's spot (the flick's origin, the camera side).
+    /// (play-ball-r2 step 1c) The player is the one looking: the camera's place on the floor, not the hand under it. In landscape the outer Jelmiko stand 3 u out and only 1 to 3 u in front of the hand, so a body facing the camera is 55-65 degrees off the line to the hand; to the eye it is the 15-20 degrees it looks. Everything that turns a body toward the player (the stand, the mid-air turn, the bodies that keep facing the player) uses this.
+    func playerPoint() -> SIMD2<Float> {
+        if PlayTuning.ballReturnOld { let h = handWorld(); return SIMD2(h.x, h.z) }
+        let cam = GameCamera.camera(aspect: Float(viewSize.width / max(viewSize.height, 1)))
+        let r = unproject(ndc: SIMD2<Float>(0, -1), invViewProj: cam.invViewProj)
+        return SIMD2(r.o.x, r.o.z)
+    }
+    func handPlayerPoint() -> SIMD2<Float> { let h = handWorld(); return SIMD2(h.x, h.z) }
+    /// The Jelmiko on the play line wait where they are while the ball game is on: GameCare+Dining's `reserved` (its wait pose, never a roam leg) is held for them.
+    func holds(_ id: Int) -> Bool { ballGame && jellies.contains { $0.id == id && !$0.free } }
 
     // MARK: header
 
@@ -453,7 +510,7 @@ final class PlayToss {
             switch q {
             case .good:
                 let slope = PlayTuning.old ? 0.07 : PlayTuning.returnFlightSlope, cap = PlayTuning.old ? 1.25 : PlayTuning.returnFlightCap
-                v = TossAim.ballistic(from: from, to: target, flight: min(max(0.7 + slope * dist, 0.8), cap) * TossTuning.slow)
+                v = TossAim.ballistic(from: from, to: target, flight: (PlayTuning.ballReturnOld ? min(max(0.7 + slope * dist, 0.8), cap) : min(max(0.40 + 0.04 * dist, 0.55), 0.70)) * TossTuning.slow)          // (play-ball-r2: a flatter, quicker return that visibly leaves the head toward the player)
                 returnAim = SIMD2(target.x, target.z)
             case .short:
                 let k = 0.45 + 0.2 * rand()
@@ -470,15 +527,16 @@ final class PlayToss {
                 v.x *= 0.55 / 1.45; v.z *= 0.55 / 1.45
             }
         }
-        v.y = max(v.y, 2.6 / TossTuning.slow)
+        v.y = max(v.y, (PlayTuning.ballReturnOld ? 2.6 : 1.75) / TossTuning.slow)          // (play-ball-r2: a lower, quicker departure; seen from the room's camera a high slow one cancels its own move toward the player and the ball seems to hang on the crown)
         ball.vel = v
         ball.pos.y = max(ball.pos.y, j.headTop + ball.radius * 0.8)
         ball.ignoring = id; ball.ignoreT = 0.45
-        rally += 1; headers += 1; touched = true
+        rally += 1; headers += 1; touched = true; headChoice = nil
         phase = .flying
         looseT = 0
+        touchLog("header", j)
         j.brain.jellyKick = max(j.brain.jellyKick, 2.2)
-        if !j.brain.tossBusy, Self.canHop(j.brain) { j.brain.tossHeaderStart(j.sim, j.skinner) }
+        if !j.brain.tossBusy, Self.canHop(j.brain) { let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }; j.brain.tossHeaderStart(j.sim, j.skinner, jump: !PlayTuning.ballReturnOld) }
         onEvent?(.header(id: id, quality: q))
     }
 
@@ -545,24 +603,102 @@ final class PlayToss {
             guard d < Self.interceptReach else { continue }
             if best == nil || d < best!.d { best = (j, a.t, a.xz, d) }
         }
-        support(toward: best?.xz ?? ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: best.map { [$0.j.id] } ?? [])
-        guard let b = best else { return }
+        // the one already going for it keeps it (two Jelmiko about as near as each other must not hand it back and forth every step: each hand-over releases the other's stand and nobody gets there)
+        if !PlayTuning.ballReturnOld, let c = headChoice, c != best?.j.id, let jc = jelly(c), let a = arrival(jc), simd_distance(jc.pos, a.xz) < Self.interceptReach { best = (jc, a.t, a.xz, simd_distance(jc.pos, a.xz)) }
+        headChoice = best?.j.id
+        if PlayTuning.ballReturnOld || best == nil {
+            support(toward: ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: [])
+        }          // (play-ball-r2: while a ball is on its way to one Jelmiko the others stand: in landscape they are 3 u apart and walked across its path)
+        guard let b = best else { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }
         let j = b.j
         let busy = j.brain.tossBusy
-        // step under it
-        if b.d > 0.30, !busy, b.t > 0.18 {
+        // where the ball is when it is at the crown's height at the jump's top (a fast, flat ball is a long way from where it crosses the standing crown's height: the stand and the nudge aim at THIS point)
+        let mt = meetTime(j)
+        let meetT = mt?.t ?? b.t
+        let meetXZ: SIMD2<Float> = mt != nil ? SIMD2(ball.pos.x + ball.vel.x * meetT, ball.pos.z + ball.vel.z * meetT) : b.xz
+        // play-ball-r2: the one it is heading for goes to where it will come down, turns onto the player, crouches and jumps so the crown meets it. NOTHING here decides whether the ball is
+        // struck: that is `headHit` -> `header(by:)` as before; this only prepares the body (a late or unready Jelmiko still strikes it).
+        if !busy, b.t > BlobBrain.tossCrouch + 0.1, !PlayTuning.ballReturnOld {
+            let zr = Self.bodyZ(), zy = min(max(meetXZ.y, zr.lowerBound), max(min(catchZ() - 1.2, zr.upperBound), zr.lowerBound)), bx = Self.bodyReach(PlayTuning.old ? meetXZ.y : zy)
+            let meet = SIMD2<Float>(min(max(meetXZ.x, -bx), bx), zy)
+            // he comes within `Self.steerReach` of the meeting point and no nearer (the last bit is the ball's: see `steerOntoCrown`), so the walk is short and he has time to turn onto the player
+            var stand = j.pos
+            let off = meet - j.pos
+            if simd_length(off) > Self.steerReach { stand = meet - off / simd_length(off) * (Self.steerReach * 0.6) }
+            let dirP = playerPoint() - stand
+            let dir = simd_length(dirP) > 1e-3 ? simd_normalize(dirP) : SIMD2<Float>(0, 1)
+            j.brain.tossFire = nil
+            if j.brain.tossBumpStart(j.sim, j.skinner, stand: stand, dir: dir, header: true) { interceptAt[j.id] = (meetXZ, clock) }
+            else if b.d > 0.30, interceptAt[j.id] == nil || clock - interceptAt[j.id]!.t > 0.45 {          // (he is in the middle of something the stand cannot interrupt: as before he is sent walking at once, the stand follows next step)
+                j.brain.requestNow(.goTo(stand)); interceptAt[j.id] = (meetXZ, clock)
+            }
+            if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, Int(clock * 20) % 4 == 0 { NSLog("[playhead] clock=%.2f best=%d t=%.2f d=%.2f meetT=%.2f meet=(%.2f,%.2f) stand=(%.2f,%.2f) busy=%d kind=%@ script=%@", clock, j.id, b.t, b.d, meetT, meetXZ.x, meetXZ.y, stand.x, stand.y, j.brain.tossBusy ? 1 : 0, String(describing: j.brain.idleState.kind), String(String(describing: j.brain.script).prefix(20))) }
+        } else if b.d > (PlayTuning.ballReturnOld ? 0.30 : Self.lateWalk), !busy, b.t > 0.18 {          // (the old step under it: with `-BallReturnOld 1` always; otherwise for the late ball there is no time for a stand, crouch and jump: he steps under it as before and the old hop below meets it)
             let last = interceptAt[j.id]
             if last == nil || (clock - last!.t > 0.45 && simd_distance(last!.p, b.xz) > 0.25) {
                 let zr = Self.bodyZ(), zy = min(max(b.xz.y, zr.lowerBound), max(min(catchZ() - 1.2, zr.upperBound), zr.lowerBound)), bx = Self.bodyReach(PlayTuning.old ? b.xz.y : zy)
-                let fx = SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)
-                j.brain.requestNow(.goTo(fx))
+                j.brain.requestNow(.goTo(SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)))
                 interceptAt[j.id] = (b.xz, clock)
             }
+        } else if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage < 3, let last = interceptAt[j.id], simd_distance(j.brain.idleState.toss.stand, meetXZ) > Self.steerReach + 0.4, clock - last.t > 0.3 {
+            j.brain.tossHeaderRelease(j.sim, j.skinner)          // (the ball moved on: he is released and sent to the new place next step)
+            interceptAt[j.id] = nil
         }
-        // the hop, timed so the top of it meets the ball
-        if !busy, b.d < 0.55, b.t <= BlobBrain.tossHeaderLead + 0.03, Self.canHop(j.brain) {
-            j.brain.tossHeaderStart(j.sim, j.skinner)
+        // the ones whose approach the ball has left behind (it is not coming to them any more) are released at once: the old loose-ball job is then done by whoever is nearest
+        for o in jellies where o.id != j.id && o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }
+        steerOntoCrown(j, arriveIn: meetT)
+        // the go: crouch now so the crown is rising as the ball arrives (met as near the top of the jump as the ball's own height allows)
+        if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let m = meetTime(j), m.t <= BlobBrain.tossCrouch + Self.riseTime(m.rise) + Self.goEarly {
+            j.brain.idleState.toss.go = true
         }
+        // fallback: no approach could be set (mid-step ...): the old hop, timed so the top of it meets the ball
+        if !busy, b.d < (PlayTuning.ballReturnOld ? 0.55 : Self.lateWalk), b.t <= BlobBrain.tossHeaderLead + (PlayTuning.ballReturnOld ? 0.03 : 0.10), Self.canHop(j.brain) {
+            let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }
+            j.brain.tossHeaderStart(j.sim, j.skinner, jump: !PlayTuning.ballReturnOld)
+        }
+    }
+
+    /// How far from his crown's line the ball may be and still be eased onto it (play-ball-r2, mechanism b: the ball's last moment is nudged onto the crown of the Jelmiko who is set to head it, so he need not walk under it with his back turned).
+    /// The jump starts this much earlier than the ball's own path says, so the crown meets it at the top (measured: without it the contact came at about 55% of the rise).
+    static let goEarly: Float = 0.10
+    /// A late ball (no time for a stand) that will pass within this of him is not walked to: he jumps where he stands, turning toward the player in the air, and the nudge brings the ball onto his crown. Further out he steps under it as before (walking, so facing his walk).
+    static let lateWalk: Float = 0.9
+    static let steerReach: Float = 0.8
+    /// The cap on the sideways speed the nudge may add (m/s): a gentle curve, never a snap.
+    static let steerMaxDV: Float = 1.7
+    private func steerOntoCrown(_ j: PlayJelly, arriveIn t: Float) {
+        guard !PlayTuning.ballReturnOld, j.brain.tossBusy, t > 0.04, t < 1.4 else { return }
+        let target: SIMD2<Float> = (j.brain.idleState.kind == .tossBump && j.brain.idleState.toss.walking) ? j.brain.idleState.toss.stand : j.pos
+        let here = SIMD2(ball.pos.x, ball.pos.z) + SIMD2(ball.vel.x, ball.vel.z) * t
+        let miss = target - here
+        guard simd_length(miss) < Self.steerReach + 0.2 else { return }
+        let want = SIMD2(ball.vel.x, ball.vel.z) + miss / t
+        let cur = SIMD2(ball.vel.x, ball.vel.z)
+        var d = (want - cur) * min(1, 0.05 / max(t, 0.05) + 0.1)
+        let L = simd_length(d), cap = Self.steerMaxDV * 0.02          // (per tick; about 60 ticks a second)
+        if L > cap { d *= cap / L }
+        ball.vel.x += d.x; ball.vel.z += d.y
+    }
+
+    /// The seconds a jump takes to raise the crown by `h` (the hop's parabola: apex `tossCrownRise` at `tossJumpLead`).
+    private static func riseTime(_ h: Float) -> Float {
+        let k = min(max(h / BlobBrain.tossCrownRise, 0), 1)
+        return BlobBrain.tossJumpLead * (1 - (1 - k).squareRoot())
+    }
+    @ObservationIgnored private var standTop: [Int: Float] = [:]
+    @ObservationIgnored private var headChoice: Int?
+    /// Where the falling ball is met: the highest rise of his crown (from a list, the top of the jump first) at which the ball's own path still comes down through the crown's height, and the seconds until then.
+    private func meetTime(_ j: PlayJelly) -> (t: Float, rise: Float)? {
+        let top = standTop[j.id] ?? (j.sim.restCentroid.y + BobShape.H * 0.5)
+        let g = TossTuning.gravity, vy = ball.vel.y
+        for h in [Float(0.38), 0.28, 0.18, 0.08] {
+            let y0 = ball.pos.y - (top + h + ball.radius * 0.9)
+            let disc = vy * vy + 2 * g * y0
+            guard disc >= 0 else { continue }
+            let t = (vy + disc.squareRoot()) / g
+            if t > -0.2 { return (t, h) }
+        }
+        return nil
     }
 
     // MARK: loose ball
@@ -611,6 +747,18 @@ final class PlayToss {
             let f = j.brain.fixed(q)
             if simd_distance(f, q) < 0.1, j.brain.peerFree(f) { plan = (f, u); break }
         }
+        if plan == nil, !PlayTuning.ballReturnOld {          // (a ball against a side wall: the nearest allowed spot to it, kicking along the wall toward the player, before the safety net)
+            for back2 in [back, back * 0.8, back * 0.6] {
+                for a in [Float(0), 0.5, -0.5, 1.0, -1.0] {
+                    let c = cosf(a), s = sinf(a)
+                    let u = SIMD2<Float>(dir.x * c - dir.y * s, dir.x * s + dir.y * c)
+                    let f = j.brain.fixed(ballXZ - u * back2)
+                    let g = ballXZ - f
+                    if simd_length(g) > 0.45, simd_length(g) < 1.8, j.brain.peerFree(f) { plan = (f, simd_normalize(g)); break }
+                }
+                if plan != nil { break }
+            }
+        }
         guard let p = plan else { return }
         j.brain.tossFire = { [weak self] b in self?.fired(by: b) }
         if j.brain.tossBumpStart(j.sim, j.skinner, stand: p.stand, dir: p.dir, lean: 1) { bumper = j.id }          // (mid-step: the next tick)
@@ -644,6 +792,7 @@ final class PlayToss {
         ball.pos.y = max(ball.pos.y, ball.radius + 0.02)
         nudges += 1; touched = true
         phase = .loose; looseT = 0
+        touchLog("kick", j)
         onEvent?(.kick(id: j.id))
         j.brain.jellyKick = max(j.brain.jellyKick, 1.6)
     }
