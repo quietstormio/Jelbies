@@ -107,13 +107,13 @@ extension BlobBrain {
     /// Away: nothing is asked of a body that sleeps, naps, eats, is held or commanded, is in a group emote, a ball game or on park equipment, is grumpy or sleepy.
     /// Round 6: after a block the two part: the next roam goal (one pick) is at least 2.5 from where the other stood and on its own side of the midpoint.
     func partOK(_ cand: SIMD2<Float>) -> Bool {
-        guard let f = socialBook.partFrom, variety.now < socialBook.partUntil else { return true }
+        guard let f = socialBook.bondPartFrom, variety.now < socialBook.bondPartUntil else { return true }
         if simd_distance(cand, f) < 2.5 { return false }
-        let s = socialBook.partSide
-        return s == 0 || (cand.x - socialBook.partMidX) * s > 0
+        let s = socialBook.bondPartSide
+        return s == 0 || (cand.x - socialBook.bondPartMidX) * s > 0
     }
-    var partActive: Bool { socialBook.partFrom != nil && variety.now < socialBook.partUntil }
-    func partDone() { socialBook.partFrom = nil }
+    var partActive: Bool { socialBook.bondPartFrom != nil && variety.now < socialBook.bondPartUntil }
+    func partDone() { socialBook.bondPartFrom = nil }
 
     /// True while the body holds a buddy-block flag or is in a block: a soccer session leaves such a body alone until the block ends.
     var inBuddyBlock: Bool { socialBook.block != nil }
@@ -284,7 +284,7 @@ extension BlobBrain {
         for b in pair {
             let o = pair.first { $0 !== b }
             b.socialBook.block = nil; b.letGo(); b.socialBook.buddyArrivedAt = -1
-            if let o { b.socialBook.partFrom = o.position; b.socialBook.partMidX = (o.position.x + b.position.x) / 2; b.socialBook.partSide = b.position.x == o.position.x ? 0 : (b.position.x < o.position.x ? -1 : 1); b.socialBook.partUntil = b.variety.now + 25 }
+            if let o { b.socialBook.bondPartFrom = o.position; b.socialBook.bondPartMidX = (o.position.x + b.position.x) / 2; b.socialBook.bondPartSide = b.position.x == o.position.x ? 0 : (b.position.x < o.position.x ? -1 : 1); b.socialBook.bondPartUntil = b.variety.now + 25 }
             b.socialBook.bondNextAt = b.variety.now + b.rand(BondMoment.nextGap.lowerBound, BondMoment.nextGap.upperBound)
             b.socialBook.housemateBoost = !b.socialBook.housemates.isEmpty
         }
