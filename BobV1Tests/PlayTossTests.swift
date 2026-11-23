@@ -313,3 +313,49 @@ final class PlayTossTests: XCTestCase {
 }
 
 extension BlobBrain.Script { var isWalking: Bool { if case .walk = self { return true }; return false } }
+
+// MARK: play-ball-s2: the soccer ball is a ground game
+
+extension PlayTossTests {
+    func beginBall(_ r: MotionRig, _ p: PlayToss, _ kind: DecorKind) {
+        p.viewSize = Self.portrait
+        p.begin(ball: kind, title: "Ball", jellies: [jelly(r)], snapCamera: true)
+        run(r, p, seconds: 3) { false }
+    }
+
+    /// The style table decides foot or head with a seeded roll: soccer mostly by foot, the beach ball mostly by head, the bouncy ball never (and it does not touch the random stream).
+    func testStyleDecidesFootOrHeadWithASeed() {
+        Self.room(Self.portrait)
+        func share(_ kind: DecorKind) -> Float {
+            let r = rigAt(SIMD2(0, 0.6)), p = PlayToss()
+            p.seed(5); beginBall(r, p, kind)
+            var foot = 0
+            for _ in 0..<400 where p.rollFoot() { foot += 1 }
+            return Float(foot) / 400
+        }
+        XCTAssertEqual(share(.soccerball), 0.88, accuracy: 0.06)
+        XCTAssertEqual(share(.beachball), 0.10, accuracy: 0.06)
+        XCTAssertEqual(share(.ball), 0)
+        XCTAssertEqual(share(.footbag), 0)
+    }
+
+    /// A planned kick: the ball thrown to be played by foot is kicked (not headed, not whiffed) and comes back to the hand.
+    func testAPlannedKickFiresWithTheBallInReach() {
+        Self.room(Self.portrait)
+        var planned = 0
+        for seed in UInt64(1)...6 {
+            let r = rigAt(SIMD2(0, 0.6)), p = PlayToss()
+            p.seed(seed &* 0x9E3779B97F4A7C15); beginBall(r, p, .soccerball)
+            var events: [PlayEvent] = []
+            p.onEvent = { events.append($0) }
+            throwAtMiddle(p)
+            guard p.footFlight else { continue }
+            planned += 1
+            let t = run(r, p, seconds: 12) { p.phase == .catching || p.phase == .inHand }
+            XCTAssertLessThan(t, 11, "seed \(seed): back in the hand (took \(t))")
+            XCTAssertTrue(events.contains { if case .kick = $0 { return true }; return false }, "seed \(seed): the foot struck it: \(events)")
+            XCTAssertFalse(events.contains { if case .whiff = $0 { return true }; return false }, "seed \(seed): no whiff: \(events)")
+        }
+        XCTAssertGreaterThanOrEqual(planned, 3, "most soccer flights are by foot")
+    }
+}
