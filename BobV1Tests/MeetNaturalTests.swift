@@ -57,7 +57,7 @@ final class MeetNaturalTests: XCTestCase {
     }
 
     func testBothWalkInAndArriveTogether() {
-        for (kind, each) in [(SocialKind.highFive, false), (.chestBump, true), (.nuzzle, false), (.sitTogether, false), (.boop, false)] {
+        for (kind, each) in [(SocialKind.highFive, false), (.chestBump, true), (.twirl, false), (.sitTogether, false), (.boop, false)] {
             let r = run(kind, a: from, b: to, natural: true, faceEach: each)
             XCTAssertTrue(r.phase2, "\(kind): reaches its emote")
             XCTAssertGreaterThan(r.moved[1], 0.7, "\(kind): the partner walks in too (no waiter): moved \(r.moved)")
@@ -68,7 +68,7 @@ final class MeetNaturalTests: XCTestCase {
     }
 
     func testFinalFacingIsReachedOnThePathNotByTurningAfterArrival() {
-        for (kind, each) in [(SocialKind.highFive, false), (.chestBump, true), (.nuzzle, false)] {
+        for (kind, each) in [(SocialKind.highFive, false), (.chestBump, true), (.twirl, false)] {
             let r = run(kind, a: from, b: to, natural: true, faceEach: each)
             XCTAssertTrue(r.phase2)
             for i in 0..<2 { XCTAssertLessThan(r.turn[i] * 57.3, 45, "\(kind) body \(i): turn on the spot after arrival \(r.turn[i] * 57.3) deg") }
