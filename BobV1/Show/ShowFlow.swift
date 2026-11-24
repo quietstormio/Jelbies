@@ -575,7 +575,7 @@ final class ShowFlow {
     }
     /// How long the turn waits for an entrant to reach the middle (was 3.5 s, and she was put there when it ran out), and for his Jelmiko to come back (was 3 s): 2.5 s more each.
     /// The most a turn waits for the line to form (the keeper carries any body to its seat within ~3.5 s, so this is a safety net that is never meant to be reached).
-    static let lineCap: Float = 8.0
+    static let lineCap: Float = 12.0
     static let walkInCap: Float = 15.0, playerBackCap: Float = 15.0          // (hard ceilings only: each walk has its own allowance, `rivalGiveUp`)
     /// The entrant who is up after the one performing now (for the glue to start a far one walking early), nil at the end of the turn.
     var nextRivalUp: Int? { rivalQueue.first }

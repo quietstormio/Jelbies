@@ -75,21 +75,27 @@ struct ShowSeatKeep {
     var off: Float = 0
     var budget: Float = 1
     var gliding = false
-    /// Seconds off the seat, not walking and not waiting its turn for the gate / the middle: a body that is merely STOPPED away from its seat.
-    var stalled: Float = 0
+    /// Progress: where the body was half a second ago and how long it has not moved (off its seat, not waiting its turn).
+    var probe = SIMD2<Float>(0, 0)
+    var probeT: Float = 0
+    var still: Float = 0
     var asked = false
     /// Seconds spent waiting its turn for the gate / the middle on this leg.
     var waited: Float = 0
+    /// The carry goes through the gate first (a back-row seat and the front are never joined by a straight line past the seated bodies).
+    var viaGate = false
 }
 
 extension GameCare {
-    /// A leg may take its walk at this pace (u/s; the stage walk is measured at ~1.4-1.6 u/s on a straight leg) plus `grace` seconds for the turn to the camera and the one in front.
-    static let lineWalkPace: Float = 0.8, lineGrace: Float = 1.5, lineMaxLeg: Float = 9.0, lineStall: Float = 1.0, lineWaitMax: Float = 6.0
-    /// A body this close to its seat is in it. A body that stands closer to another than `lineTouch` for `lineTouchHold` seconds is carried to its seat too.
-    static let lineAt: Float = 0.3, lineTouch: Float = 1.15, lineTouchHold: Float = 0.5, glideSpeed: Float = 3.2
-
+    /// A leg may take its walk at this pace (u/s; measured 0.6-1.1 u/s on the stage, the turn to the camera and the one in front included) plus `lineGrace` s.
+    static let lineWalkPace: Float = 0.8, lineGrace: Float = 1.5, lineMaxLeg: Float = 7.0
+    /// Not moving for `lineStall` s (a body with nothing to do) or `lineStallWalk` s (a body inside a walk: the half turn on the spot before a step takes ~1.7 s), off its seat, not waiting its turn: carried.
+    static let lineStall: Float = 1.0, lineStallWalk: Float = 3.0, lineWaitMax: Float = 6.0
+    /// A body this close to its seat is in it. A carry never passes closer than `lineClearOf` to another body.
+    static let lineAt: Float = 0.3, lineClearOf: Float = 1.15, glideSpeed: Float = 3.2
     /// Off only for a capture that wants the old behaviour (`-ShowLineKeepOff 1`, dev arguments): the baseline measurement.
     static var lineKeeperOn: Bool { !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ShowLineKeepOff") != nil) }
+
     private func lineBodies() -> [JellyActor] {
         let book = showBook
         let p = book.performers.first.flatMap { book.actors.indices.contains($0) ? book.actors[$0] : nil }
@@ -97,17 +103,42 @@ extension GameCare {
     }
     private func lineFloor(_ a: JellyActor) -> SIMD2<Float> { let c = a.sim.centroid(); return SIMD2(c.x, c.z) }
 
+    /// The body is doing his trick on the middle right now: the keeper leaves him alone (a trick moves the centroid; cutting it short is not a return).
+    private func linePerforming(_ a: JellyActor) -> Bool {
+        if a.id == show.playerID { return show.trickStage == .performing }
+        guard show.trickStage == .rivals, show.rivalStep == .perform, let k = show.rivalTurn else { return false }
+        return showBook.rivalBody[k] == a.id
+    }
+
     /// Every body that has a seat stands in it and nobody is being carried: the line is formed. (The flow waits for this before a turn opens.)
     func showLineFormed() -> Bool {
         guard Self.lineKeeperOn, show.onStage, showBook.trickSet else { return true }
         return lineBodies().allSatisfy { a in
-            guard let seat = showSeat(a.id) else { return true }
+            guard let seat = showSeat(a.id), !linePerforming(a) else { return true }
             return !(showBook.keep[a.id]?.gliding ?? false) && simd_distance(lineFloor(a), seat) < Self.lineAt
         }
     }
 
+    /// The walk's length: a leg between the back row and the front goes through the gate (GameCare+Show.swift `showRoute`).
+    private func showLegLength(_ here: SIMD2<Float>, _ seat: SIMD2<Float>) -> Float {
+        let backHere = here.y < Self.backRowLine, backThere = seat.y < Self.backRowLine
+        guard backHere != backThere else { return simd_distance(here, seat) }
+        return simd_distance(here, ShowStage.gate) + simd_distance(ShowStage.gate, seat)
+    }
+    static let backRowLine: Float = -0.7
+    /// Nobody (but the body itself) stands within `lineClearOf` of the segment a -> b.
+    private func lineClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, except id: Int, _ bodies: [JellyActor]) -> Bool {
+        let d = b - a, L2 = max(simd_dot(d, d), 1e-6)
+        return !bodies.contains { o in
+            guard o.id != id else { return false }
+            let p = lineFloor(o), t = min(max(simd_dot(p - a, d) / L2, 0), 1)
+            return simd_distance(p, a + d * t) < Self.lineClearOf
+        }
+    }
+
     /// Once per tick while the Trick round's stage is up: each body is on its way to its seat within its allowance, or the keeper carries it there (a short glide at `glideSpeed`, never a pop).
-    /// A body pushed off its seat (the floor rules press bodies apart) is also carried back after `lineGrace` s; two bodies closer than `lineTouch` for `lineTouchHold` s are untangled the same way.
+    /// A body that is merely STOPPED away from its seat (not moving, not waiting its turn: the brain's steering is standing in a walk it cannot make, or the floor rules pressed it off) is carried after
+    /// `lineStall` s; a late body after its leg's allowance. A carry waits while another body stands on the line (that one is carried first), and a carry between the back row and the front goes through the gate.
     func tickShowLine(dt: Float) {
         let book = showBook
         guard Self.lineKeeperOn, show.onStage, book.trickSet else { book.keep = [:]; return }
@@ -117,48 +148,51 @@ extension GameCare {
             var k = book.keep[a.id] ?? ShowSeatKeep()
             guard let seat = showSeat(a.id) else { book.keep[a.id] = nil; continue }
             let here = lineFloor(a)
+            if linePerforming(a) { k.gliding = false; k.off = 0; k.still = 0; k.seat = seat; book.keep[a.id] = k; continue }
             if k.seat == nil || simd_distance(k.seat!, seat) > 0.01 {          // a new leg: its allowance
-                k.seat = seat; k.off = 0; k.waited = 0; k.gliding = false
-                k.budget = min(Self.lineGrace + showLegLength(here, seat) / Self.lineWalkPace, Self.lineMaxLeg); k.stalled = 0
+                k.seat = seat; k.off = 0; k.waited = 0; k.gliding = false; k.still = 0; k.probe = here; k.probeT = 0; k.asked = false
+                k.budget = min(Self.lineGrace + showLegLength(here, seat) / Self.lineWalkPace, Self.lineMaxLeg)
+                let backHere = here.y < Self.backRowLine, backThere = seat.y < Self.backRowLine
+                k.viaGate = backHere != backThere && simd_distance(here, ShowStage.gate) > 0.5 && simd_distance(seat, ShowStage.gate) > 0.5
             }
             let d = simd_distance(here, seat)
-            if d < Self.lineAt, !k.gliding { k.off = 0; book.keep[a.id] = k; continue }
+            if d < Self.lineAt, !k.gliding { k.off = 0; k.still = 0; k.probe = here; book.keep[a.id] = k; continue }
             if !k.gliding {
                 let waiting = book.pendingWalks.contains { $0.id == a.id } || book.via[a.id] != nil
                 if waiting { k.waited += dt; if k.waited > Self.lineWaitMax { k.off = max(k.off, k.budget + 1) } } else { k.off += dt }          // (a body waiting its turn for the gate or the middle is not late: the wait is bounded by the one it waits for, who is kept to his own allowance)
-                let moving = a.isWalking || b.pending != nil || { if case .none = b.script { return false }; return true }()
-                if moving || waiting { k.stalled = 0; k.asked = false } else { k.stalled += dt }
-                // a walk the brain dropped (it gives up a walk it cannot steer): one fresh ask at 0.4 s for a seat that is not the middle (the middle walks have their own retry), then the carry
-                if k.stalled > 0.4, !k.asked, simd_distance(seat, ShowStage.playerSpot) > 0.01 { k.asked = true; showRoute(a, to: seat) }
-                if k.stalled > Self.lineStall { k.off = max(k.off, k.budget + 1) }          // (stopped short of the seat with nothing to wait for: carried at once)
-                // a body that has been in its seat and is pushed out of it has no leg: it gets the grace only
-                if k.off > k.budget { k.gliding = true; showLineBegin(a, b) }
+                k.probeT += dt
+                if k.probeT >= 0.5 { k.still = simd_distance(here, k.probe) < 0.05 && !waiting ? k.still + k.probeT : 0; k.probe = here; k.probeT = 0 }
+                let idle = b.pending == nil && { if case .none = b.script { return true }; return false }()
+                // a body that stands still off its seat: one fresh ask for a seat that is not the middle (the middle walks have their own retry), then the carry
+                if k.still > 0.5, !k.asked, simd_distance(seat, ShowStage.playerSpot) > 0.01 { k.asked = true; showRoute(a, to: seat) }
+                if k.still > (idle ? Self.lineStall : Self.lineStallWalk) { k.off = max(k.off, k.budget + 1) }
+                if k.off > k.budget {
+                    let aim = k.viaGate && simd_distance(here, ShowStage.gate) > 0.3 && (here.y < Self.backRowLine) != (seat.y < Self.backRowLine) ? ShowStage.gate : seat
+                    // the line to the carry's goal is free of bodies, or the wait for it is over (then the carry goes regardless: the others have their own allowance)
+                    if lineClear(here, aim, except: a.id, bodies) || k.off > k.budget + Self.lineWaitMax { k.gliding = true; showLineBegin(a, b) }
+                }
             }
             if k.gliding {
-                let speed = min(Self.glideSpeed, 0.6 + d * 4)
-                let step = min(d, speed * dt)
+                var aim = seat
+                if k.viaGate, (here.y < Self.backRowLine) != (seat.y < Self.backRowLine), simd_distance(here, ShowStage.gate) > 0.12 { aim = ShowStage.gate }
+                let dd = simd_distance(here, aim)
+                let speed = min(Self.glideSpeed, 0.6 + dd * 4)
+                let step = min(dd, speed * dt)
                 if d <= 0.02 {
-                    k.gliding = false; k.off = 0; showLineEnd(a, b)
-                } else {
-                    let dir = (seat - here) / d
-                    a.sim.shift(byXZ: dir * step)
-                    b.currentPose(a.sim)
+                    k.gliding = false; k.off = 0; k.still = 0; showLineEnd(a, b)
+                } else if dd > 1e-4 {
+                    let d2 = (aim - here) / dd * step          // a rigid warp, as the contact settle's (BlobBrain.contactNudge): the brain's root, its soles and the sim body move together, so nothing pulls the body back
+                    b.px += d2.x; b.pz += d2.y; b.stepRoot0 += d2; b.feet.nudge(d2)
+                    a.sim.shift(byXZ: d2)
                 }
             }
             book.keep[a.id] = k
         }
     }
-    /// The walk's length: a leg between the back row and the front goes through the gate (GameCare+Show.swift `showRoute`).
-    private func showLegLength(_ here: SIMD2<Float>, _ seat: SIMD2<Float>) -> Float {
-        let backHere = here.y < Self.backRowLine, backThere = seat.y < Self.backRowLine
-        guard backHere != backThere else { return simd_distance(here, seat) }
-        return simd_distance(here, ShowStage.gate) + simd_distance(ShowStage.gate, seat)
-    }
-    static let backRowLine: Float = -0.7
     private func showLineBegin(_ a: JellyActor, _ b: BlobBrain) {
         let book = showBook
         #if targetEnvironment(simulator)
-        let why = "script=\(b.scriptKindName) activity=\(b.activity) pending=\(b.pending != nil) idle=\(String(describing: b.idleState.kind)) commanded=\(b.commanded) waitedFor=\(book.pendingWalks.contains { $0.id == a.id }) via=\(book.via[a.id] != nil)"
+        let why = "script=\(b.scriptKindName) activity=\(b.activity) pending=\(b.pending != nil) idle=\(String(describing: b.idleState.kind)) commanded=\(b.commanded) waitedFor=\(book.pendingWalks.contains { $0.id == a.id }) via=\(book.via[a.id] != nil) held=\(b.heldByPeer) steerWait=\(String(format: "%.1f", b.steerWait)) route=\(b.route.count) planFails=\(b.planFails) feetActive=\(b.feet.active) still=\(String(format: "%.1f", book.keep[a.id]?.still ?? 0)) off=\(String(format: "%.1f", book.keep[a.id]?.off ?? 0))"
         #endif
         b.abortAll(a.sim, a.skinner)
         b.commandedIdle = nil; b.commandedFlip = false

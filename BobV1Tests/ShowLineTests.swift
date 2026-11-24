@@ -47,6 +47,7 @@ final class ShowLineTests: XCTestCase {
                     guard let b = a.brain else { continue }
                     let floorRules = b.resolve
                     b.resolve = { p, r in MelonController.keepApart(floorRules(p, r), id: i, peers: peers) }
+                    b.peers = { peers.enumerated().filter { $0.offset != i }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) } }          // (the steering's view of the others: MelonStage.wirePeers)
                 }
             }
             peers = all.map { (pos: $0.floor, walking: $0.isWalking) }
