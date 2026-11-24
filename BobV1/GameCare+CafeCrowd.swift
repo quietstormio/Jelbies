@@ -270,11 +270,15 @@ extension GameCare {
                 let from = g.phase == .leaving ? g.table.stands[m.index] : door
                 let to = g.phase == .leaving ? door : g.table.stands[m.index]
                 // planning discs are bigger than the keep-apart gap (a walker cuts corners by up to 0.4 u); a disc that holds the start or the goal is shrunk to just clear it
-                let discs = crowdDiscs(for: g, excluding: m, landscape: landscape).map { d -> CafeRoute.Disc in
-                    let near = min(simd_distance(d.c, from), simd_distance(d.c, to))
-                    return .init(c: d.c, r: max(min(d.r + 0.4, near - 0.02), min(d.r, near - 0.02)))
+                let base = crowdDiscs(for: g, excluding: m, landscape: landscape)
+                var route: [SIMD2<Float>] = []
+                for extra in [Float(0.4), 0.2, 0.0] where route.isEmpty {          // (the widest berth that still has a way through)
+                    let discs = base.map { d -> CafeRoute.Disc in
+                        let near = min(simd_distance(d.c, from), simd_distance(d.c, to))
+                        return .init(c: d.c, r: max(min(d.r + extra, near - 0.02), min(d.r, near - 0.02)))
+                    }
+                    route = CafeRoute.path(from: from, to: to, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.4 })
                 }
-                let route = CafeRoute.path(from: from, to: to, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.4 })
                 if route.isEmpty {          // no way round the seated bodies yet: he waits (off the floor when coming in) and looks again; after 10 s he is simply seated
                     m.waitT += dt
                     if g.phase == .arriving, m.waitT > 10 { m.path = [to]; m.state = .walking; m.stuck = 6.1; rehome(m.actor, at: to); Self.crowdLog("no route for member \(m.actor.id): seated directly") }
