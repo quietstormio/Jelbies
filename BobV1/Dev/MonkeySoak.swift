@@ -34,6 +34,7 @@ enum MonkeySoak {
         for _ in 0..<900 where LaunchGate.shared.visible || care.lastBrain == nil { await sleep(0.1) }
         if d.object(forKey: "FreezeFix") != nil, d.integer(forKey: "FreezeFix") == 0 { FocusGroup.handBackFix = false; FocusGroup.netEnabled = false; NSLog("[freeze] FIX OFF (hand-back and safety net)") }
         if !GameCare.unstickOn { NSLog("[mealunstick] UNSTICK OFF") }
+        if !GameCare.stuckReleaseOn { NSLog("[stuck] RELEASE GUARD OFF") }
         StuckDetector.on = true
         await sleep(3)
         let seed = UInt64(max(1, d.integer(forKey: "Monkey")))

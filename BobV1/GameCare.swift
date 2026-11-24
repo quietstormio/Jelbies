@@ -23,6 +23,9 @@ final class GameCare {
     /// night-meal-r1: seconds the tray / a wanted meal / a group serving has been continuously on (GameCare+MealUnstick.swift: a lock that outlives any real meal is cleared when the player asks again).
     @ObservationIgnored var mealLockAge: Float = 0
     @ObservationIgnored var callIdleT: Float = 0
+    /// no-stuck-r1: the general release guard's clocks and count (GameCare+StuckRelease.swift).
+    @ObservationIgnored var stuckHeldT: [String: Float] = [:]
+    @ObservationIgnored var stuckReleased = 0
     /// A group action (call everyone / come here walking to its spots, a group serving, a group bedtime walk) is on: the Cancel pill shows from its start.
     var cancelPill = false
     /// A voice command asked for a Town screen ("let's race" / "time to train" open the Track for the selected Jelly): GameScreen watches `townRequest`.
@@ -1060,6 +1063,7 @@ final class GameCare {
         if !out, servingKind != nil { servingKind = nil }
         if bath.targetID == 0 { bath.tick(brain: brain, sim: sim, play: touchPlay, dt: dt) }         // another Jelly's clean-up ticks in tickOthers
         if !bath.active, !tripActive { voice.tick(care: self, brain: brain, sim: sim, dt: dt) }
+        if !isPreview { stuckReleaseTick(dt: dt) }          // (the general release guard: GameCare+StuckRelease.swift)
         #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
         if !isPreview { StuckDetector.shared.tick(care: self, dt: dt) }          // (no-stuck-r1: dev builds only, `-StuckProbe 1`)
         #endif
