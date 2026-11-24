@@ -16,11 +16,19 @@ extension BlobBrain {
     private static let slidePath0: [SIMD2<Float>] = [SIMD2(-0.4, 0.66), SIMD2(-0.1, 0.68), SIMD2(0.23, 0.62), SIMD2(0.36, 0.536), SIMD2(0.49, 0.458), SIMD2(0.62, 0.386), SIMD2(0.75, 0.321),
                                             SIMD2(0.88, 0.264), SIMD2(1.01, 0.214), SIMD2(1.14, 0.174), SIMD2(1.27, 0.145), SIMD2(1.4, 0.13), SIMD2(1.75, 0.0)]
     /// The steps: (z, y) he hops to, then the platform.
-    static let slideSteps: [SIMD2<Float>] = slideSteps0.map { $0 * DecorKind.slide.scale }
+    static var slideSteps: [SIMD2<Float>] { (legacyOff["SlideNoSteps"] == true ? slideStepsOld : slideSteps0).map { $0 * DecorKind.slide.scale } }
+    private static let slideStepsOld: [SIMD2<Float>] = [SIMD2(-1.28, 0.22), SIMD2(-1.04, 0.44), SIMD2(-0.4, 0.66)]
     private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.52, 0.22), SIMD2(-1.32, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the first two hops stand 0.18 further back (was -1.28, -1.04; further and the feet hang off the step edges at -1.75 / -1.45): his belly is 1.1 wide, the steps 0.3 deep, so on the exported spots it sank into the next riser)
-    static let slideRunOut: Float = 0.2
+    nonisolated(unsafe) static var legacyOff: [String: Bool] = {          // (simulator bisect switches: -SlideNoCoast / -SlideNoLift / -SlideNoSteps 1)
+        #if targetEnvironment(simulator)
+        var d: [String: Bool] = [:]; for k in ["SlideNoCoast", "SlideNoLift", "SlideNoSteps"] { d[k] = UserDefaults.standard.integer(forKey: k) != 0 }; return d
+        #else
+        return [:]
+        #endif
+    }()
+    static var slideRunOut: Float { legacyOff["SlideNoCoast"] == true ? 0 : 0.2 }
     /// no-clip-r1: the floor he stands, sits and rides on is this much above the art's surface (his seated belly sank 5 cm into the platform).
-    static let slideLift: Float = 0.05
+    static var slideLift: Float { legacyOff["SlideNoLift"] == true ? 0 : 0.05 }
     static var slideLength: Float {
         var L: Float = 0
         for i in 1..<slidePath.count { L += simd_length(slidePath[i] - slidePath[i - 1]) }
