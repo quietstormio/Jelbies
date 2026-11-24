@@ -145,9 +145,9 @@ final class ComeHereFreezeTests: XCTestCase {
 
     /// The old behaviour, kept as a record (hand-back and net off): this is the freeze the owner saw.
     func testTheFreezeBeforeTheFix() {
-        let (fix, net) = (FocusGroup.handBackFix, FocusGroup.netEnabled)
-        FocusGroup.handBackFix = false; FocusGroup.netEnabled = false
-        defer { FocusGroup.handBackFix = fix; FocusGroup.netEnabled = net }
+        let (fix, net, guardOn) = (FocusGroup.handBackFix, FocusGroup.netEnabled, GameCare.stuckReleaseOn)
+        FocusGroup.handBackFix = false; FocusGroup.netEnabled = false; GameCare.stuckReleaseOn = false          // (no-stuck-r1: the general release guard would free him too)
+        defer { FocusGroup.handBackFix = fix; FocusGroup.netEnabled = net; GameCare.stuckReleaseOn = guardOn }
         let r = rig()
         let a = GameCamera.callSpot
         r.place(1, at: SIMD2(-2.2, -1.8)); r.place(2, at: SIMD2(2.2, -1.8)); r.place(0, at: SIMD2(a.x, a.y - 0.2))

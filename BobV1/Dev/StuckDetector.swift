@@ -104,7 +104,8 @@ final class StuckDetector {
         let welcome = c.newcomerWelcome != nil
         let homeQuiet = !trip && !outing && !welcome && !c.bath.active && !c.trayOut && !c.groupActive && !c.isPreview && !c.show.onStage && c.focus.phase == .roaming && !c.bedtimeWalking
         func line(_ b: BlobBrain) -> String {
-            "scr=\(b.scriptKindName) job=\(b.job == nil ? "-" : "Y") pend=\(b.pending == nil ? 0 : 1) cmd=\(b.commanded ? 1 : 0) res=\(b.reserved ? 1 : 0) auto=\(b.autonomy ? 1 : 0) idle=\(b.idleState.kind?.rawValue ?? "-") act=\(b.activity) sleep=\(b.isSleeping ? 1 : 0) soc=\(b.social == nil ? 0 : 1) pos=\(String(format: "%.2f,%.2f", b.position.x, b.position.y))"
+            var tgt = "-"; if case .walk(let t, _) = b.script { tgt = String(format: "%.2f,%.2f", t.x, t.y) }
+            return "scr=\(b.scriptKindName) tgt=\(tgt) stall=\(String(format: "%.1f", b.steerStall)) job=\(b.job.map { "\($0)" } ?? "-") pend=\(b.pending == nil ? 0 : 1) cmd=\(b.commanded ? 1 : 0) res=\(b.reserved ? 1 : 0) auto=\(b.autonomy ? 1 : 0) idle=\(b.idleState.kind?.rawValue ?? "-") act=\(b.activity) sleep=\(b.isSleeping ? 1 : 0) soc=\(b.social == nil ? 0 : 1) pos=\(String(format: "%.2f,%.2f", b.position.x, b.position.y))"
         }
         let game = "ph=\(c.focus.phase) ids=\(c.focusGroup.ids) trip=\(trip ? 1 : 0) tray=\(c.trayOut ? 1 : 0) group=\(c.groupActive ? 1 : 0) bath=\(c.bath.active ? 1 : 0) play=\(c.play.active ? 1 : 0) call=\(c.callRunning ? 1 : 0) queued=\(c.queued.count)"
 

@@ -11,16 +11,16 @@ import simd
 final class StuckDetectorTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     private var savedHour: Double?
-    private var saved: (Bool, Bool, Bool, Bool) = (false, false, false, false)
+    private var saved: (Bool, Bool, Bool, Bool, Bool) = (false, false, false, false, false)
 
     override func setUp() {
         savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 14
-        saved = (StuckDetector.on, FocusGroup.handBackFix, FocusGroup.netEnabled, GameCare.unstickOn)
+        saved = (StuckDetector.on, FocusGroup.handBackFix, FocusGroup.netEnabled, GameCare.unstickOn, GameCare.stuckReleaseOn)
         StuckDetector.on = true; StuckDetector.shared.reset()
     }
     override func tearDown() {
         DayClock.shared.forcedHour = savedHour
-        (StuckDetector.on, FocusGroup.handBackFix, FocusGroup.netEnabled, GameCare.unstickOn) = saved
+        (StuckDetector.on, FocusGroup.handBackFix, FocusGroup.netEnabled, GameCare.unstickOn, GameCare.stuckReleaseOn) = saved
         StuckDetector.shared.reset()
     }
 

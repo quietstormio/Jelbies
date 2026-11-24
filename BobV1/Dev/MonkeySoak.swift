@@ -77,6 +77,8 @@ enum MonkeySoak {
     /// The button the action presses is greyed out now (HUDMenu.enabled, the same rule the HUD draws with): a player could not press it.
     static func illegal(_ a: String, care: GameCare) -> String? {
         let item: HUDItem?
+        let anyTime: Set<String> = ["release", "cancel", "idle", "music", "rotate"]
+        if !anyTime.contains(a), care.focus.isActive { return "close-up: the care menu and Town are hidden" }
         switch a {
         case "feed", "feedone", "welcomeplayfeed": item = .feed
         case "water", "drinkone": item = .drink
