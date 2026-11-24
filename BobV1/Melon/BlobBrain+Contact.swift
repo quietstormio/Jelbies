@@ -71,7 +71,7 @@ extension BlobBrain {
         let live = roomTraffic          // (the 11-15 room round, step 1: RoomRoam+Traffic.swift; read once)
         let crowd = crowdLive          // (move-crowd-r1, MoveCrowd.swift; read once)
         let cGap = crowd && MoveCrowd.gapOn          // (gap: trigger and detour at one clearance just outside the push radius)
-        let vSelf = live && RoomTraffic.realSpeed ? roomWalkSpeed : ContactTuning.walkerSpeed          // (T1: the speed he really walks at)
+        let vSelf = (live && RoomTraffic.realSpeed) || (crowd && MoveCrowd.speedOn) ? roomWalkSpeed : ContactTuning.walkerSpeed          // (T1: the speed he really walks at; move-crowd-r1 speed: the 0.8 u/s guess put the predicted meeting of two walkers in the wrong place)
         let horizon = min(L / vSelf, ContactTuning.lookTime)
         struct Hit { var tc: Float; var pos: SIMD2<Float>; var vel: SIMD2<Float>; var id: Int; var walking: Bool; var dmin: Float }
         var hit: Hit?
