@@ -184,9 +184,9 @@ nonisolated enum StoryTemplates {
         N(41, [.near], ["sharedTime"], "Like to be close by each other."),
         N(42, [.near], ["sharedTime"], "Spend a lot of time side by side.", minShared: 3600),
         // they have lived together for days; nothing more is on record
-        N(43, [.home], ["livedTogether"], "Share the same room."),
-        N(44, [.home], ["livedTogether"], "Housemates for a while now."),
-        N(45, [.home], ["livedTogether"], "Live together."),
+        N(43, [.home], ["livedTogether"], "Housemates for a while now."),
+        N(44, [.home], ["livedTogether"], "Settled in together by now."),
+        N(45, [.home], ["livedTogether"], "Have been housemates for days."),
     ]
 
     /// The first word of a note as it will be read (letters only, lower case).

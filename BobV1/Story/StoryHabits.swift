@@ -173,6 +173,7 @@ final class StoryHabitStore {
     private(set) var books: [Int: StoryHabits] = [:]
     private var dirty: Set<Int> = []
     private var sinceSave: Float = 0
+    private var logTick: [Int: Int] = [:]
     var defaults: UserDefaults = .standard
     /// Slot (the room's body index) -> instance id; set by the stage. nil = not a home Jelmiko.
     var resolve: (Int) -> Int? = { $0 }
@@ -211,6 +212,12 @@ final class StoryHabitStore {
         if h.decayDay != 0, day > h.decayDay { h.decay(toDay: day) }
         h.add(activity: activity, partners: ps, area: area, day: day, nearby: ns)
         books[id] = h; dirty.insert(id)
+        logTick[id, default: 0] += 1
+        if logTick[id]! >= 60 {          // once a minute per body: what the counters hold with each housemate (the `[storysample]` line)
+            logTick[id] = 0
+            let keys = Set((h.shared ?? [:]).keys).union(h.partner.keys).union((h.near ?? [:]).keys).sorted()
+            NSLog("[storysample] id=%d total=%.0f ever=%.0f %@", id, h.total, h.everSeconds, keys.map { "with \($0): near \(Int(h.near?[$0] ?? 0)) shared \(Int(h.shared?[$0] ?? 0)) partner \(Int(h.partner[$0] ?? 0))" }.joined(separator: " | "))
+        }
         sinceSave += 1
         if sinceSave >= 60 { flush() }
     }

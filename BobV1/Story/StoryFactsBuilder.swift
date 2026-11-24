@@ -48,12 +48,13 @@ enum StoryFactsBuilder {
 
         // habits
         applyHabits(habits, to: &f)
-        f.newcomer = habits.everSeconds < 1800 && t.total == 0 && p.stats.meals.isEmpty && p.stats.races == 0
+        f.newcomer = habits.everSeconds < 1800 && t.total == 0 && p.stats.meals.isEmpty && p.stats.races == 0 && daysHere(c, habits, p, care) < 2          // (a Jelmiko whose save shows days of care at home is no newcomer)
 
         // housemates
         for o in care.jellies where o.character != c {
             let oi = SpeciesInfo.of(JellyRoster.species(o.character))
-            f.housemates.append(housemate(habits, id: o.character, name: o.name, kind: oi.name, other: StoryHabitStore.shared.habits(o.character)))
+            let together = min(daysHere(c, habits, p, care), daysHere(o.character, StoryHabitStore.shared.habits(o.character), o, care))
+            f.housemates.append(housemate(habits, id: o.character, name: o.name, kind: oi.name, other: StoryHabitStore.shared.habits(o.character), daysTogether: together))
         }
         markMostPlayed(&f)
         return f
@@ -68,12 +69,21 @@ enum StoryFactsBuilder {
         f.daysTracked = h.daysTracked
     }
 
-    nonisolated static func housemate(_ h: StoryHabits, id: Int, name: String, kind: String, other: StoryHabits? = nil) -> StoryFacts.Housemate {
+    /// How many days this Jelmiko has been at home, from what the save already has (so the first Profile open after an install knows without a single sample):
+    /// the days the sampler has run (once 30 minutes were seen), the care days behind its relationship points (at most 30 points a day), and its oldest meal in the diary.
+    static func daysHere(_ id: Int, _ h: StoryHabits, _ p: JellyProfile, _ care: GameCare, now: Date = Date()) -> Int {
+        let sampled = h.everSeconds >= 1800 ? h.daysTracked : 0
+        let bond = (JellyBond.points(id, care.bondDefaults) + 29) / 30
+        let meal = p.stats.meals.map(\.at).min().map { max(0, Int((now.timeIntervalSince1970 - $0) / 86400)) } ?? 0
+        return max(sampled, bond, meal)
+    }
+
+    nonisolated static func housemate(_ h: StoryHabits, id: Int, name: String, kind: String, other: StoryHabits? = nil, daysTogether: Int? = nil) -> StoryFacts.Housemate {
         var m = StoryFacts.Housemate(id: id, name: name, kindName: kind, playShare: h.playShare(with: id), togetherSeconds: h.seconds(with: id), topEmote: h.topEmote(with: id))
         m.groupKind = h.topGroupKind(with: id); m.sharedGroup = m.groupKind != nil
         m.sharedSeconds = h.sharedEver(with: id)
         if let o = other {
-            m.livedTogether = min(h.daysTracked, o.daysTracked) >= 2 && h.everSeconds >= 1800 && o.everSeconds >= 1800
+            m.livedTogether = daysTogether.map { $0 >= 2 } ?? (min(h.daysTracked, o.daysTracked) >= 2 && h.everSeconds >= 1800 && o.everSeconds >= 1800)
             if let a = h.favouriteSpot, a == o.favouriteSpot { m.sharedSpot = a }
             m.napBuddies = h.hasHistory && o.hasHistory && h.restShare >= 0.3 && o.restShare >= 0.3
         }
