@@ -81,6 +81,7 @@ final class WalkPolishLockTests: XCTestCase {
 
     func testRecordOrCompareTheWalkAndTheRun() {
         let env = ProcessInfo.processInfo.environment
+        BlobBrain.walkPolish = Self.level; defer { BlobBrain.walkPolish = BlobBrain.walkPolishDefault }
         let (walk, runs) = all()
         if let out = env["WALK_GOLDEN_OUT"] {
             try? (walk + runs).joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)

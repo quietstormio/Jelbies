@@ -64,6 +64,7 @@ final class WalkPolishMetricsTests: XCTestCase {
     static var level: Int { Int(ProcessInfo.processInfo.environment["WALK_LEVEL"] ?? "0") ?? 0 }
 
     func testGaitNumbers() {
+        BlobBrain.walkPolish = Self.level; defer { BlobBrain.walkPolish = BlobBrain.walkPolishDefault }
         func go(_ r: MotionRig) { r.brain.request(.goTo(r.root + SIMD2(0, 16))) }
         MotionLog.write(Self.measure("walk_roam", go))
         MotionLog.write(Self.measure("walk_mid", { r in r.brain.amplitude = 0.85; go(r) }))
