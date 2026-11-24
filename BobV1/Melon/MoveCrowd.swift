@@ -32,12 +32,13 @@ nonisolated enum MoveCrowd {
     nonisolated(unsafe) static var partOn = part("part")
     nonisolated(unsafe) static var speedOn = part("speed")
     nonisolated(unsafe) static var allOn = part("all")
+    nonisolated(unsafe) static var legOn = part("leg")
     private static func num(_ k: String, _ d: Float) -> Float { Float(env[k] ?? "") ?? d }
 
     /// The one clearance (u, centre to centre): trigger, detour offset, goal rejection.
     nonisolated(unsafe) static var gap = num("MOVECROWD_GAP", 1.45)
 
-    static var text: String { "MoveCrowd on=\(on) gap=\(gapOn) goal=\(goalOn) yield=\(yieldOn) look=\(lookOn) part=\(partOn) speed=\(speedOn) all=\(allOn) gapU=\(gap)" }
+    static var text: String { "MoveCrowd on=\(on) gap=\(gapOn) goal=\(goalOn) yield=\(yieldOn) look=\(lookOn) part=\(partOn) speed=\(speedOn) all=\(allOn) leg=\(legOn) gapU=\(gap)" }
 }
 
 /// Read by the scoreboard (tests): the switches as they stand.
@@ -111,6 +112,32 @@ extension BlobBrain {
         for p in steerPeers() where p.id != except {
             if simd_distance(p.pos, w) < r { return false }
             if p.id < Int.max / 4, let v = peerVel[p.id], simd_distance(p.pos + v * t, w) < r { return false }
+        }
+        return true
+    }
+}
+
+extension BlobBrain {
+    /// leg: my straight leg here -> cand, walked at my speed, keeps `gap` from every other body: a walker along its route and goal at its speed, a stander where he stands
+    /// (pairs already closer than the gap at the start only must not get closer).
+    func crowdLegFree(from here: SIMD2<Float>, to cand: SIMD2<Float>) -> Bool {
+        let g = MoveCrowd.gap, L = simd_distance(here, cand), v = max(roomNominalWalk, 0.3)
+        guard L > 0.05 else { return true }
+        let T = L / v
+        for o in socialOthers() where o !== self {
+            var pts = [o.position]
+            var ov: Float = 0
+            if case .walk(let goal, _) = o.script { pts += o.steerRoute; pts.append(goal); ov = max(o.roomWalkSpeed, 0.3) }
+            let d0 = simd_distance(here, o.position)
+            var t: Float = 0.2
+            while t <= T + 0.01 {
+                let a = here + (cand - here) * min(1, t / T)
+                var b = pts[0], left = ov * t
+                if ov > 0 { for k in 1..<pts.count { let seg = simd_distance(pts[k - 1], pts[k]); if left <= seg { b = pts[k - 1] + (pts[k] - pts[k - 1]) * (seg > 1e-4 ? left / seg : 0); break }; left -= seg; b = pts[k] } }
+                let dd = simd_distance(a, b)
+                if dd < g && dd < d0 - 0.05 { return false }
+                t += 0.2
+            }
         }
         return true
     }

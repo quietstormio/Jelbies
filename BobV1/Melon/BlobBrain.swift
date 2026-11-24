@@ -1078,6 +1078,7 @@ final class BlobBrain {
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             if attempt == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
             if crowdGoal, !crowdGoalFree(cand) { continue }          // (move-crowd-r1 goal: nobody stands at or walks to within the gap of it)
+            if crowdGoal, attempt == 0, MoveCrowd.legOn, !crowdLegFree(from: here, to: cand) { continue }          // (move-crowd-r1 leg: the leg never comes within the gap of another body's walk in space and time, nor of a stander)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
