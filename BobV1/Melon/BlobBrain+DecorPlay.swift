@@ -26,7 +26,8 @@ extension BlobBrain {
         return [:]
         #endif
     }()
-    static let slideRunOut: Float = 0          // (no-clip-r1 round 2: no coast. A 0.2 coast past the lip made ParkSlideRoundTests stand-still / drops red (bisected); the landing belly overlap stays at the measured ~14 cm)
+    static let slideRunOut: Float = 0
+    static let slideSkid: Float = 0.2          // (no-clip-r1 round 2: no coast. A 0.2 coast past the lip made ParkSlideRoundTests stand-still / drops red (bisected); the landing belly overlap stays at the measured ~14 cm)
     /// no-clip-r1: the floor he stands, sits and rides on is this much above the art's surface (his seated belly sank 5 cm into the platform).
     static var slideLift: Float { legacyOff["SlideNoLift"] == true ? 0 : 0.05 }
     static var slideLength: Float {
@@ -158,7 +159,7 @@ extension BlobBrain {
             jellyKick = max(jellyKick, 0.5)
             skinner.setEyeOpenness(0.8)
             if idleState.slideS >= Self.slideLength + Self.slideRunOut {
-                idleState.slideStage = 6; idleState.phase = 1; idleState.phaseT = 0; idleState.steps = 0
+                idleState.slideStage = 6; idleState.phase = 1; idleState.phaseT = 0; idleState.steps = 0; slideSkidDone = 0
                 bagFloorOn = false; applyBagFloor(sim, skinner)
                 jellyKick = max(jellyKick, 2.4)
                 AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.9)
@@ -168,6 +169,12 @@ extension BlobBrain {
             // lands on the floor: a squash, then gets up
             let phT = idleState.phaseT
             let k = 1 - smooth01((phT - 0.35) / 0.9)
+            // no-clip-r1: he skids 0.2 on past the lip while squashed (before he gets up), so his belly rear is out of the chute's tail (14 cm of it was in the tail); no coast during the ride (that turned the walk-round tests red)
+            let skid = Self.slideSkid * smooth01(min(1, phT / 0.4)), dSkid = skid - slideSkidDone
+            if dSkid > 0 {
+                slideSkidDone = skid
+                let dv = f.turned(SIMD2(0, dSkid)); px += dv.x; pz += dv.y; feet.pos[0] += dv; feet.pos[1] += dv
+            }
             if phT > 0.35, !feet.active && idleState.steps < 2 && phT > 0.35 + Float(idleState.steps) * 0.3 { idleFootStep(reach: 0); idleState.steps += 1 }
             idleState.k = k
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)

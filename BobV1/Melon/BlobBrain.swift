@@ -86,6 +86,7 @@ final class BlobBrain {
     var bagFloorOn = false
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
     var slideY: Float = 0
+    var slideSkidDone: Float = 0
     /// The kick scooter ride in progress (BlobBrain+Scooter.swift).
     var ride = ScooterRide()
     /// Tests: force how a throw ends (0 plain arc, 1 bonk, 2 drop).
