@@ -121,7 +121,7 @@ enum RoomLayout {
     static var padNow: Float { decorFeet.contains(where: { $0.uid == ParkToys.slideUID }) ? 0 : armPad }
 
     /// The park / home slide's walls are 0.9 high and 0.16 thick: a walker's arm reached 0.24 past the footprint and 11 cm into them, so the slide keeps the walker this much further.
-    static let slideArmPad: Float = 0.26
+    static let slideArmPad: Float = 0.32
 
     /// Pushes a sphere (centre, radius) out of walls, sofa and props; returns the corrected centre (y untouched).
     static func resolve(position p0: SIMD3<Float>, radius: Float, lowPropScale: Float = 1, ignoreDecor: Int? = nil) -> SIMD3<Float> {

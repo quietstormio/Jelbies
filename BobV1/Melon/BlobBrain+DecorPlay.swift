@@ -20,7 +20,7 @@ extension BlobBrain {
     private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.52, 0.22), SIMD2(-1.32, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the first two hops stand 0.18 further back (was -1.28, -1.04; further and the feet hang off the step edges at -1.75 / -1.45): his belly is 1.1 wide, the steps 0.3 deep, so on the exported spots it sank into the next riser)
     static let slideRunOut: Float = 0.2
     /// no-clip-r1: the floor he stands, sits and rides on is this much above the art's surface (his seated belly sank 5 cm into the platform).
-    static let slideLift: Float = 0.03
+    static let slideLift: Float = 0.05
     static var slideLength: Float {
         var L: Float = 0
         for i in 1..<slidePath.count { L += simd_length(slidePath[i] - slidePath[i - 1]) }
