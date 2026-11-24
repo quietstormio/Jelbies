@@ -1,8 +1,8 @@
 //
 //  KeepOutWalkStuckTests.swift
-//  no-stuck-r1: the soak's "motionless" case (iter0 seed 21: Jelly 2 "walking" with a job, 75 s without moving at the front of the room during Jelly 1's close-up).
-//  Mechanism under test: a requested walk (a job) whose target lies inside the close-up's keep-out wedge while the walker is outside it: the floor rules push every step
-//  out of the wedge, the job walk only re-plans (it never gives up), and the walker marks time at the wedge's edge until the close-up ends.
+//  no-stuck-r1: a probe for a soak's "motionless" case (iter0 seed 21, a run later voided: Jelly 2 "walking" with a job, 75 s without moving at the front of the room during Jelly 1's close-up).
+//  Hypothesis tested here: a requested walk (a job) into the close-up's keep-out wedge marks time at the wedge's edge. NOT reproduced: the walk is dropped within ~10 s
+//  (KEEPOUT-WALK lines in the log). The test stays as a guard that such a walk never marks time; the soak case is still open (not seen again).
 //
 
 import XCTest
