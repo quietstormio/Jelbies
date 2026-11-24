@@ -74,6 +74,7 @@ final class StuckDetector {
         if !taps.isEmpty, care.raceBook.actors.contains(where: { $0.brain?.activity == .eating || $0.brain?.activity == .drinking }) || care.brainFor(0).map({ $0.activity == .eating || $0.activity == .drinking }) == true {
             for i in taps.indices { taps[i].ate = true }
         }
+        for id in 0..<max(care.jellies.count, 1) { if let b = care.brainFor(id), b.autonomy { everFree.insert(ObjectIdentifier(b)) } }          // (every step: a life switched off within a second of the start still counts as switched off)
         guard acc >= 1 else { return }
         let step = acc; acc = 0
         judge(findings(care: care, step: step), step: step)
