@@ -233,7 +233,7 @@ nonisolated enum StoryGuard {
     /// Which fact each placeholder stands for. A text that uses one must name that fact.
     static let tokenFact: [String: String] = ["FOOD": "favouriteFood", "ACT": "favouriteActivity", "SPOT": "favouriteSpot", "RACE": "raceWin", "SHOW": "showCup", "PERS": "personality", "EMOTE": "topEmote", "LEFT": "raceMilestone"]
     /// Every fact key a text may name (the writers' vocabulary; the model's guide lists these).
-    static let allFactKeys = ["personality", "favouriteFood", "favouriteActivity", "favouriteSpot", "raceWin", "showCup", "volleyWin", "partner", "topEmote", "nap", "newcomer", "settled", "raceMilestone", "together", "gettingToKnow", "sharedGroup", "sharedSpot", "napBuddies", "bond"] + StoryEvent.kinds.map { "recent" + $0.prefix(1).uppercased() + $0.dropFirst() }
+    static let allFactKeys = ["personality", "favouriteFood", "favouriteActivity", "favouriteSpot", "raceWin", "showCup", "volleyWin", "partner", "topEmote", "nap", "newcomer", "settled", "raceMilestone", "together", "gettingToKnow", "sharedTime", "livedTogether", "sharedGroup", "sharedSpot", "napBuddies", "bond"] + StoryEvent.kinds.map { "recent" + $0.prefix(1).uppercased() + $0.dropFirst() }
 
     /// The line must name at least one fact, every named fact must be on the sheet (true), and every fact placeholder it uses must be named. `keys` nil = not checked (pure-shape tests).
     static func checkFacts(_ t: String, kind: StoryKind, keys: [String]?, available: Set<String>?) -> StoryReason? {

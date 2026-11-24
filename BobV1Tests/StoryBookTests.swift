@@ -236,4 +236,77 @@ final class StoryBookTests: XCTestCase {
             XCTAssertEqual(b.noteLine(f, with: f.housemates[0])!.text, a); XCTAssertEqual(b.noteLine(f, with: f.housemates[1])!.text, c)
         }
     }
+
+    // MARK: housemate-notes-r1
+
+    private func mate(play: Int = 0, shared: Int = 0, lived: Bool = false, emote: String? = nil, share: Double = 0.9) -> StoryFacts.Housemate {
+        var m = StoryFacts.Housemate(id: 2, name: "Latte", kindName: "Moo", playShare: share, togetherSeconds: play, topEmote: emote)
+        m.sharedSeconds = shared; m.livedTogether = lived
+        return m
+    }
+    private func pair(_ m: StoryFacts.Housemate) -> StoryFacts { var f = facts(); f.housemates = [m]; f.mostPlayedWithID = m.togetherSeconds >= 60 ? 2 : nil; return f }
+
+    func testAnEstablishedPairHasANoteWithTheModelOff() {
+        for m in [mate(play: 700, shared: 900, emote: "chase"), mate(shared: 800), mate(lived: true), mate(play: 90, shared: 400)] {
+            let b = book(suite(), day: Box(100))
+            let f = pair(m)
+            let n = b.noteLine(f, with: f.housemates[0])
+            XCTAssertNotNil(n, "\(m)"); XCTAssertFalse(n!.byModel)
+            XCTAssertNotEqual(n!.text, "Still finding out")
+        }
+        let b = book(suite(), day: Box(100)); let f = pair(mate())          // just met: the row's own placeholder
+        XCTAssertNil(b.noteLine(f, with: f.housemates[0]))
+    }
+
+    func testANoteChangesWhenTheFactsChangeAtMostOncePerDay() async {
+        let day = Box(100), b = book(suite(), day: day)
+        let few = pair(mate(play: 120, shared: 300)), more = pair(mate(play: 700, shared: 5000, emote: "chase")), cuddly = pair(mate(play: 700, shared: 5000, emote: "cuddle"))
+        let first = b.noteLine(few, with: few.housemates[0])!.text
+        let r0 = await b.refresh(few, rotate: false); XCTAssertTrue(r0.isEmpty)          // same facts, same day: nothing
+        day.v = 101
+        let r1 = await b.refresh(few, rotate: false); XCTAssertTrue(r1.isEmpty, "same facts a day later and the Profile open: no change")
+        XCTAssertEqual(b.noteLine(few, with: few.housemates[0])!.text, first)
+        let r2 = await b.refresh(more, rotate: false); XCTAssertEqual(r2, ["note:1>2"], "a closer pair: the note is rewritten")
+        let changed = b.noteLine(more, with: more.housemates[0])!.text
+        XCTAssertNotEqual(changed, first)
+        let r3 = await b.refresh(cuddly, rotate: false); XCTAssertTrue(r3.isEmpty, "once a day")
+        for _ in 0..<5 { XCTAssertEqual(b.noteLine(more, with: more.housemates[0])!.text, changed) }
+        day.v = 102
+        let r4 = await b.refresh(cuddly, rotate: false); XCTAssertEqual(r4, ["note:1>2"], "the next day a changed favourite shows")
+    }
+
+    func testNoFlickerWhenTheFactsCrossAThresholdMidVisit() async {
+        let b = book(suite(), day: Box(100))
+        var seen: [String] = []
+        for i in 0..<12 {
+            let f = pair(i < 6 ? mate(shared: 700) : mate(play: 400, shared: 1200, emote: "chase"))          // the pair crosses into play at step 6
+            _ = await b.refresh(f, rotate: false)
+            seen.append(b.noteLine(f, with: f.housemates[0])!.text)
+        }
+        var flips = 0; for i in 1..<seen.count where seen[i] != seen[i - 1] { flips += 1 }
+        XCTAssertLessThanOrEqual(flips, 1, "\(seen)")
+        XCTAssertEqual(Set(seen[6...]).count, 1)
+    }
+
+    func testOldHabitsJSONWithoutTheNewKeysStillLoads() throws {
+        let json = #"{"act":{"walk":10},"partner":{"2":700},"emote":{"2|chase":300},"area":{},"total":900,"everSeconds":5000,"firstDay":10,"decayDay":20}"#
+        let h = try JSONDecoder().decode(StoryHabits.self, from: Data(json.utf8))
+        XCTAssertNil(h.near); XCTAssertNil(h.shared)
+        XCTAssertEqual(h.sharedEver(with: 2), 700)          // an old save's pair seconds are the floor
+        XCTAssertEqual(h.partner["2"], 700)
+        let m = StoryFactsBuilder.housemate(h, id: 2, name: "Latte", kind: "Moo", other: h)
+        XCTAssertGreaterThanOrEqual(m.sharedSeconds, 600); XCTAssertTrue(m.livedTogether)
+        XCTAssertNotEqual(StoryTemplates.tier(m), .few)
+    }
+
+    func testNearnessIsRecordedAndNotDecayedAway() {
+        var h = StoryHabits()
+        for _ in 0..<700 { h.add(activity: "stand", partners: [], area: nil, day: 10, nearby: [2]) }
+        XCTAssertEqual(h.near?["2"], 700); XCTAssertEqual(h.sharedEver(with: 2), 700); XCTAssertNil(h.partner["2"])          // not counted as play
+        h.decay(toDay: 100)
+        XCTAssertEqual(h.sharedEver(with: 2), 700, "a month away does not make them strangers")
+        XCTAssertNil(h.near?["2"])
+        for _ in 0..<30 { h.add(activity: "pair:chase", partners: [2], area: nil, day: 100, nearby: [2]) }
+        XCTAssertEqual(h.sharedEver(with: 2), 730)          // a session second is counted once even when they are also near
+    }
 }

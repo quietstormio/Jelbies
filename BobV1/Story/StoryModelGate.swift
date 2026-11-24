@@ -249,12 +249,14 @@ nonisolated enum StoryPrompt {
         switch StoryTemplates.tier(h) {
         case .close: lines.append("- [together] they play together more than anyone, the closest of friends")
         case .regular: lines.append("- [together] they often play together")
+        case .near: lines.append("- [sharedTime] they spend a lot of time near each other, keeping each other company")
+        case .home: lines.append("- [livedTogether] they share the same room and have lived together for a while")
         case .few: lines.append("- [gettingToKnow] they are still getting to know each other")
         }
         if let k = h.groupKind, let w = StoryPrompt.groupWords[k] { lines.append("- [sharedGroup] lately they \(w)") }
         if h.sharedSpot != nil { lines.append("- [sharedSpot] they both like the same spot: {SPOT} (\(v["SPOT"] ?? ""))") }
         if h.napBuddies { lines.append("- [napBuddies] they both nap a lot") }
-        if let x = v["EMOTE"], StoryTemplates.tier(h) != .few { lines.append("- [topEmote] they are often: {EMOTE} (\(x))") }
+        if let x = v["EMOTE"], StoryTemplates.tier(h) != .few, StoryTemplates.tier(h) != .near, StoryTemplates.tier(h) != .home { lines.append("- [topEmote] they are often: {EMOTE} (\(x))") }
         lines.append("Placeholders you may use: {EMOTE} only with the topEmote fact, {SPOT} only with the sharedSpot fact.")
         return lines.joined(separator: "\n")
     }
