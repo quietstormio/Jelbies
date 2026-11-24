@@ -284,7 +284,7 @@ extension GameCare {
                 // planning discs are bigger than the keep-apart gap (a walker cuts corners by up to 0.4 u); a disc that holds the start or the goal is shrunk to just clear it
                 let base = crowdDiscs(for: g, excluding: m, landscape: landscape)
                 var route: [SIMD2<Float>] = []
-                for extra in [Float(0.4), 0.2, 0.0] where route.isEmpty {          // (the widest berth that still has a way through)
+                for extra in [Float(0.5), 0.3, 0.1, 0.0] where route.isEmpty {          // (the widest berth that still has a way through)
                     let discs = base.map { d -> CafeRoute.Disc in
                         let near = min(simd_distance(d.c, from), simd_distance(d.c, to))
                         return .init(c: d.c, r: max(min(d.r + extra, near - 0.02), min(d.r, near - 0.02)))
@@ -327,11 +327,11 @@ extension GameCare {
                     continue
                 }
                 m.reqT += dt
-                // the proximity guard: never nearer than 1.45 u to another body (the player's, a seated customer): look for a new way from here (three times at most)
+                // the proximity guard: never nearer than 1.6 u to another body (the player's, a seated customer): look for a new way from here (three times at most)
                 var nearest: Float = .infinity
                 for a in book.actors { if let ob = a.brain { nearest = min(nearest, simd_distance(Self.floorPos(ob, a.sim), pos)) } }
                 for og in cs.live.values { for om in og.members where om !== m && om.state == .seated { nearest = min(nearest, simd_distance(Self.floorPos(om.actor.brain!, om.actor.sim), pos)) } }
-                if nearest < 1.45, m.guards < 3, cs.clock - m.guardAt > 2 {
+                if nearest < 1.6, m.guards < 3, cs.clock - m.guardAt > 2 {
                     m.guards += 1; m.guardAt = cs.clock; m.replan = true; m.state = .waiting; m.waitT = 0; m.stuck = 0
                     b.requestNow(.goTo(pos))
                     Self.crowdLog(String(format: "member %d only %.2f from a body at (%.2f,%.2f): new route (guard %d)", m.actor.id, nearest, pos.x, pos.y, m.guards))
@@ -343,8 +343,8 @@ extension GameCare {
                     let d = simd_distance(pos, wp)
                     // he walked to this spot and stopped short of it (the walkable floor clamps it): that counts as there
                     let stoppedShort = m.reqWp == wp && m.reqT > 0.8
-                    // leaving: the entrance itself may lie past the walkable floor, so the last leg counts as done within 1.3 u of it (or when he has stopped within 2 u of it)
-                    let atDoor = g.phase == .leaving && lastLeg && (d < 1.3 || (stoppedShort && d < 2.0))
+                    // leaving: the entrance itself may lie past the walkable floor, so the last leg counts as done within 0.6 u of it (or when he has walked there and stopped within 2 u of it): he walks all the way out, never vanishes at his seat
+                    let atDoor = g.phase == .leaving && lastLeg && (d < 0.6 || (stoppedShort && d < 2.0))
                     if atDoor { m.path.removeAll(); crowdArrived(g, m, landscape: landscape); continue }
                     if d < (lastLeg ? 0.45 : 0.45) || (stoppedShort && (!lastLeg || d < 0.9)) {
                         m.path.removeFirst(); m.reqWp = nil

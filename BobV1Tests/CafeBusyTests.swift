@@ -166,7 +166,7 @@ final class CafeBusyTests: XCTestCase {
     /// Round 2: the capacity rule. A customer table takes a pair only when BOTH ends can be reached from its entrance without coming within the keep-apart clearance of the player's bodies,
     /// one customer (at the near end) when only that end can; the route to every reachable end stays clear of the player's stands all the way (sampled every 0.1 u).
     func testCustomerTableCapacityKeepsEveryRouteClearOfThePlayersBodies() {
-        XCTAssertEqual(CafeTables.door(landscape: false, table: SIMD2(2.7, -3.3)), SIMD2(3.8, -2.4), "the back-right table has its own entrance")
+        XCTAssertEqual(CafeTables.door(landscape: false, table: SIMD2(2.7, -3.3)), SIMD2(4.2, -2.4), "the back-right table has its own entrance")
         XCTAssertEqual(CafeTables.door(landscape: false, table: SIMD2(-1.6, -3.3)), SIMD2(3.7, 1.8))
         XCTAssertEqual(CafeTables.door(landscape: true, table: SIMD2(2.8, -2.6)), SIMD2(4.4, 1.0))
         for (name, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {

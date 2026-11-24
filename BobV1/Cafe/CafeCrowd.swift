@@ -20,7 +20,7 @@ nonisolated enum CafeTables {
             let v = s.split(separator: ",").compactMap { t in Float(t.hasPrefix("m") ? "-" + t.dropFirst() : String(t)) }
             if v.count == 2 { return SIMD2(v[0], v[1]) }
         }
-        if !landscape, let t = table, t.y < -2.0, t.x > 1.5 { return SIMD2(3.8, -2.4) }
+        if !landscape, let t = table, t.y < -2.0, t.x > 1.5 { return SIMD2(4.2, -2.4) }
         return landscape ? SIMD2(4.4, 1.0) : SIMD2(3.7, 1.8)
     }
     /// Tables the player's group may take (floor x, z of the table centre) with their weight. The first of each aspect is the old fixed spot ("the middle").
