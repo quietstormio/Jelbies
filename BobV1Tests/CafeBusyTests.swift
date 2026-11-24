@@ -157,7 +157,7 @@ final class CafeBusyTests: XCTestCase {
                 let free = CafeTables.customerTables(landscape: landscape).filter { t in
                     [t - SIMD2(GameCare.pairSideX, 0), t + SIMD2(GameCare.pairSideX, 0)].allSatisfy { s in abs(s.x) <= 3.7 && stands.allSatisfy { simd_distance($0, s) >= GameCare.pairMargin } }
                 }
-                print("[cafebusy-test] \(name) player table \(i) \(p.centre): \(free.count) customer tables free \(free)")
+                print("[cafebusy-test] \(name) player table \(i) \(p.centre): \(free.count) customer tables free \(free); player stands \(stands)")
                 XCTAssertGreaterThanOrEqual(free.count, 1, "\(name) player table \(i) leaves a customer table")
             }
         }
