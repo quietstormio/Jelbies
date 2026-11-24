@@ -84,6 +84,8 @@ struct ShowSeatKeep {
     var waited: Float = 0
     /// The carry goes through the gate first (a back-row seat and the front are never joined by a straight line past the seated bodies).
     var viaGate = false
+    /// Seconds the carry has stood aside for a body on its way.
+    var yielded: Float = 0
 }
 
 extension GameCare {
@@ -126,6 +128,10 @@ extension GameCare {
         return simd_distance(here, ShowStage.gate) + simd_distance(ShowStage.gate, seat)
     }
     static let backRowLine: Float = -0.7
+    /// Another body stands within a body's width of where the carry is about to be.
+    private func glideBlocked(_ a: JellyActor, _ p: SIMD2<Float>, _ bodies: [JellyActor]) -> Bool {
+        bodies.contains { $0.id != a.id && simd_distance(lineFloor($0), p) < Self.lineClearOf }
+    }
     /// Nobody (but the body itself) stands within `lineClearOf` of the segment a -> b.
     private func lineClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, except id: Int, _ bodies: [JellyActor]) -> Bool {
         let d = b - a, L2 = max(simd_dot(d, d), 1e-6)
@@ -150,7 +156,7 @@ extension GameCare {
             let here = lineFloor(a)
             if linePerforming(a) { k.gliding = false; k.off = 0; k.still = 0; k.seat = seat; book.keep[a.id] = k; continue }
             if k.seat == nil || simd_distance(k.seat!, seat) > 0.01 {          // a new leg: its allowance
-                k.seat = seat; k.off = 0; k.waited = 0; k.gliding = false; k.still = 0; k.probe = here; k.probeT = 0; k.asked = false
+                k.seat = seat; k.off = 0; k.waited = 0; k.yielded = 0; k.gliding = false; k.still = 0; k.probe = here; k.probeT = 0; k.asked = false
                 k.budget = min(Self.lineGrace + showLegLength(here, seat) / Self.lineWalkPace, Self.lineMaxLeg)
                 let backHere = here.y < Self.backRowLine, backThere = seat.y < Self.backRowLine
                 k.viaGate = backHere != backThere && simd_distance(here, ShowStage.gate) > 0.5 && simd_distance(seat, ShowStage.gate) > 0.5
@@ -181,6 +187,8 @@ extension GameCare {
                 let step = min(dd, speed * dt)
                 if d <= 0.02 {
                     k.gliding = false; k.off = 0; k.still = 0; showLineEnd(a, b)
+                } else if dd > 1e-4, glideBlocked(a, here + (aim - here) / dd * max(step, 0.4), bodies), k.yielded < 2.0 {
+                    k.yielded += dt          // (another body is on the next stretch of the carry: it passes first, for at most 2 s)
                 } else if dd > 1e-4 {
                     let d2 = (aim - here) / dd * step          // a rigid warp, as the contact settle's (BlobBrain.contactNudge): the brain's root, its soles and the sim body move together, so nothing pulls the body back
                     b.px += d2.x; b.pz += d2.y; b.stepRoot0 += d2; b.feet.nudge(d2)
