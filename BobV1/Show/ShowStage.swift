@@ -120,7 +120,7 @@ nonisolated enum ShowStage {
     static func playerAside(sideways: Bool = false) -> SIMD2<Float> { SIMD2(sideways ? 0.9 : -0.9, -1.4) }
     static let gate = SIMD2<Float>(0, 0.4)
     static func rivalRest(_ k: Int, sideways: Bool = false) -> SIMD2<Float> {
-        let fixed = [sideways ? SIMD2<Float>(-1.65, 0.0) : SIMD2<Float>(-1.45, 0.5), sideways ? SIMD2<Float>(1.5, 0.4) : SIMD2<Float>(1.45, 0.5), SIMD2<Float>(sideways ? -0.9 : 0.9, -1.4)]
+        let fixed = [sideways ? SIMD2<Float>(-1.65, 0.16) : SIMD2<Float>(-1.45, 0.66), sideways ? SIMD2<Float>(1.5, 0.56) : SIMD2<Float>(1.45, 0.66), SIMD2<Float>(sideways ? -0.9 : 0.9, -1.4)]          // (show-line-r1: a body settles ~0.16 further back than the mark it is sent to, so the near marks are asked 0.16 forward and the bodies REST on the old marks (0.5): the gate-to-back-seat leg then clears them by 1.38)
         return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
     }
     /// Where entrant k waits in the wing before she walks on to her rest spot (just outside the wide shot: left, left, right; a phone on its side: all from the left).

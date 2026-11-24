@@ -132,6 +132,11 @@ extension GameCare {
     private func glideBlocked(_ a: JellyActor, _ p: SIMD2<Float>, _ bodies: [JellyActor]) -> Bool {
         bodies.contains { $0.id != a.id && simd_distance(lineFloor($0), p) < Self.lineClearOf }
     }
+    /// This body `o` is within `lineClearOf` of the segment a -> b (false = clear of it).
+    private func lineSegmentClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ o: JellyActor) -> Bool {
+        let d = b - a, L2 = max(simd_dot(d, d), 1e-6), p = lineFloor(o), t = min(max(simd_dot(p - a, d) / L2, 0), 1)
+        return simd_distance(p, a + d * t) >= Self.lineClearOf
+    }
     /// Nobody (but the body itself) stands within `lineClearOf` of the segment a -> b.
     private func lineClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, except id: Int, _ bodies: [JellyActor]) -> Bool {
         let d = b - a, L2 = max(simd_dot(d, d), 1e-6)
@@ -178,7 +183,15 @@ extension GameCare {
                     let aim = k.viaGate && simd_distance(here, ShowStage.gate) > 0.3 && (here.y < Self.backRowLine) != (seat.y < Self.backRowLine) ? ShowStage.gate : seat
                     // the line to the carry's goal is free of bodies, or the wait for it is over (then the carry goes regardless: the others have their own allowance)
                     let otherGliding = bodies.contains { $0.id != a.id && (book.keep[$0.id]?.gliding ?? false) }
-                    if !otherGliding && lineClear(here, aim, except: a.id, bodies) || k.off > k.budget + Self.lineWaitMax { k.gliding = true; showLineBegin(a, b) }          // (one carry at a time: two carried through the gate meet there)
+                    // a body that is itself off its seat and not yet carried is in the way: it goes first (its own carry is due too); only a blocker standing IN his seat is passed after the wait
+                    let stuckBlocker = bodies.contains { o in
+                        guard o.id != a.id, let os = showSeat(o.id), !linePerforming(o) else { return false }
+                        guard simd_distance(lineFloor(o), os) >= Self.lineAt, !(book.keep[o.id]?.gliding ?? false), !lineSegmentClear(here, aim, o) else { return false }
+                        let mutual = !lineSegmentClear(lineFloor(o), os, a)          // (each in the other's way: the lower id goes first)
+                        return !(mutual && a.id < o.id)
+                    }
+                    if !otherGliding && !stuckBlocker && (lineClear(here, aim, except: a.id, bodies) || k.off > k.budget + Self.lineWaitMax) { k.gliding = true; showLineBegin(a, b) }
+                    else if !otherGliding && stuckBlocker && k.off > k.budget + 3 * Self.lineWaitMax, lineClear(here, aim, except: a.id, bodies) { k.gliding = true; showLineBegin(a, b) }          // (one carry at a time: two carried through the gate meet there)
                 }
             }
             if k.gliding {
@@ -190,7 +203,7 @@ extension GameCare {
                 let step = min(dd, speed * dt)
                 if d <= 0.02 {
                     k.gliding = false; k.off = 0; k.still = 0; showLineEnd(a, b)
-                } else if dd > 1e-4, glideBlocked(a, here + (aim - here) / dd * max(step, 0.4), bodies), k.yielded < 2.0 {
+                } else if dd > 1e-4, glideBlocked(a, here + (aim - here) / dd * max(step, 0.4), bodies), (k.yielded < 2.0 || bodies.contains { $0.id != a.id && (book.keep[$0.id]?.gliding ?? false) && simd_distance(lineFloor($0), here) < Self.lineClearOf }) && k.yielded < 8.0 {
                     k.yielded += dt          // (another body is on the next stretch of the carry: it passes first, for at most 2 s)
                 } else if dd > 1e-4 {
                     let d2 = (aim - here) / dd * step          // a rigid warp, as the contact settle's (BlobBrain.contactNudge): the brain's root, its soles and the sim body move together, so nothing pulls the body back

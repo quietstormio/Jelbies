@@ -459,7 +459,7 @@ extension GameCare {
     }
     private func tickPendingWalks(dt: Float) {
         let book = showBook
-        guard show.trickStage == .rivals || show.trickEntering else { book.via = [:]; book.pendingWalks = []; return }          // (the rivals' part is over: no walk of it is left to go on)
+        guard show.trickStage == .rivals || show.trickEntering || (!book.via.isEmpty && book.trickSet) else { book.via = [:]; book.pendingWalks = []; return }          // (a body still on its way through the gate keeps its second leg when the rivals' part is over)          // (the rivals' part is over: no walk of it is left to go on)
         tickVia()
         guard !book.pendingWalks.isEmpty else { return }
         var rest: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
