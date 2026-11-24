@@ -398,8 +398,12 @@ extension GameCare {
                 // the proximity guard: never nearer than 1.6 u to a player's body or a seated customer. A new route is planned from here and followed at once, without stopping (three times at most).
                 var nearest: Float = .infinity, who = ""
                 for a in book.actors where book.stands[a.id] != nil { if let ob = a.brain { let d = simd_distance(Self.floorPos(ob, a.sim), pos); if d < nearest { nearest = d; who = "player \(a.id)" } } }
-                for og in cs.live.values { for om in og.members where om !== m && om.state == .seated { let d = simd_distance(Self.floorPos(om.actor.brain!, om.actor.sim), pos); if d < nearest { nearest = d; who = "seated customer \(om.actor.id)" } } }
-                if nearest < 1.6, m.guards < 3, cs.clock - m.guardAt > 2, let goal = m.path.last {
+                var playerNear = nearest
+                var custNear: Float = .infinity
+                for og in cs.live.values where og !== g { for om in og.members where om.state == .seated { let d = simd_distance(Self.floorPos(om.actor.brain!, om.actor.sim), pos); if d < custNear { custNear = d; if d < nearest { who = "seated customer \(om.actor.id)" } } } }
+                nearest = min(playerNear, custNear)
+                // (the player's bodies: 1.6; another table's seated customers: 1.3; his own table's mates never)
+                if playerNear < 1.6 || custNear < 1.3, m.guards < 3, cs.clock - m.guardAt > 2, let goal = m.path.last {
                     m.guards += 1; m.guardAt = cs.clock; cs.guardReplans += 1
                     let route = crowdRoute(g, m, from: pos, to: goal, landscape: landscape)
                     Self.crowdLog(String(format: "member %d is %.2f from %@ at (%.2f,%.2f): new route %@ (guard %d)", m.actor.id, nearest, who, pos.x, pos.y, route.isEmpty ? "none" : "followed", m.guards))
