@@ -241,6 +241,7 @@ extension GameCare {
         }
         #endif
         #if targetEnvironment(simulator)
+        if ParkPosLog.on, park.phase == .playing { parkPosLog(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors, dt: dt) }          // (park-open-r1 capture aid: Park/ParkPosLog.swift)
         if Self.traceOn, park.phase == .playing { parkTrace(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors) }
         if ParkSlideProbe.busy, park.phase == .playing { parkSlideBusy(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors) }          // (capture aid `-SlideBusy 1`)
         if ParkSlideProbe.on, park.phase == .playing || park.phase == .arriveIn { parkSlideProbe(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors, dt: dt) }          // (park-slide-r3 capture aid: Park/ParkSlideProbe.swift)
