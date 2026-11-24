@@ -181,10 +181,12 @@ final class CafeBusyTests: XCTestCase {
             var turns = 0, moves = 0, acts = 0, steps = 0
             var turning: [Int: Bool] = [:], moving: [Int: Bool] = [:], acting: [Int: Bool] = [:]
             var lounged: Float = 0
+            var settled = Set<Int>()
             step(r, 240, until: { lounged > 25 }, each: {
                 if c.cafe.phase == .lounge { lounged += 1.0 / 60 }
                 for s in c.cafeSeats(r.actors) where c.cafeFinished(s.id) {
                     let b = s.brain
+                    if !settled.contains(s.id) { if case .none = b.script, b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace { settled.insert(s.id) } else { continue } }          // (counting starts when the last bite / sip is over)
                     steps += 1
                     let yawErr = abs(GameCare.wrapAngle(b.yaw + b.twist + b.chat.twist - s.yaw))
                     let off = simd_distance(GameCare.floorPos(b, s.sim), s.stand)

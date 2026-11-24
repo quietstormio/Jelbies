@@ -49,7 +49,7 @@ final class CafeTalkProbe {
 final class CafeCalmProbe {
     static let shared = CafeCalmProbe()
     static var on: Bool { DevArgs.enabled && UserDefaults.standard.integer(forKey: "CafeCalmLog") != 0 }
-    struct Count { var turns = 0, moves = 0, acts = 0, steps = 0; var kinds: [String: Int] = [:]; var turning = false, moving = false, acting = false }
+    struct Count { var settled = false, turns = 0, moves = 0, acts = 0, steps = 0; var kinds: [String: Int] = [:]; var turning = false, moving = false, acting = false }
     var by: [Int: Count] = [:]
     var next: Float = 15, clock: Float = 0
     func reset() { by = [:]; next = 15; clock = 0 }
@@ -61,6 +61,7 @@ final class CafeCalmProbe {
         for s in care.cafeSeats(actors) where care.cafeFinished(s.id) {
             let b = s.brain
             var c = by[s.id] ?? Count()
+            if !c.settled { if case .none = s.brain.script, s.brain.activity == .idle || s.brain.activity == .lookingAround || s.brain.activity == .steppingInPlace { c.settled = true } else { by[s.id] = c; continue } }          // (counting starts when the last bite / sip is over: the eating itself is not extra movement)
             c.steps += 1
             let yawErr = abs(GameCare.wrapAngle(b.yaw + b.twist + b.chat.twist - s.yaw))
             let off = simd_distance(GameCare.floorPos(b, s.sim), s.stand)
