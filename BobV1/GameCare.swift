@@ -210,8 +210,8 @@ final class GameCare {
     @ObservationIgnored var zeroOnSlot: Float = 0
     @ObservationIgnored var approachRetries = 0
     @ObservationIgnored var approachShort = 0
-    @ObservationIgnored private var savedAutonomy = true
-    @ObservationIgnored private var wantHop = false
+    @ObservationIgnored var savedAutonomy = true
+    @ObservationIgnored var wantHop = false
     @ObservationIgnored var afterRelease: Consumable?        // Feed / Drink asked inside focus: release first, then the tray flow
     /// Needs + mood (hunger / thirst / attention). `needs.mood` and `needs.wantedNeed` are what the touch reactions read.
     let needs: BlobNeeds
@@ -729,7 +729,7 @@ final class GameCare {
 
     func enterFocus(brain: BlobBrain) {
         if !focusGroup.arrived.contains(0) { savedAutonomy = autonomySnapshot(0, brain) }          // (once: in a group he waits here for the others and this is asked again, which would save the `false` set below)
-        brain.autonomy = false                       // he stays on the front spot until released
+        brain.autonomy = false; focusGroup.took[0] = 0          // he stays on the front spot until released (the safety net's record: GameCare+FocusRelease.swift)
         if focusGroup.markArrived(0) { focus.arrive(snap: isPreview) }
         if !silentArrival { AudioHub.shared.chirp(jelly: 0, .happy, src: "greet") }          // (the opening story's Jelbies stay quiet until their drop pops)
     }
@@ -776,11 +776,12 @@ final class GameCare {
         case .leaving:
             if wantHop, let sim {
                 wantHop = false
-                brain.autonomy = savedAutonomy
+                brain.autonomy = savedAutonomy; focusGroup.took[0] = nil
                 brain.startHopPlay(sim: sim, distance: 0.25)
-            } else if wantHop, sim == nil { wantHop = false; brain.autonomy = savedAutonomy }
+            } else if wantHop, sim == nil { wantHop = false; brain.autonomy = savedAutonomy; focusGroup.took[0] = nil }
         default: break
         }
+        focusNetTick(brain: brain, dt: dt)          // (the safety net: GameCare+FocusRelease.swift)
         if focus.step(dt: dt) {
             if let c = afterRelease { afterRelease = nil; order(c, jelly: pendingJelly) }
         }
