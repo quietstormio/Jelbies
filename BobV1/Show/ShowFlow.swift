@@ -14,7 +14,7 @@ import Observation
 import simd
 
 /// The show's sound cues (AudioHub.showCue maps them to files; tests count them).
-nonisolated enum ShowCue: Equatable, Sendable { case perfect, good, slip, countdown, go, ring, land, flop, burst, applause, jingle(win: Bool) }
+nonisolated enum ShowCue: Equatable, Sendable { case perfect, good, slip, countdown, go, ring, land, flop, burst, jingle(win: Bool) }
 
 @MainActor
 @Observable
@@ -374,7 +374,7 @@ final class ShowFlow {
             let ev = s.tickDance(songTime: now)
             sim = s
             handle(ev)
-            if s.danceDone { beat = .danced; dancedAge = 0; danceMusicOn = false; cue(.applause); revision += 1 }          // (the stage loop comes back)
+            if s.danceDone { beat = .danced; dancedAge = 0; danceMusicOn = false; revision += 1 }          // (the stage loop comes back)
         }
     }
 

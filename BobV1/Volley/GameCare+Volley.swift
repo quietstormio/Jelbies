@@ -446,7 +446,6 @@ extension GameCare {
             if tone == 1 || tone == 3 { A11yEvents.say(text, .low) }
         case .combo:
             AudioHub.shared.play(.sparkle, volume: 0.9)
-            AudioHub.shared.play(.cheerSmall, volume: 0.6)
             touchPlay?.haptics.transient(now: now, intensity: 1.0, sharpness: 0.8)
         case .slowMo:
             if !A11ySettings.shared.reduceMotion { GameCare.volleySlowScale = 0.3; w.slowLeft = 0.6 }
@@ -466,7 +465,6 @@ extension GameCare {
         case .serveReady(let p):
             if p < 2 { A11yEvents.say("Your serve. Tap Hit to toss, tap again at the top", .normal) }
         case .matchOver(let winner):
-            AudioHub.shared.play(.cheerSmall)          // (the crowd cheer both ways, as before; it is a sound effect, not music)
             if winner == 0 { volley.celebrateWin(); fireGrandChampionConfetti() }          // a win: the race win's results jingle + confetti burst (same calls as GameCare+Race.swift:426); a loss stays as it was
         }
     }
