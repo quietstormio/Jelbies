@@ -112,7 +112,9 @@ enum MonkeySoak {
     }
 
     private static func someJelly(_ care: GameCare, _ g: inout LCG) -> Int { g.next(max(care.jellies.count, 1)) }
-    private static func hungry(_ care: GameCare) { for j in care.jellies { care.needs(for: j.id).set(.hunger, 0.15); care.needs(for: j.id).set(.thirst, 0.15) } }
+    /// The player has the food the Feed button serves (a fresh game's bag can be empty: the tap is then only "No ... left in the bag").
+    private static func stock(_ care: GameCare) { if let c = Consumables.with(id: care.selectedFoodID), c.stored, care.store.count(food: c.id) == 0 { care.store.grant(c.id); care.store.grant(c.id) } }
+    private static func hungry(_ care: GameCare) { stock(care); for j in care.jellies { care.needs(for: j.id).set(.hunger, 0.15); care.needs(for: j.id).set(.thirst, 0.15) } }
 
     static func act(_ a: String, arg: Int?, care: GameCare, ui: Bindings, g: inout LCG, sleep: (Double) async -> Void) async {
         let j = arg ?? someJelly(care, &g)
