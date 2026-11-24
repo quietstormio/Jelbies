@@ -18,6 +18,7 @@ extension BlobBrain {
     /// The steps: (z, y) he hops to, then the platform.
     static let slideSteps: [SIMD2<Float>] = slideSteps0.map { $0 * DecorKind.slide.scale }
     private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.52, 0.22), SIMD2(-1.28, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the first two hops stand 0.3 further back (was -1.28, -1.04): his belly is 1.1 wide, the steps 0.3 deep, so on the exported spots it sank into the next riser)
+    static let slideRunOut: Float = 0.2
     static var slideLength: Float {
         var L: Float = 0
         for i in 1..<slidePath.count { L += simd_length(slidePath[i] - slidePath[i - 1]) }
@@ -89,7 +90,7 @@ extension BlobBrain {
     /// no-clip-r1: while he sits, rides and gets up the arms point forward down the chute: at his sides they lay in the chute's walls and the ladder posts (up to 13 cm).
     private func slideArmsUp(_ k: Float, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         armWalkWant = 1
-        armDirW = smooth01(k); armDirEl = [0.35, 0.35]; armDirSa = [1.25, 1.25]; armDirOut = 0          // (the arms point FORWARD down the chute: raised or at his sides the stubs reach 0.85 out, over the rails and posts that stand at 0.77; the chute is as wide as his belly)
+        armDirW = smooth01(min(1, 2 * k)); armDirEl = [0.35, 0.35]; armDirSa = [1.25, 1.25]; armDirOut = -0.04          // (the arms point FORWARD down the chute: raised or at his sides the stubs reach 0.85 out, over the rails and posts that stand at 0.77; the chute is as wide as his belly)
         driveArms(sim, skinner, dt)
     }
 
@@ -133,7 +134,8 @@ extension BlobBrain {
             let speed = 1.6 + 1.4 * smooth01(t / 1.1)
             idleState.slideS += speed * dt
             let at = Self.slideAt(idleState.slideS)
-            let want = c + f.turned(SIMD2(0, at.z))
+            let over = max(0, idleState.slideS - Self.slideLength)          // (no-clip-r1: he coasts on 0.2 past the lip before the squash: his belly is wider than the chute's tail, 14 cm of it was in the tail)
+            let want = c + f.turned(SIMD2(0, at.z + over))
             let d = want - SIMD2(px, pz)
             px = want.x; pz = want.y
             feet.pos[0] += d; feet.pos[1] += d
@@ -145,7 +147,7 @@ extension BlobBrain {
             pitch += at.slope * 0.9
             jellyKick = max(jellyKick, 0.5)
             skinner.setEyeOpenness(0.8)
-            if idleState.slideS >= Self.slideLength {
+            if idleState.slideS >= Self.slideLength + Self.slideRunOut {
                 idleState.slideStage = 6; idleState.phase = 1; idleState.phaseT = 0; idleState.steps = 0
                 bagFloorOn = false; applyBagFloor(sim, skinner)
                 jellyKick = max(jellyKick, 2.4)
