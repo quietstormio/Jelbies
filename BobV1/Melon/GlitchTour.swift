@@ -12,7 +12,10 @@ import simd
 
 @MainActor
 enum GlitchTour {
-    static let full = "idle:120;cuddle;comeall;wash;play;feed;water;idle:30;park;cafe;groom;race;show;volley;idle:60"
+    static let full = "idle:120;emotes:1;cuddle;comeall;wash;play;feed;water;idle:30;park;cafe;groom;race;show;volley;idle:60"
+    /// The solo emotes `emotes:<rounds>` commands in turn (each body takes the next one, ~4.5 s apart); the probe's tag names the emote.
+    static let emoteKinds: [IdleKind] = [.jacks, .bounce, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .sigh, .hmph, .tail, .flop, .stretch, .stopLook,
+                                         .scoot, .slide, .stumble, .look, .yawn, .sit, .slump, .sway, .zoomies, .trot, .run]
 
     static func run(care: GameCare) async {
         guard DevArgs.enabled else { return }
@@ -25,6 +28,7 @@ enum GlitchTour {
         NSLog("[glitch] tour start %@", script)
         for step in script.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }) where !step.isEmpty {
             let kv = step.split(separator: ":", maxSplits: 1).map(String.init)
+            await settle(care, sleep: sleep)          // the step before is fully over (trips home, the bath closed)
             GlitchProbe.shared.tag = kv[0]
             NSLog("[glitch] tour step=%@", step)
             await act(kv[0], arg: kv.count > 1 ? Double(kv[1]) : nil, care: care, sleep: sleep)
@@ -33,12 +37,42 @@ enum GlitchTour {
         NSLog("[glitch] tour done")
     }
 
+    static func busy(_ care: GameCare) -> Bool {
+        care.tripActive || care.raceBusy || care.bath.active || care.park.active || care.cafe.active || care.groom.active || care.race.active || care.show.active || care.volley.active
+    }
+    /// Waits (up to 5 minutes) until no trip, race, show, bath or visit is on, then 4 s more.
+    static func settle(_ care: GameCare, sleep: (Double) async -> Void) async {
+        var waited = false
+        for _ in 0..<1500 where busy(care) { waited = true; await sleep(0.2) }
+        if waited { await sleep(4) }
+    }
+    /// After a start: waits (up to 15 s) for the trip to begin, then until it is over.
+    static func runTrip(_ care: GameCare, sleep: (Double) async -> Void) async {
+        for _ in 0..<75 where !busy(care) { await sleep(0.2) }
+        await sleep(2)
+        for _ in 0..<4500 where busy(care) { await sleep(0.2) }
+        await sleep(4)
+    }
+
     private static func hungry(_ care: GameCare) { for j in care.jellies { care.needs(for: j.id).set(.hunger, 0.15); care.needs(for: j.id).set(.thirst, 0.15) } }
     private static func screenSize() -> CGSize? { (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.size }
 
     static func act(_ a: String, arg: Double?, care: GameCare, sleep: (Double) async -> Void) async {
         switch a {
         case "idle": await sleep(arg ?? 60)
+        case "emotes":
+            var n = 0
+            for _ in 0..<Int(arg ?? 1) {
+                for k in emoteKinds {
+                    let id = n % max(care.jellies.count, 1); n += 1
+                    guard let b = care.brainFor(id) else { continue }
+                    GlitchProbe.shared.tag = "emote:\(k.rawValue)"
+                    b.commandedIdle = k
+                    await sleep(4.5)
+                }
+            }
+            GlitchProbe.shared.tag = "emotes"
+            await sleep(6)
         case "cuddle":
             care.comeHere(jelly: 0)
             for _ in 0..<200 where !care.focus.isFocused { await sleep(0.1) }
@@ -102,18 +136,15 @@ enum GlitchTour {
             care.requestGroom()
             await sleep(1)
             care.startGroom(.quick)
-            for _ in 0..<900 where care.groom.active { await sleep(0.2) }
-            await sleep(6)
+            await runTrip(care, sleep: sleep)
         case "show":
             care.show.auto = true; care.show.autoHomeAfter = 3
             care.startShow(jelly: 0)
-            for _ in 0..<1800 where care.show.active { await sleep(0.2) }
-            await sleep(6)
+            await runTrip(care, sleep: sleep)
         case "race":
             care.race.autoRate = 4; care.race.autoReturnAfter = 7
             care.startRace(jelly: 0)
-            for _ in 0..<1500 where care.race.active { await sleep(0.2) }
-            await sleep(6)
+            await runTrip(care, sleep: sleep)
         case "volley":
             care.startVolley(jelly: 0, mode: .match(.sandcastle))
             await sleep(arg ?? 60)

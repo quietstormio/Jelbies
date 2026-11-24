@@ -29,9 +29,9 @@ final class GlitchProbeTests: XCTestCase {
         _ = core.observe(sample(feet: [(0, SIMD2(0, 0)), (0, SIMD2(0.2, 0))]), steps: 1)
         _ = core.observe(sample(feet: [(0, SIMD2(0, 0)), (0, SIMD2(0.2, 0))]), steps: 1)
         let ev = core.observe(sample(SIMD3(0.2, 0, 0), yaw: 1.0, arm: SIMD3(0.4, 0.7, 0), feet: [(0, SIMD2(0.03, 0)), (0, SIMD2(0.2, 0))], blends: [0, 1]), steps: 1)
-        let kinds = Set(ev.map(\.kind))
-        XCTAssertEqual(kinds, ["jump", "yaw", "pose", "slide", "blend"])
-        XCTAssertEqual(ev.first { $0.kind == "pose" }?.detail, "part=arm")
+        XCTAssertEqual(Set(ev.map(\.kind)), ["jump", "yaw", "slide", "blend"])
+        let ev2 = core.observe(sample(SIMD3(0.2, 0, 0), yaw: 1.0, arm: SIMD3(0.4, 0.7, 0), feet: [(0, SIMD2(0.03, 0)), (0, SIMD2(0.2, 0))], blends: [0, 1]), steps: 1)
+        XCTAssertTrue(ev2.first { $0.kind == "pose" }?.detail.hasPrefix("part=arm ") ?? false, "\(ev2.map(\.detail))")
     }
 
     func testStepsDivideAndZeroStepsKeepTheSample() {
@@ -47,6 +47,18 @@ final class GlitchProbeTests: XCTestCase {
             let ev = core.observe(sample(SIMD3(Float(i) * 0.1, 0, 0), yaw: Float(i) * 0.17), steps: 1)
             XCTAssertTrue(ev.isEmpty, "frame \(i): \(ev.map(\.kind))")
         }
+    }
+
+    func testJiggleIsNotAPopButASnapIs() {
+        var core = GlitchCore()
+        for i in 0..<30 {          // an antenna tip oscillating 10 cm at 10 Hz: fast, but continuous
+            let ev = core.observe(sample(arm: SIMD3(0.4, 0.5 + 0.1 * sinf(Float(i) * 2 * .pi / 6), 0)), steps: 1)
+            XCTAssertFalse(ev.contains { $0.kind == "pose" }, "frame \(i)")
+        }
+        var c2 = GlitchCore()
+        _ = c2.observe(sample(), steps: 1); _ = c2.observe(sample(), steps: 1)
+        XCTAssertFalse(c2.observe(sample(arm: SIMD3(0.4, 0.58, 0)), steps: 1).contains { $0.kind == "pose" }, "judged one frame late")
+        XCTAssertTrue(c2.observe(sample(arm: SIMD3(0.4, 0.58, 0)), steps: 1).contains { $0.kind == "pose" }, "8 cm in one step from rest, then still: a pop")
     }
 
     func testDeliberateMoveIsTagged() {

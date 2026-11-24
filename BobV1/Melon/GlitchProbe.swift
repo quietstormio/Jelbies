@@ -6,7 +6,8 @@
 //  kinds (jump, yaw, pose and camera are the DEVIATION from the motion of the frame before, per physics step: a steady run or spin reads 0, a snap reads its size):
 //    jump    the body's centroid (tele=1 when the body was moved on purpose: SoftBody.teleport / shift / reset)
 //    yaw     the body's facing (skipped while it is tipped over, tilt > 50 deg)
-//    pose    a drawn piece (body / arm / foot / tail / feature vertices, the body's own rigid motion taken out); feet only while the foot pieces are fully out
+//    pose    a POP: a drawn vertex (body / arm / foot / tail / feature, the body's own rigid motion taken out) that moved fast this step after moving under a third
+//            of that the step before (a snap to a new pose, a one-frame flicker); a swing or a spring's jiggle is not one. Feet only while the foot pieces are fully out
 //    slide   a foot the brain holds planted (bean morph 0, both frames) whose drawn contact patch moved across the floor (plain distance per step)
 //    blend   one of the skinner's blend weights (feet, arms) changed by more than `blendStep` in one step
 //    camera  the camera's eye
@@ -25,7 +26,7 @@ import simd
 nonisolated struct GlitchBars {
     var jumpU: Float = 0.04          // real bar 0.08 u
     var yawDeg: Float = 12.5         // real bar 25 deg
-    var poseCm: Float = 1.5          // real bar decided from the histogram (cm per step of acceleration)
+    var poseCm: Float = 1.5          // cm per step of sudden motion (real bar 3)
     var slideCm: Float = 0.5         // real bar 1 cm
     var blendStep: Float = 0.3
     var camU: Float = 0.12
@@ -54,10 +55,12 @@ nonisolated struct GlitchSample {
     /// Sampled drawn vertices in the body's own frame (rigid motion removed), with their group.
     var local: [SIMD3<Float>]
     var group: [UInt8]
+    /// The drawn vertex index of each sample (diagnostics only; may be empty).
+    var index: [Int32] = []
     /// Foot pieces: lowest y and the xz of the contact patch; nil = no foot pieces out.
     var feet: [(minY: Float, xz: SIMD2<Float>)]?
     var blends: [Float]          // beanBlend, armBlend
-    /// The brain's bean morph per foot (0 = planted boot, 1 = lifted ball); nil = unknown.
+    /// The brain's bean morph per foot (0 = planted boot, 1 = lifted ball; 1 while the foot is in a step's swing); nil = unknown.
     var footMorph: [Float]? = nil
 }
 
@@ -80,9 +83,12 @@ nonisolated struct GlitchCore {
     private(set) var prev: GlitchSample?
     private var vel: SIMD3<Float>?          // centroid motion per step over the last frame
     private var yawVel: Float?               // yaw change per step (rad)
-    private var localVel: [SIMD3<Float>]?    // each sampled vertex's local motion per step
+    private var localVel: [SIMD3<Float>]?    // each sampled vertex's local motion per step, last frame
+    private var localVel2: [SIMD3<Float>]?   // ... the frame before that
+    private var feetOutBefore = false, armsOutBefore = false
+    private var planted = [0, 0]             // steps each foot has been held planted
 
-    mutating func forget() { prev = nil; vel = nil; yawVel = nil; localVel = nil }
+    mutating func forget() { prev = nil; vel = nil; yawVel = nil; localVel = nil; localVel2 = nil; feetOutBefore = false; armsOutBefore = false; planted = [0, 0] }
 
     /// `steps`: physics steps run this frame (0 = nothing moved: nothing compared, the history is kept).
     mutating func observe(_ s: GlitchSample, steps: Int) -> [GlitchEvent] {
@@ -112,30 +118,44 @@ nonisolated struct GlitchCore {
             }
             yawVel = w
         } else { yawVel = nil }
-        // pose: per group, the largest vertex acceleration in the body's own frame (feet only while the foot pieces are fully out)
+        // pose: a POP, judged one frame late. Vertex velocity v(t-1), v(t), v(t+1) per step in the body's own frame: a pop at t moves fast (|v(t)| over the bar)
+        // after moving under a third of that, and then either stops (a snap to a new pose: |v(t+1)| under a third) or goes straight back (a one-frame flicker).
+        // A swing, a run's arms or a spring's jiggle keep moving and are not pops. Feet only while the foot pieces are fully out.
         let feetOut = s.blends.first.map { $0 > 0.95 } ?? false && p.blends.first.map { $0 > 0.95 } ?? false
+        let armsOut = s.blends.count > 1 && p.blends.count > 1 && s.blends[1] > 0.95 && p.blends[1] > 0.95          // (a capsule fading or put back into the body is hidden: not a pop)
         var lv = [SIMD3<Float>](repeating: .zero, count: s.local.count)
-        var worst = [Float](repeating: 0, count: GlitchGroup.allCases.count)
+        var worst = [Float](repeating: 0, count: GlitchGroup.allCases.count), worstI = [Int](repeating: -1, count: GlitchGroup.allCases.count)
         for i in 0..<s.local.count {
             lv[i] = (s.local[i] - p.local[i]) / k
-            guard let l0 = localVel else { continue }
+            guard let v0 = localVel2, let v1 = localVel, v0.count == lv.count, v1.count == lv.count else { continue }
             let g = Int(s.group[i])
-            if g == Int(GlitchGroup.foot.rawValue), !feetOut { continue }
-            let m = simd_distance(lv[i], l0[i])
-            if m > worst[g] { worst[g] = m }
+            if g == Int(GlitchGroup.foot.rawValue), !(feetOut && feetOutBefore) { continue }
+            if g == Int(GlitchGroup.arm.rawValue), !(armsOut && armsOutBefore) { continue }
+            let m = simd_length(v1[i])
+            guard m * 100 > bars.poseCm, simd_length(v0[i]) * 3 < m else { continue }
+            let after = lv[i]
+            guard simd_length(after) * 3 < m || simd_dot(after, v1[i]) < -0.5 * m * m else { continue }
+            if m > worst[g] { worst[g] = m; worstI[g] = i }
         }
-        localVel = lv
         for g in GlitchGroup.allCases {
             let cm = worst[Int(g.rawValue)] * 100
-            if cm > bars.poseCm { out.append(GlitchEvent(kind: "pose", size: cm * k, perStep: cm, detail: "part=\(g.name)")) }
-        }
-        // slide: a foot the brain holds planted (both frames) whose drawn contact patch moved across the floor
-        if let f1 = s.feet, let f0 = p.feet, f1.count == 2, f0.count == 2, let m1 = s.footMorph, let m0 = p.footMorph, m1.count == 2, m0.count == 2 {
-            for i in 0..<2 where m1[i] < 0.02 && m0[i] < 0.02 {
-                let cm = simd_distance(f1[i].xz, f0[i].xz) * 100 / k
-                if cm > bars.slideCm { out.append(GlitchEvent(kind: "slide", size: cm * k, perStep: cm, detail: "foot=\(i == 0 ? "L" : "R")")) }
+            let i = worstI[Int(g.rawValue)]
+            if cm > bars.poseCm, i >= 0, let v0 = localVel2, let v1 = localVel {
+                let at = p.local[i]
+                out.append(GlitchEvent(kind: "pose", size: cm, perStep: cm, detail: String(format: "part=%@ before=%.1f after=%.1f at=%.2f,%.2f,%.2f vi=%d", g.name, simd_length(v0[i]) * 100, simd_length(lv[i]) * 100, at.x, at.y, at.z, Int(s.index.count > i ? s.index[i] : -1))))
+                _ = v1
             }
         }
+        localVel2 = localVel; localVel = lv; feetOutBefore = feetOut; armsOutBefore = armsOut
+        // slide: a foot the brain holds planted (both frames) whose drawn contact patch moved across the floor
+        if let f1 = s.feet, let f0 = p.feet, f1.count == 2, f0.count == 2, let m1 = s.footMorph, let m0 = p.footMorph, m1.count == 2, m0.count == 2 {
+            for i in 0..<2 {
+                guard m1[i] < 0.02 && m0[i] < 0.02, abs(f1[i].minY - f0[i].minY) < 0.003 * k else { planted[i] = 0; continue }          // (a foot leaving or meeting the floor this step is not planted)
+                planted[i] += steps
+                let cm = simd_distance(f1[i].xz, f0[i].xz) * 100 / k
+                if cm > bars.slideCm { out.append(GlitchEvent(kind: "slide", size: cm * k, perStep: cm, detail: "foot=\(i == 0 ? "L" : "R") held=\(planted[i])")) }
+            }
+        } else { planted = [0, 0] }
         // blends
         let names = ["feet", "arms"]
         for i in 0..<min(s.blends.count, p.blends.count) {
@@ -173,6 +193,11 @@ nonisolated struct GlitchBurst {
     }
 }
 
+extension GameCare {
+    /// The white scene wipe over the game view (the largest of every trip's / the bath's / the room switch's): 1 = the world is hidden.
+    var glitchWipe: Float { max(bath.wipe, cafe.wipe, groom.wipe, park.wipe, race.wipe, show.wipe, volley.wipe, roomSwitch.wipe) }
+}
+
 /// The stage glue: samples, attributes and logs.
 @MainActor
 final class GlitchProbe {
@@ -190,7 +215,7 @@ final class GlitchProbe {
     private var sceneSteps: [String: Int] = [:]
     private var stepsSinceSum = 0
     private var counts: [String: Int] = [:]
-    private var groups: [Int: (n: Int, group: [UInt8], idx: [Int32])] = [:]
+    private var groups: [Int: (sig: [Int], group: [UInt8], idx: [Int32])] = [:]
     var tag = ""
 
     static func configure(defaults: UserDefaults = .standard) {
@@ -202,7 +227,8 @@ final class GlitchProbe {
 
     /// Which drawn vertices to sample and their group (built once per skinner layout).
     private func layout(_ sk: Skinner, key: Int) -> (group: [UInt8], idx: [Int32]) {
-        if let g = groups[key], g.n == sk.vertexCount { return (g.group, g.idx) }
+        let sig = [sk.vertexCount, sk.tailFirst] + sk.armFirst + sk.beanFirst          // (the blocks are configured after the first frames: a layout is rebuilt when they change)
+        if let g = groups[key], g.sig == sig { return (g.group, g.idx) }
         let n = sk.vertexCount
         var gr = [UInt8](repeating: GlitchGroup.feature.rawValue, count: n)
         var starts: [Int] = []
@@ -216,7 +242,8 @@ final class GlitchProbe {
             let stride = gr[i] == GlitchGroup.body.rawValue ? 7 : 3
             if i % stride == 0 { idx.append(Int32(i)); g.append(gr[i]) }
         }
-        groups[key] = (n, g, idx)
+        groups[key] = (sig, g, idx)
+        NSLog("[glitch] layout key=%d verts=%d egg=%d arms=%@ feet=%@ tail=%d", key, n, egg, sk.armFirst.map(String.init).joined(separator: ","), sk.beanFirst.map(String.init).joined(separator: ","), sk.tailFirst)
         return (g, idx)
     }
 
@@ -227,7 +254,7 @@ final class GlitchProbe {
     }
 
     /// Once per drawn frame after the skin pass. `bodies`: (key, actor, drawn vertex pointer) for every body skinned THIS frame.
-    func record(bodies: [(key: Int, actor: JellyActor, dyn: UnsafeMutablePointer<Float>)], steps: Int, scene: String, touching: Bool, cover: Bool,
+    func record(bodies: [(key: Int, actor: JellyActor, dyn: UnsafeMutablePointer<Float>)], steps: Int, scene: String, touching: Bool, cover: Bool, wipe: Float,
                 cam: CameraState, rawIntervalMs: Double, cpuMs: Double) {
         guard GlitchProbe.on else { return }
         frame += 1
@@ -238,7 +265,7 @@ final class GlitchProbe {
             lastScene = scene
         }
         sceneSteps[scene, default: 0] += steps; stepsSinceSum += steps
-        let ctxBase = "scene=\(scene) touch=\(touching ? 1 : 0) cover=\(cover ? 1 : 0)\(tag.isEmpty ? "" : " tag=\(tag)")"
+        let ctxBase = "scene=\(scene) touch=\(touching ? 1 : 0) cover=\(cover ? 1 : 0) wipe=\(String(format: "%.2f", wipe))\(tag.isEmpty ? "" : " tag=\(tag)")"
         // camera
         if let lc = lastCamPos {          // the eye's move against the move the frame before (a smooth dolly reads 0; a cut or a snap reads its size); and the view direction's turn
             let v = cam.pos - lc
@@ -271,15 +298,14 @@ final class GlitchProbe {
                 for s in 0..<2 {
                     let f = sk.beanFirst[s]
                     var mn: Float = .greatestFiniteMagnitude
-                    for i in 0..<FootBean.vertexCount { mn = min(mn, dyn[6 * (f + i) + 1]) }
-                    var c = SIMD2<Float>.zero, cn: Float = 0
-                    for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); if dyn[o + 1] < mn + 0.01 { c += SIMD2(dyn[o], dyn[o + 2]); cn += 1 } }
-                    fs.append((mn, c / max(cn, 1)))
+                    var c = SIMD2<Float>.zero
+                    for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); mn = min(mn, dyn[o + 1]); c += SIMD2(dyn[o], dyn[o + 2]) }          // (the whole piece's centre: a contact patch jumps between heel and toe as the boot rocks)
+                    fs.append((mn, c / Float(FootBean.vertexCount)))
                 }
                 feet = fs
             }
             let s = GlitchSample(centroid: pose.centroid, rotation: pose.rotation, tilt: pose.tilt, moveSerial: a.sim.moveSerial, brainYaw: a.brain?.yaw,
-                                 local: local, group: g, feet: feet, blends: [sk.beanBlend, sk.armBlend], footMorph: a.brain?.beanMorphLast)
+                                 local: local, group: g, index: idx, feet: feet, blends: [sk.beanBlend, sk.armBlend], footMorph: a.brain.map { b in (0..<2).map { s in b.feet.swinging && b.feet.side == s ? 1 : b.beanMorphLast[s] } })          // (a foot in a step's swing is never planted, even when the step does not lift it)
             let evs = core.observe(s, steps: steps)
             cores[key] = core
             if evs.isEmpty { continue }

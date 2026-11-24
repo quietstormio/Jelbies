@@ -1315,7 +1315,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             var bodies: [(key: Int, actor: JellyActor, dyn: UnsafeMutablePointer<Float>)] = []
             for a in actors { if let d = dst[ObjectIdentifier(a.skinner)] { bodies.append((a.id, a, d)) } }
             for a in parkActors { if let d = dst[ObjectIdentifier(a.skinner)] { bodies.append((1000 + a.id, a, d)) } }
-            GlitchProbe.shared.record(bodies: bodies, steps: smoothSteps, scene: sceneName, touching: (stageView?.activeTouches ?? 0) > 0 || mode != .none, cover: m.coverUp,
+            GlitchProbe.shared.record(bodies: bodies, steps: smoothSteps, scene: sceneName, touching: (stageView?.activeTouches ?? 0) > 0 || mode != .none, cover: m.coverUp, wipe: game ? model.care.glitchWipe : 0,
                                       cam: cam, rawIntervalMs: rawIntervalMs, cpuMs: lastCPUFrameMs)
         }
         #endif
