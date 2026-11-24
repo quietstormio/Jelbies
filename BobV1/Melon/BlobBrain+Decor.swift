@@ -376,10 +376,6 @@ extension BlobBrain {
         let field = DecorField.shared
         let exiting = decorIgnore          // (still standing in the bag he sat in: that stays soft for him)
         let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (commanded || ParkVisitPlan.allows($0.kind, outing: outingPlay)) && (only == nil || $0.kind == only) && (onlyUID == nil || $0.uid == onlyUID) && parkToyGate($0) }
-        if EmoteSpot.logOn, kind == .decorKick || kind == .decorHop, variety.now - toy.failLogAt > 5 {          // (toy-audit-r1 diag)
-            toy.failLogAt = variety.now
-            NSLog("[toystart] t=%.1f id=%d %@ wanted=%d offers=%@", variety.now, steerID, "\(kind)", wanted.count, field.feet.filter { $0.kind.offers(kind) }.map { "\($0.kind.rawValue):av=\(field.available($0)) mv=\(field.anim[$0.uid]?.moving == true) tb=\(field.anim[$0.uid]?.tumbling == true) held=\(field.held == $0.uid)" }.joined(separator: ","))
-        }
         guard !wanted.isEmpty else { return false }
         // nearest first, with a little luck in it, then the first one he can walk to
         let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6) - (anticsEnabled ? 2.5 * field.toyPull(f.uid) : 0) + (f.uid == toy.lastUID ? 6 : 0)) }.sorted { $0.1 < $1.1 }          // (the fresher / less played toy wins over a nearer stale one)
@@ -395,9 +391,6 @@ extension BlobBrain {
                 standSpot = first.0; slideLeg = first.1
                 if slideLeg == 2 { decorIgnore = f.uid } else { slideSolidAgain(f) }
             }
-            if EmoteSpot.logOn, standSpot == nil || !(roundSlide || simd_distance(here, standSpot ?? here) > 0.35 || onlyUID != nil || kind == .decorHop || kind == .decorHopscotch || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick) || !(roundSlide || standSpot == nil || reachable(here, standSpot!)) {
-                if variety.now - toy.failLogAt > 5 { toy.failLogAt = variety.now; NSLog("[toyfail] t=%.1f id=%d %@ stand=%@ here=(%.2f,%.2f) reachable=%d", variety.now, steerID, f.kind.rawValue, standSpot.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "nil", here.x, here.y, standSpot.map { reachable(here, $0) ? 1 : 0 } ?? -1) }          // (toy-audit-r1 diag)
-            }
             guard let stand = standSpot,
                   roundSlide || simd_distance(here, stand) > 0.35 || onlyUID != nil || kind == .decorHop || kind == .decorHopscotch || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick,
                   roundSlide || reachable(here, stand) else { decorIgnore = exiting; continue }
@@ -412,7 +405,7 @@ extension BlobBrain {
             if f.kind.hopSit { field.take(f.uid, seat: seat, by: steerID) } else { field.use(f.uid, by: steerID) }
             if f.kind == .playtunnel { tunnelCommit(f, stand: stand) }
             if f.kind == .hopscotch { hopscotchCommit(f) }
-            if BlobBrain.audienceKinds.contains(f.kind) { field.toys.shows[f.uid] = (steerID, field.toys.clock) }          // (toy-audit-r1: a housemate may come and watch / dance)
+            if BlobBrain.audienceOn, BlobBrain.audienceKinds.contains(f.kind) { field.toys.shows[f.uid] = (steerID, field.toys.clock) }          // (toy-audit-r1: a housemate may come and watch / dance)
             if EmoteSpot.logOn { NSLog("[toyuse] t=%.1f id=%d uid=%d kind=%@ move=%@", variety.now, steerID, f.uid, f.kind.rawValue, "\(kind)") }          // (toy-audit-r1 log)
             script = .walk(target: stand, then: .none); activity = .walking
             return true
@@ -639,7 +632,7 @@ extension IdleTable {
         switch m {
         case .happy: table = [(.decorSit, 2.0), (.decorBoop, 1.6), (.decorKick, 2.4), (.decorHop, 2.2), (.decorPeek, 1.3), (.decorSlide, 2.2), (.decorHopscotch, 2.4), (.soccerKick, 2.6)]
         case .okay: table = [(.decorSit, 3.0), (.decorBoop, 1.4), (.decorKick, 1.0), (.decorHop, 0.8), (.decorPeek, 1.2), (.decorSlide, 0.8), (.decorHopscotch, 1.2), (.soccerKick, 1.1)]
-        case .grumpy: table = [(.decorSit, 1.6), (.decorBoop, 0.5)] + (ToyTuning.grumpyPlay ? [(.decorKick, 0.6), (.decorHop, 0.55)] : [])          // (toy-audit-r1: half the happy weights for the kick / hop toys)
+        case .grumpy: table = [(.decorSit, 1.6), (.decorBoop, 0.5)]          // (toy-audit-r1: no kick / hop rows for a grumpy one here: they play through the direct pick only, ToyTuning.grumpyShare, so the boop toys are not displaced)
         }
         // a stuck soccer ball (20 s against a wall / under furniture) wants rescuing: the soccer pick dominates until it is out
         return table.filter { offers.contains($0.0) }.map { (kind: $0.0, weight: $0.0 == .soccerKick && SoccerState.shared.anyStuck ? BlobBrain.soccerRescueWeight : $0.1) }

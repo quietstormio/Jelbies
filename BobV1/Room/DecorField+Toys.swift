@@ -30,7 +30,7 @@ enum ToyTuning {
     static let directGap: Float = 20
     /// toy-audit-r1: a grumpy Jelmiko plays with the kick / hop toys at this share of a happy one's rate (a shorter go: no run of kicks, fewer bounces).
     nonisolated(unsafe) static var grumpyPlay: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ToyGrumpy") != nil && UserDefaults.standard.integer(forKey: "ToyGrumpy") == 0)          // (dev: -ToyGrumpy 0 = the old never)
-    static var grumpyShare: Float { grumpyPlay ? 0.25 : 0 }          // (direct pick chance x 0.25; the idle table gives the kick / hop toys 0.6 / 0.55 against the happy 2.4 / 2.2. NOTE: halving the weights made no measurable difference in the takes: a grumpy one is still at about the same rate as a happy one for these toys; the lever that would lower it without displacing the boop toys is to drop the grumpy kick / hop rows from decorWeights and keep only the direct pick)
+    static var grumpyShare: Float { grumpyPlay ? 0.12 : 0 }          // (toy-audit-r1: the direct pick chance of a grumpy Jelmiko = this x the happy chance; the ONLY way he reaches the kick / hop toys; measured in the takes, see the hand-back)
     /// Founding set-up (launch, room switches) is not news.
     nonisolated(unsafe) static var settle: TimeInterval = 5
 }

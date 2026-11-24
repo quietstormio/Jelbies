@@ -36,8 +36,6 @@ struct ToyBrain {
     var lastUID = -1
     /// Variety clock of his last direct toy start.
     var lastDirect: Float = -999
-    var dirLogAt: Float = -999
-    var failLogAt: Float = -999          // (toy-audit-r1 diag)
     /// Park only (ParkPlayTuning): the toy clock before which he does not pick this big toy again by himself (the slide, the hopscotch court).
     var parkCool: [DecorKind: Float] = [:]
     var burstHandled = 0
@@ -299,8 +297,8 @@ extension BlobBrain {
 //  the walk there keeps 1.3 from every standing body. With nobody else at home nothing here runs.
 
 extension BlobBrain {
-    /// The audience switch (dev: `-ToyAudience 0`; the tests: ToyAuditTests TOYAUDIENCE=0): off = the toys as they were.
-    nonisolated(unsafe) static var audienceOn: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ToyAudience") != nil && UserDefaults.standard.integer(forKey: "ToyAudience") == 0)
+    /// The audience switch: OFF by default (shared play was built but not delivered as visible moments, toy-audit-r1); dev `-ToyAudience 1` (tests: ToyAuditTests TOYAUDIENCE=1) turns it on for later work.
+    nonisolated(unsafe) static var audienceOn: Bool = (DevArgs.enabled && UserDefaults.standard.integer(forKey: "ToyAudience") == 1)
     static let audienceKinds: Set<DecorKind> = [.drum, .spintop, .hoop, .bouncymat]
     static func audienceChance(_ k: DecorKind) -> Float { switch k { case .drum: return 0.4; case .spintop: return 0.45; case .hoop: return 0.4; default: return 0.2 } }
     static func audienceLimit(_ k: DecorKind) -> Int { k == .spintop ? 2 : 1 }
