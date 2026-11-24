@@ -63,6 +63,13 @@ nonisolated enum ShowDancePlan {
     static let swingFrac: Float = 0.8
     static let rateFactor: Float = 1.08
     static let minStep: Float = 0.15
+    /// The feet never cross (the owner: "the feet are still crossing during the dance"): every step is planned so the landing foot stops beside the standing foot at `feetMinSeparation`, never past it.
+    /// (A switch only so the test can run the old plan for its "before" numbers.)
+    nonisolated(unsafe) static var keepFeetApart = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DanceFeetGuardOff") != nil)          // (`-DanceFeetGuardOff 1`, dev arguments only: the before pictures)
+    /// The most a landing foot may be pushed off its nominal spot under the body (u) to keep its distance; a turn that would need more is turned less.
+    static let maxFootPush: Float = 0.14
+    /// The most one step turns the body (rad): the standing foot is left behind by that much, so a larger turn would swing the feet across each other seen from the front.
+    static let maxStepTurn: Float = 0.6
     static func lively(_ rank: ShowRank) -> Bool { rank.index >= ShowRank.lagoon.index }
     /// Bars in the round: the song's last prompt beat in whole bars (24 beats -> 6, 16 -> 4).
     static func bars(lastBeat: Int) -> Int { max(4, lastBeat / beatsPerBar) }
@@ -196,12 +203,45 @@ nonisolated struct DanceStepDrive: Sendable {
 }
 
 extension BlobBrain {
+    /// The least centre-to-centre distance the two feet keep sideways (body frame): 72 % of the stance width, and at least the two footprints' width (their x extents) with a margin,
+    /// never more than the stance itself.
+    func danceMinSeparation() -> Float {
+        guard geom.valid else { return 0.3 }
+        func halfX(_ k: Int) -> Float { let xs = geom.rest[k].map(\.x); return ((xs.max() ?? 0) - (xs.min() ?? 0)) / 2 }
+        let w = abs(geom.off[1].x - geom.off[0].x)
+        return min(w, max(0.72 * w, halfX(0) + halfX(1) + 0.015))
+    }
+    /// Re-plan a step that would cross: the swing foot's landing, in the frame it lands in, stays at least `danceMinSeparation` on its own side of the standing foot (it stops beside it:
+    /// pushed out of the nominal spot under the body by up to `maxFootPush`); a turn that would need more is turned less (down to none), and a step in place that is already too close steps out.
+    func danceKeepApart(_ s: inout DanceStepSpec, rootD: inout SIMD2<Float>, reach: inout SIMD2<Float>) {
+        guard geom.valid, feetInit else { return }
+        let m = danceMinSeparation()
+        let sign: Float = s.side == 1 ? 1 : -1                 // (foot 1 is the +x one)
+        let stand = feet.pos[1 - s.side]
+        let reach0 = reach
+        let root = s.settle ? SIMD2<Float>.zero : rootD
+        var dyaw = max(-ShowDancePlan.maxStepTurn, min(ShowDancePlan.maxStepTurn, s.dyaw))
+        var inPlace = s.inPlace
+        var attempt = 0
+        while true {
+            let landYaw = yaw + dyaw
+            let target = inPlace ? feet.pos[s.side] : position + root + rotXZ(geom.off[s.side], landYaw) + reach0
+            let need = m - sign * rotXZ(target - stand, -landYaw).x
+            if need <= 0 { break }
+            if inPlace { inPlace = false; continue }          // (a step in place from a stance that is too narrow steps out to its spot under the body, then is checked again)
+            if need <= ShowDancePlan.maxFootPush || attempt >= 4 { reach = reach0 + rotXZ(SIMD2(sign * need, 0), landYaw); break }
+            attempt += 1
+            dyaw = attempt >= 4 ? 0 : dyaw * 0.5
+        }
+        s.dyaw = dyaw; s.inPlace = inPlace
+    }
     /// Begin the step `s` now (the stage decides the moment). False while a step is still in the air.
     @discardableResult
     func danceLaunch(_ s: DanceStepSpec, st: Float, accent: Bool) -> Bool {
         guard danceDrive != nil, !feet.active, feetInit else { return false }
         nextSwing = s.side
         let a = amplitude
+        var s = s
         var rootD = rotXZ(s.rootD, yaw), reach = SIMD2<Float>.zero
         if s.settle {          // the stance foot stays where it is; the swing foot lands the stance's own distance from it (not the touch's 0.16 closer), so the round ends standing on two feet
             rootD = .zero
@@ -209,6 +249,7 @@ extension BlobBrain {
             reach = feet.pos[o] - rotXZ(geom.off[o], landYaw) - SIMD2(px, pz)
         }
         // (the stomp lifts the foot higher, capped at 0.13: more than the strut's 0.095 by a third is as high as the join has been shown clean)
+        if ShowDancePlan.keepFeetApart { danceKeepApart(&s, rootD: &rootD, reach: &reach) }
         startStep(rootD: rootD, dyaw: s.dyaw, reach: reach, peak: min(s.peak * (accent ? 1.6 : 1), 0.13) * a,
                   rate: 1 / st, swingFrac: ShowDancePlan.swingFrac, inPlace: s.inPlace, outScale: s.out)
         danceDrive?.cur = s; danceDrive?.accent = accent; danceDrive?.accentDone = !accent
