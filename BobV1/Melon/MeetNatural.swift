@@ -20,8 +20,9 @@ enum MeetNatural {
     /// Pair kinds whose start is "the initiator walks to a spot beside / before the partner, who waits": the two families (side by side facing the room, face to face) and the sit / hold kinds.
     /// Left on the old start: follow, chase, tag, sneak, keepAway, line, pass, bagSit, cuddle (a prop / a seat / a run), look, greet, zoomies, the travelling and the ring kinds.
     /// (move-crowd-r1 merge fix: the HOLDING stances - nuzzle, cheekSquish, backToBack, cuddleLean, swayHug, ContactStance.holding - are left on the old start: with the shifted meeting they planted
-    /// 5-7 cm off the touch spot (ContactSettleTests.testNuzzleWalkUpArrivesAtTheTouch / testSideBySideWalkUpPlantsOnTheTouchSpot, bar 1.5 cm; skin gap 0 +- 0.5 cm is the owner's approved look).)
-    static let kinds: Set<SocialKind> = [.boop, .squabble, .hopAlong, .highFive, .chestBump, .twirl, .sitTogether, .whisperGiggle, .shyWave, .danceOff, .spinHug, .bellyBounce, .mirrorDance, .peekaboo, .tag, .littleRace, .leapfrog, .ringAround]
+    /// 5-7 cm off the touch spot (ContactSettleTests.testNuzzleWalkUpArrivesAtTheTouch / testSideBySideWalkUpPlantsOnTheTouchSpot, bar 1.5 cm; skin gap 0 +- 0.5 cm is the owner's approved look). highFive too: the hands
+    /// overlapped 1.8 cm with the joint approach (HighFiveContactTests, bar 1.5; green with MeetNatural off).)
+    static let kinds: Set<SocialKind> = [.boop, .squabble, .hopAlong, .chestBump, .twirl, .sitTogether, .whisperGiggle, .shyWave, .danceOff, .spinHug, .bellyBounce, .mirrorDance, .peekaboo, .tag, .littleRace, .leapfrog, .ringAround]
     static let minLeg: Float = 0.7
     static let minShift: Float = 0.35
     /// Tests only: the headless rigs have no room floor (`roamProvider`); the floor rules of the brain are the check there.
