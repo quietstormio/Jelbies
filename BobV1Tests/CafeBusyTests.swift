@@ -79,7 +79,7 @@ final class CafeBusyTests: XCTestCase {
             let saved = GameCamera.aspect; GameCamera.aspect = aspect
             for z in [Float(-2.4), 1.0, 1.8] {
                 let e = GameCare.crowdEntry(z: z)
-                XCTAssertGreaterThanOrEqual(e.x, GameCamera.visibleHalfWidthAtBody(z: z, aspect: aspect) + 1.29, "aspect \(aspect) z \(z): off screen by a body")
+                XCTAssertGreaterThanOrEqual(e.x, aspect >= 1 ? 4.5 - 0.01 : GameCamera.visibleHalfWidthAtBody(z: z, aspect: aspect) + 1.29, "aspect \(aspect) z \(z): off screen by a body")
                 XCTAssertEqual(e.y, z)
             }
             GameCamera.aspect = saved

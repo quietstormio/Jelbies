@@ -112,7 +112,12 @@ extension GameCare {
     }
 
     /// The entrance, a whole body past the screen's right edge at depth `z` (the same off-screen rule as the home guest's exit: the visible half width at body height + 1.3).
-    static func crowdEntry(z: Float) -> SIMD2<Float> { SIMD2(GameCamera.visibleHalfWidthAtBody(z: z, aspect: GameCamera.aspect) + 1.3, z) }
+    /// Landscape: the screen is much wider than the room (the right wall is ON screen, "off screen" would be 12 u away, outside the room), so there the entrance is the floor's right edge at the wall
+    /// (4.5) - a door in that wall needs art; nothing is drawn.
+    static func crowdEntry(z: Float) -> SIMD2<Float> {
+        let off = GameCamera.visibleHalfWidthAtBody(z: z, aspect: GameCamera.aspect) + 1.3
+        return SIMD2(GameCamera.aspect >= 1 ? min(off, 4.5) : off, z)
+    }
 
     /// One customer table, set out at once and empty: places 1 and 2 of the ends table, the far one (from the entrance) first. nil when it does not fit the floor or crowds the player's table.
     func cafeMakeCustomerTable(slot: Int, at t: SIMD2<Float>, landscape: Bool) -> CafeCustomerTable? {
