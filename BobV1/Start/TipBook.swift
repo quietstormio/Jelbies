@@ -61,7 +61,7 @@ final class TipBook {
         TipCard(id: "spring", symbol: "drop.fill", title: "The Jelly Spring", body: "Find a kind you love, then tap Pick. Up to three live at home."),
         TipCard(id: "park", symbol: "tree.fill", title: "The Park", body: "Tap a visitor to say hi. Play together to make new friends."),
         TipCard(id: "trophies", symbol: "trophy.fill", title: "Trophies", body: "Win races, shows and volleyball. Every trophy is kept here."),
-        TipCard(id: "race", symbol: "flag.checkered", title: "Jelly Race", body: "Tap the two foot buttons in turn to run. Tap ? to learn more."),
+        TipCard(id: "race", symbol: "flag.checkered", title: "Jelly Race", body: RaceHelp.tip),
         TipCard(id: "show", symbol: HUDMenu.symbol(.tricks), title: "Jelly Show", body: "Dress for today's theme, then dance and do tricks. Tap ? to learn more."),
         TipCard(id: "volley", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", title: "Jelly Volleyball", body: "Tap as the ring closes to hit the ball. Tap ? to learn more."),
         TipCard(id: "camp", symbol: "tent.fill", title: "Jelmiko Camp", body: "When home is full, the others wait here. Tap one to bring them home."),

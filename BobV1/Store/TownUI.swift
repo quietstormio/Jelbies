@@ -465,13 +465,7 @@ struct TrackPanel: View {
                     .zIndex(1)
             }
             if howOpen {
-                LobbyHowSheet(rows: [
-                    (.feet, "Left, right, left", "Tap the two foot buttons in turn. The same foot twice is a stumble."),
-                    (.bend, "Ease off in the bends", "Too fast round a corner and they can trip."),
-                    (.flag, "Jump the bars", "On hurdle courses, tap Jump just before each bar."),
-                    (.run, "Speed and Focus", "Speed: longer steps, quicker feet. Focus: fewer look-arounds. Spend race points in Upgrade."),
-                    (.trophy, "Win to open the next course", "Win the course below to open the next."),
-                ], close: { setHow(false) })
+                LobbyHowSheet(rows: RaceHelp.rows, close: { setHow(false) })
                 .zIndex(1)
             }
         }
