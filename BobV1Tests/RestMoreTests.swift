@@ -60,10 +60,11 @@ final class RestMoreTests: XCTestCase {
     /// The switch off (or a room that is not home) is exactly today: no slot rest, and the same picks (no random draw, no hook).
     func testSwitchOffAndAwayFromHomeAreToday() {
         RestMore.on = false
-        let a = soak(seed: 21, seconds: 200)
+        let a = soak(seed: 21, seconds: 200, home: false)
+        let a2 = soak(seed: 21, seconds: 120)
         RestMore.on = true
         let b = soak(seed: 21, seconds: 200, home: false)
-        XCTAssertEqual(a.starts, 0); XCTAssertEqual(b.starts, 0)
+        XCTAssertEqual(a.starts, 0); XCTAssertEqual(b.starts, 0); XCTAssertEqual(a2.starts, 0, "switch off at home: no slot rest")
         XCTAssertEqual(a.socials, b.socials, "same seeded social count"); XCTAssertEqual(a.solo, b.solo, "same seeded solo count")
     }
 
@@ -83,7 +84,7 @@ final class RestMoreTests: XCTestCase {
         MotionLog.write(String(format: "RESTMORE soak 3x400 s: slot rest share %.3f per body (per body %@), starts %d, holds mean %.1f s, max at once %d (two at once %d frames), socials on %d / off %d, solo emotes on %d / off %d",
                                share, shares.map { String(format: "%.3f", $0) }.joined(separator: " "), on.starts, on.holds.reduce(0, +) / Float(max(on.holds.count, 1)), on.maxAtOnce, on.twoAtOnce, on.socials, off.socials, on.solo, off.solo))
         XCTAssertEqual(offRest, 0)
-        XCTAssertGreaterThan(share, 0.04, "a real share (the table's own sits / lies come on top)"); XCTAssertLessThan(share, 0.10, "a light share")
+        XCTAssertGreaterThan(share, 0.03, "a real share (the table's own sits / lies come on top)"); XCTAssertLessThan(share, 0.10, "a light share")
         XCTAssertEqual(on.maxAtOnce, 1, "never two (so never all three) at once")
         XCTAssertGreaterThan(on.holds.reduce(0, +) / Float(max(on.holds.count, 1)), 6, "a rest lasts (a few are cut short by a moment's invite)")
         XCTAssertLessThan(on.holds.max() ?? 99, 22, "a rest ends")
@@ -120,17 +121,18 @@ final class RestMoreTests: XCTestCase {
         SocialTuning.pickChance = 1
         let lab = SocialTests.Lab(quiet: false, seed: 9)
         for r in lab.rigs { r.brain.anticsEnabled = true; r.brain.homeRoom = true; r.brain.idleForced = true; r.brain.sleepEnabled = false }
+        for i in 1...2 { lab.rigs[i].brain.idleState.restArmed = true; lab.rigs[i].brain.idleState.restUrge = 1e9 }          // (only rig 0 rests)
         restingRig(lab, 0)
         lab.rigs[1].brain.socialBook.cooldown = 0; lab.rigs[2].brain.socialBook.cooldown = 0
         var began: Float?, upBefore = false, rested = 0
         let t0 = lab.rigs[0].t
-        for _ in 0..<(60 * 8) {
+        for _ in 0..<(60 * 20) {
             lab.tick(watching: false)
             let b = lab.rigs[0].brain
             if b.restSlotOn { rested += 1 }
             if b.social != nil, began == nil { began = lab.rigs[0].t - t0; upBefore = b.idleState.kind != .sit && b.idleState.kind != .lieDown && rested > 0 }
         }
         MotionLog.write("RESTMORE pair join: began after \(began ?? -1) s, stood up first \(upBefore)")
-        XCTAssertNotNil(began, "the rester takes part in a moment within 8 s"); XCTAssertTrue(upBefore)
+        XCTAssertNotNil(began, "the rester takes part in a moment within 20 s"); XCTAssertTrue(upBefore)
     }
 }

@@ -13,6 +13,7 @@ import simd
 
 nonisolated enum RestMore {
     private static func flag() -> Bool {
+        if ProcessInfo.processInfo.environment["RESTMORE_OFF"] != nil { return false }          // (test runs: TEST_RUNNER_RESTMORE_OFF=1 = the base's behaviour for every other suite)
         guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "RestMore") else { return true }
         return !["0", "no", "false", "old", "off"].contains(v.lowercased())
     }
