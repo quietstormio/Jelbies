@@ -212,13 +212,14 @@ enum MonkeySoak {
         case "cafe":
             care.bath.wallet.add(60, silent: true)
             care.requestCafe()
-            for _ in 0..<300 where !care.cafe.menuOpen && care.cafe.active { await sleep(0.1) }
+            let cafeWhy = care.cafeBlocker().map { "\($0.message)" }
+            for _ in 0..<200 where !care.cafe.menuOpen { await sleep(0.1) }          // (the walk-out / wake comes first)
             if care.cafe.menuOpen {
                 await sleep(1 + 2 * g.unit())
                 let menu: [CafeTreatID] = [.swirl, .juice, .latte, .cocoa, .pancakes]
                 _ = care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: care.cafeDinerIDs.map { ($0, care.cafeCanEat($0) ? menu[g.next(menu.count)] : .juice) })))
             }
-            out(a, "entered=\(care.cafe.active ? 1 : 0)")
+            out(a, "entered=\(care.cafe.active ? 1 : 0) why=\(cafeWhy ?? "-")")
             await tripWait(30 + 60 * g.unit(), g: &g, sleep: sleep) { care.cafe.active }
             if care.cafe.active { care.cafe.goHome() }
             for _ in 0..<600 where care.cafe.active { await sleep(0.2) }
@@ -227,22 +228,29 @@ enum MonkeySoak {
             care.requestGroom()
             await sleep(1)
             care.startGroom(.quick)
-            await sleep(1); out(a, "entered=\(care.groom.active ? 1 : 0)")
+            for _ in 0..<80 where !care.groom.inScene { await sleep(0.25) }          // (the walk-out / wake comes first)
+            out(a, "entered=\(care.groom.inScene ? 1 : 0) why=\(care.groom.picking ? "picker still open" : "-")")
             if care.groom.picking { care.groom.closePicker() }
             await tripWait(180, g: &g, sleep: sleep) { care.groom.active }
         case "show":
             care.show.auto = true; care.show.autoHomeAfter = 3
+            let showWhy = care.showBlocker(jelly: j)
             care.startShow(jelly: j)
-            await sleep(2); out(a, "entered=\(care.show.active ? 1 : 0)")
+            for _ in 0..<80 where !care.show.active { await sleep(0.25) }
+            out(a, "entered=\(care.show.active ? 1 : 0) why=\(showWhy ?? "-")")
             await tripWait(360, g: &g, sleep: sleep) { care.show.active }
         case "race":
             care.race.autoRate = 4; care.race.autoReturnAfter = 7
+            let raceWhy = care.raceBlocker(jelly: j)
             care.startRace(jelly: j)
-            await sleep(2); out(a, "entered=\(care.race.active ? 1 : 0)")
+            for _ in 0..<80 where !care.race.active { await sleep(0.25) }
+            out(a, "entered=\(care.race.active ? 1 : 0) why=\(raceWhy ?? "-")")
             await tripWait(300, g: &g, sleep: sleep) { care.race.active }
         case "volley":
+            let volleyWhy = care.volleyBlocker(jelly: j, match: true)
             care.startVolley(jelly: j, mode: .match(.sandcastle))
-            await sleep(2); out(a, "entered=\(care.volley.active ? 1 : 0)")
+            for _ in 0..<80 where !care.volley.active { await sleep(0.25) }
+            out(a, "entered=\(care.volley.active ? 1 : 0) why=\(volleyWhy ?? "-")")
             await tripWait(25 + 40 * g.unit(), g: &g, sleep: sleep) { care.volley.active }
             if care.volley.active { care.volley.goHome() }
             for _ in 0..<600 where care.volley.active { await sleep(0.2) }
