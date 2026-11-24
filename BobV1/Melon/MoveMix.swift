@@ -222,6 +222,7 @@ extension BlobBrain {
                 let d = simd_distance(cand, here)
                 guard simd_length(cand - raw) < 0.15, d > lo, d < hi, rf.stopOK(cand), peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }
                 if crowdPart, !crowdGoalFree(cand) { continue }          // (move-crowd-r1: nobody stands at or walks to within the gap of a stroll goal)
+                if crowdPart, pass == 0, MoveCrowd.legOn, !crowdLegFree(from: here, to: cand) { continue }          // (move-crowd-r1 leg: the stroll leg keeps the gap from the others' walks)
                 let dir = (cand - here) / d
                 if pass == 0, simd_dot(dir, out) < cosf(MoveMix.strollOutward) { continue }
                 var split = true
