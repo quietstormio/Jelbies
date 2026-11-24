@@ -149,8 +149,9 @@ private struct TipCardLayout: View {
 final class TipWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let b = TipBook.shared
-        guard b.current != nil, (b.passThrough ? b.gotItFrame : b.cardFrame).insetBy(dx: -4, dy: -4).contains(point) else { return nil }          // only the card answers; everything else falls through to the game
-        return super.hitTest(point, with: event)
+        guard b.swallows(point) else { return nil }          // only the card answers; everything else falls through to the game
+        if b.current == nil { return self }          // just dismissed: the spot eats the touch, nothing under it receives it
+        return super.hitTest(point, with: event) ?? self
     }
 }
 

@@ -82,7 +82,7 @@ nonisolated struct ShowSim: Sendable {
     private(set) var rivalTurns: [[ShowTrickTurn]] = []
 
     // results
-    private(set) var entrants: [ShowEntrant] = []
+    var entrants: [ShowEntrant] = []
 
     init(rank: ShowRank, theme: ShowTheme, dayKey: Int, player: ShowPlayerInput, rivals: [ShowRival], seed: UInt64) {
         self.rank = rank; self.theme = theme; self.dayKey = dayKey; self.player = player; self.rivals = rivals; self.seed = seed

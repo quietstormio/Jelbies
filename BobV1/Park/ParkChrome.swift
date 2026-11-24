@@ -247,7 +247,7 @@ struct ParkChrome: View {
     }
 }
 
-/// A visitor: his name and style, one line about him, how much each of the player's Jelbies and he like each other, and what he says hello with.
+/// A visitor: his name and style, one line about him, and how much each of the player's Jelbies and he like each other.
 struct VisitorCard: View {
     let care: GameCare
     let visitor: ParkVisitor
@@ -288,9 +288,6 @@ struct VisitorCard: View {
                     .accessibilityElement(children: .combine).accessibilityLabel("\(prof.name): \(lvl.title)")
                 }
             }
-            Text("\u{201C}\(visitor.greeting)\u{201D}").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
-                .padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.7)))
             if home {
                 Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); care.guestSayGoodbye() } label: {
                     HStack(spacing: 8) { Image(systemName: "hand.wave.fill"); Text("Say goodbye") }

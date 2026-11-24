@@ -7,6 +7,7 @@
 //
 
 import XCTest
+import SwiftUI
 import simd
 @testable import BobV1
 
@@ -149,6 +150,31 @@ final class PlayTossTests: XCTestCase {
         XCTAssertTrue(events.contains { if case .header = $0 { return true }; return false }, "the Jelmiko headed it: \(events)")
         XCTAssertTrue(events.contains { if case .caught = $0 { return true }; return false }, "and it was caught: \(events)")
         XCTAssertEqual(p.nudges, 0)
+    }
+
+    /// (no-rally-mark-r1) After a catch that follows a rally of 3 the Play chrome shows NO "x3" mark (hearts still rise; the count is internal only).
+    func testPlayChromeHasNoRallyMarkAfterARallyOfThree() {
+        Self.room(Self.portrait)
+        let care = GameCare(jellyCount: 1, persistent: false, defaults: UserDefaults(suiteName: "PlayChrome.norally")!)
+        Self.keep.append(care)
+        let host = UIHostingController(rootView: PlayChrome(care: care))
+        let win = UIWindow(frame: CGRect(origin: .zero, size: Self.portrait)); win.rootViewController = host; win.makeKeyAndVisible()
+        let r = rigAt(SIMD2(0, 0.6)), p = care.play
+        p.forceQuality = .weak; p.seed(3)
+        func pump() { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        begin(r, p); pump()
+        throwAtMiddle(p)
+        p.rally = 3
+        let serial = p.catchSerial
+        _ = run(r, p, seconds: 30) { p.catchSerial != serial }
+        XCTAssertGreaterThan(p.catchSerial, serial, "the ball was caught")
+        XCTAssertGreaterThanOrEqual(p.shownRally, 3, "the rally stays internal (the hearts read it)")
+        for _ in 0..<10 { pump() }
+        func ids(_ v: UIView) -> [String] { [v.accessibilityIdentifier ?? ""] + v.subviews.flatMap(ids) }
+        func labels(_ v: UIView) -> [String] { [v.accessibilityLabel ?? ""] + v.subviews.flatMap(labels) }
+        XCTAssertFalse(ids(host.view).contains("play-rally"), "no rally mark")
+        XCTAssertFalse(labels(host.view).contains { $0.contains("in a row") }, "no streak label")
+        win.isHidden = true
     }
 
     func testAMissedBallIsBumpedBackInFiveNudgesAndTwelveSeconds() {

@@ -20,6 +20,9 @@ final class GameCare {
     private(set) var trayOut = false
     /// The meal on the tray gives a power-up (the first-time tip "Power-up!" comes when the tray is gone).
     @ObservationIgnored private var mealHasPerk = false
+    /// night-meal-r1: seconds the tray / a wanted meal / a group serving has been continuously on (GameCare+MealUnstick.swift: a lock that outlives any real meal is cleared when the player asks again).
+    @ObservationIgnored var mealLockAge: Float = 0
+    @ObservationIgnored var callIdleT: Float = 0
     /// A group action (call everyone / come here walking to its spots, a group serving, a group bedtime walk) is on: the Cancel pill shows from its start.
     var cancelPill = false
     /// A voice command asked for a Town screen ("let's race" / "time to train" open the Track for the selected Jelly): GameScreen watches `townRequest`.
@@ -603,6 +606,7 @@ final class GameCare {
             release()
             if focus.isActive { afterRelease = c; pendingJelly = jelly; return }
         }
+        mealUnstick(why: c.kind == .drink ? "drink tap" : "food tap")          // (night-meal-r1: a leftover lock is cleared before the tap is judged)
         if let why = orderBlocker(c) { tapRefused(why); return }          // (said out loud: GameCare+MealFeedback.swift)
         if jelly == nil, jellies.count > 1, let full = fullLine(c, jelly: jelly) { tapRefused(full) }          // a group serving has no label of its own: the tray still comes out and they shake their heads, the line says why (a single Jelbie shows "Not hungry" over his head)
         if jelly == nil, jellies.count > 1 {         // the group serving: started by `tickGroup` (it has every brain)
@@ -627,6 +631,7 @@ final class GameCare {
     nonisolated static var mealReachX: Float { DiningLayout.reachSideX }
     /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): food diners stand `reachCloser` nearer the tray (along the place yaw) so the nub
     /// tip touches the piece at the grab. `-MealReach 0` (dev builds) = the old stand and reach.
+    static let toyMoodAid: BlobMood? = DevArgs.enabled ? UserDefaults.standard.string(forKey: "ToyMood").flatMap(BlobMood.init(rawValue:)) : nil
     nonisolated(unsafe) static var mealReach: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReach") != nil && UserDefaults.standard.integer(forKey: "MealReach") == 0)
     nonisolated(unsafe) static var reachCloser: Float = 0
     /// The most the nub may stretch past its rest length during the dine grab (a fraction of the rest nub); 0 = never.
@@ -915,7 +920,7 @@ final class GameCare {
             guard let brain = a.brain, let profile = jelly(a.id) else { continue }
             let here = Self.floorPos(brain, a.sim)
             if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting, drainScale: brain.napDrainScale, asleep: asleepForAway(a.id)) }
-            brain.idleMood = profile.needs.mood
+            brain.idleMood = Self.toyMoodAid ?? profile.needs.mood          // (toy-audit-r1 capture aid: -ToyMood happy|okay|grumpy, DevArgs builds: the owner's save copy has grumpy Jelmiko, who only boop toys)
             syncPerks(id: a.id, brain: brain)
             brain.idleBlocked = (bath.active || play.ballGame || isPreview) && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
             brain.focusPaused = false
@@ -1008,6 +1013,13 @@ final class GameCare {
         }
         finished.removeAll()
 
+        // night-meal-r1: `callRunning` means "a come job is in flight". A job that something else replaced (a ball game's line, a session, a voice walk) never reports, and the flag then held every Feed / Water
+        // until a relaunch (found by NightMealStuckTests: welcome home, then Play). No job and nothing pending for a second = the call is over.
+        if callRunning, Self.unstickOn, brain.job == nil, brain.pending == nil, !brain.isSleeping, !brain.mealWaking, !queued.contains(where: { if case .come = $0 { return true }; return false }) {
+            callIdleT += dt
+            if callIdleT > 1 { callRunning = false; callIdleT = 0; NSLog("[mealunstick] cleared=callRunning why=come job lost (replaced) greeting=%d focus=%@", greeting ? 1 : 0, String(describing: focus.phase)) }
+        } else { callIdleT = 0 }
+
         // one-shot requests (a Call drops the meal first so the tray poofs and the held piece goes with it)
         if let r = queued.first {
             var isCome = false
@@ -1033,6 +1045,7 @@ final class GameCare {
         dining.update(dt: dt)
         if let room = renderer?.room { pushDiningFrames(room) }
         let out = wanted != nil || meal != nil || dining.isPresent || groupActive
+        if out { mealLockAge += dt } else { mealLockAge = 0 }
         if out != trayOut { trayOut = out; if !out, mealHasPerk { mealHasPerk = false; TipBook.shared.request("powerup") } }          // (home again after a power-up meal: the tip waits for the tray to be gone and everyone roaming)
         let cp = focus.phase == .approaching || groupActive || bedtimeWalking
         if cp != cancelPill { cancelPill = cp }

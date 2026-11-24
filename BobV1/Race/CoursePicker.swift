@@ -101,3 +101,29 @@ struct CoursePicker: View {
         .accessibilityIdentifier("course-\(t.rawValue)")
     }
 }
+
+
+/// Every help line about the Jelly Race, in one place so it matches the control the race really uses: the pull (pull down anywhere, let go in the green). Every course uses it;
+/// the hurdle courses (Splash, Wave, Tsunami) add "the green clears each bar". Pure: tests read it.
+nonisolated enum RaceHelp {
+    /// The tip card body (16 words or fewer).
+    static let tip = "Pull down and let go in the green to hop. Tap ? to learn more."
+    /// The lobby's one line for a course (12 words or fewer after the course's own description).
+    static func blurb(_ c: CourseTier) -> String {
+        switch c {
+        case .puddle: return "The straight. Pull down, let go in the green."
+        case .ripple: return "Two gentle curves. Keep pulling and hopping along."
+        case .splash: return "S-bends, soft bumps and three low hurdles. Green clears each bar."
+        case .wave: return "Tight turns, two hairpins and six hurdles. Green clears each bar."
+        case .tsunami: return "Hairpins and runs of hurdles, back to back. The big one."
+        }
+    }
+    /// The "How to play" rows of the race lobby.
+    @MainActor static var rows: [(LobbyIcon.Kind, String, String)] { [
+        (.feet, "Pull and let go", "Pull down anywhere, then let go in the green to hop."),
+        (.bend, "Hop again at once", "Hop again as soon as you land. Green hops build a streak."),
+        (.flag, "Clear the bars", "On hurdle courses, let go in the green as a bar comes up."),
+        (.run, "Speed and Focus", "Speed: longer steps, quicker feet. Focus: fewer look-arounds. Spend race points in Upgrade."),
+        (.trophy, "Win to open the next course", "Win the course below to open the next."),
+    ] }
+}

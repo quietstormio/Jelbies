@@ -30,7 +30,7 @@ extension DecorKind {
         case .jackinbox: return DecorSpec(half: SIMD2(0.31, 0.31), height: 0.78, solid: true, units: 1, corner: 0.1, reach: 1, box: true)
         case .plushbear: return DecorSpec(half: SIMD2(0.44, 0.40), height: 1.18, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
         case .toypiano: return DecorSpec(half: SIMD2(0.56, 0.32), height: 0.98, solid: true, units: 1, corner: 0.05, reach: 1, box: true)
-        case .pinwheel: return DecorSpec(half: SIMD2(0.30, 0.30), height: 1.55, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
+        case .pinwheel: return DecorSpec(half: SIMD2(0.35, 0.35), height: 1.55, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
         default: return batch4Spec
         }
     }

@@ -7,7 +7,7 @@
 - **Favourite food:** every Jelmiko loves one food. Its power-up lasts twice as long.
 - **Clean:** tap your Jelmiko, then Clean, to scrub, rinse and shine.
 - **Play:** tap Play and pick a toy.
-- **Call by name:** hold the mic button and say your Jelmiko's name.
+- **Call by name:** hold the mic button and say your Jelmiko's name. With Tap to talk on, tap the mic instead.
 - **Jelly Race, Jelly Show and Jelly Volleyball:** go out to compete and earn JellyCoins.
 
 ## The mic is not working

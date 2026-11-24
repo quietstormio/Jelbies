@@ -53,16 +53,16 @@ final class VolleyFlow {
     var partnerCharacter: Int?
     var opponentNames: [String] = []
     /// Results.
-    private(set) var earned = 0
-    private(set) var awards = TrophyAwards()
-    private(set) var unlockedNow: VolleyTier?
+    var earned = 0
+    var awards = TrophyAwards()
+    var unlockedNow: VolleyTier?
     private(set) var gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0)
     private(set) var settled = false
     /// The player went home in the middle (Race/ForfeitHome.swift): nothing is settled.
     private(set) var forfeited = false
     /// Volleyball Upgrade points this match gave (3 / 2 / 1), and his balance after; 0 until settled.
-    private(set) var pointsEarned = 0
-    private(set) var pointsAfter = 0
+    var pointsEarned = 0
+    var pointsAfter = 0
     private var pointsGiven = false
     @ObservationIgnored var upgrades: UpgradeBook?
     private(set) var cueSerial = 0
