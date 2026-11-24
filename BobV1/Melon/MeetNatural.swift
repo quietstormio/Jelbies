@@ -54,7 +54,7 @@ extension BlobBrain {
         var best: (c: SIMD2<Float>, etaA: Float, etaO: Float)?
         var bestDiff = Float.infinity
         let dir0 = (pa - ga)
-        for ang: Float in [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.2, -2.2] {          // (the shift points toward the initiator; a few turned ones when that one is not legal: wall, third body)
+        for ang: Float in [0, 0.5, -0.5, 1.0, -1.0] {          // (the shift points toward the initiator; a few turned ones when that one is not legal: wall, third body)
             let ca = cosf(ang), sa = sinf(ang)
             let dir = SIMD2<Float>(dir0.x * ca - dir0.y * sa, dir0.x * sa + dir0.y * ca)
             for k in 0...18 {
@@ -68,9 +68,9 @@ extension BlobBrain {
                 guard diff < bestDiff - 0.02 || best == nil else { continue }
                 do {
                     guard rf.contains(af), rf.contains(of) else { MeetNatural.why[0] += 1; continue }
-                    guard simd_distance(closeFixed(af), af) < 0.1, simd_distance(o.closeFixed(of), of) < 0.1 else { MeetNatural.why[1] += 1; continue }
+                    guard simd_distance(closeFixed(af), af) < 0.1, simd_distance(o.fixed(of), of) < 0.1 else { MeetNatural.why[1] += 1; continue }
                     guard spotFree(af, besides: [self, o]), spotFree(of, besides: [self, o]) else { MeetNatural.why[2] += 1; continue }
-                    guard o.meetLegOK(po, of, partner: self) else { MeetNatural.why[3] += 1; continue }
+                    guard o.legClear(po, of, margin: o.steerMargin) else { MeetNatural.why[3] += 1; continue }
                 }
                 best = (c, etaA, etaO); bestDiff = diff
             }
