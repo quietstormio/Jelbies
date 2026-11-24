@@ -9,10 +9,10 @@ import simd
 
 enum SlideZones {
     /// Half width of the zones (the arms-up rider is 1.6 wide), the climb zone behind the slide (piece-local z), the landing zone in front, and the margin kept to other pieces.
-    static let halfX: Float = 1.0
-    static let climb: ClosedRange<Float> = -3.0 ... -1.9
-    static let landing: ClosedRange<Float> = 1.9 ... 3.5
-    static let margin: Float = 0.1
+    static let halfX: Float = 0.8
+    static let climb: ClosedRange<Float> = -2.8 ... -2.0
+    static let landing: ClosedRange<Float> = 2.0 ... 3.3
+    static let margin: Float = 0
 
     /// The zone boxes in the world (axis-aligned: a quarter turn swaps the half extents).
     static func zones(_ f: DecorFoot) -> [(lo: SIMD2<Float>, hi: SIMD2<Float>)] {

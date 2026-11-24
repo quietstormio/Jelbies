@@ -115,8 +115,10 @@ enum RoomLayout {
         #if targetEnvironment(simulator)
         if UserDefaults.standard.object(forKey: "ArmPad") != nil { return UserDefaults.standard.float(forKey: "ArmPad") }
         #endif
-        return 0.14
+        return 0.20
     }()
+    /// The pad in force now: the park (its slide is placed) keeps only the slide's own side pad, so the park's slide round trips stay as tested; the home rooms keep `armPad`.
+    static var padNow: Float { decorFeet.contains(where: { $0.uid == ParkToys.slideUID }) ? 0 : armPad }
 
     /// The park / home slide's walls are 0.9 high and 0.16 thick: a walker's arm reached 0.24 past the footprint and 11 cm into them, so the slide keeps the walker this much further.
     static let slideArmPad: Float = 0.12
@@ -124,6 +126,7 @@ enum RoomLayout {
     /// Pushes a sphere (centre, radius) out of walls, sofa and props; returns the corrected centre (y untouched).
     static func resolve(position p0: SIMD3<Float>, radius: Float, lowPropScale: Float = 1, ignoreDecor: Int? = nil) -> SIMD3<Float> {
         var p = p0
+        let armPad = padNow
         for _ in 0..<2 {
             for w in walls {
                 let dist = simd_dot(w.normal, p) - w.d

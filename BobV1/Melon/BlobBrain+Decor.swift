@@ -283,7 +283,7 @@ extension BlobBrain {
         if slideLegFree(here, gate), avoid.allSatisfy({ simd_distance($0, gate) > 0.3 }) { return (gate, 1) }          // (`avoid`: the leg that has stood still behind a friend is not taken again: round the slide the other way)
         // round the slide: the corners of its footprint, a body's width off the edge (both sides, front and back); the walk's own planner does not go round a slide that long
         let h = f.quarter & 1 == 0 ? f.spec.half : SIMD2(f.spec.half.y, f.spec.half.x)
-        let lat = h.x + footprint * f.spec.reach + 0.1 + RoomLayout.armPad + RoomLayout.slideArmPad, zf = h.y + footprint * f.spec.reach + 0.1 + RoomLayout.armPad          // (no-clip-r1: the corners stand outside the pads the floor rules keep walkers off the slide by, or no leg round it is free)
+        let lat = h.x + footprint * f.spec.reach + 0.1 + RoomLayout.padNow + RoomLayout.slideArmPad, zf = h.y + footprint * f.spec.reach + 0.1 + RoomLayout.padNow          // (no-clip-r1: the corners stand outside the pads the floor rules keep walkers off the slide by, or no leg round it is free)
         var corners: [SIMD2<Float>] = []
         for sx: Float in [-1, 1] {
             for wide: Float in [0, 1.0, 2.0] {          // (the same corners further out: a friend standing beside the way round is gone round on his far side)

@@ -19,6 +19,8 @@ extension BlobBrain {
     static let slideSteps: [SIMD2<Float>] = slideSteps0.map { $0 * DecorKind.slide.scale }
     private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.46, 0.22), SIMD2(-1.22, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the first two hops stand 0.18 further back (was -1.28, -1.04; further and the feet hang off the step edges at -1.75 / -1.45): his belly is 1.1 wide, the steps 0.3 deep, so on the exported spots it sank into the next riser)
     static let slideRunOut: Float = 0.2
+    /// no-clip-r1: the floor he stands, sits and rides on is this much above the art's surface (his seated belly sank 5 cm into the platform).
+    static let slideLift: Float = 0.03
     static var slideLength: Float {
         var L: Float = 0
         for i in 1..<slidePath.count { L += simd_length(slidePath[i] - slidePath[i - 1]) }
@@ -58,7 +60,7 @@ extension BlobBrain {
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
         if gait.phase == .land, !idleState.decorBooped {
             idleState.decorBooped = true
-            bagFloorOn = true; slideY = Self.slideSteps[idleState.slideStep].y
+            bagFloorOn = true; slideY = Self.slideSteps[idleState.slideStep].y + Self.slideLift
             applyBagFloor(sim, skinner)
             DecorField.shared.kick(f.uid, 0.4)
             AudioHub.shared.play(.footstep, jelly: steerID, x: px, volume: 0.9)
@@ -84,7 +86,7 @@ extension BlobBrain {
     private func slideHop(_ sim: SoftBody, _ f: DecorFoot) {
         let st = Self.slideSteps[idleState.slideStep]
         idleState.slideStage = 1; idleState.decorBooped = false
-        bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y, apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
+        bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y + Self.slideLift, apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
     }
 
     /// no-clip-r1: while he sits, rides and gets up the arms point forward down the chute: at his sides they lay in the chute's walls and the ladder posts (up to 13 cm).
@@ -139,7 +141,7 @@ extension BlobBrain {
             let d = want - SIMD2(px, pz)
             px = want.x; pz = want.y
             feet.pos[0] += d; feet.pos[1] += d
-            slideY = at.y; bagFloorOn = true
+            slideY = at.y + Self.slideLift; bagFloorOn = true
             applyBagFloor(sim, skinner)
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             sitPose(skinner, 1, slump: false)
