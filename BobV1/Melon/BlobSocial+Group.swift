@@ -187,6 +187,7 @@ extension BlobBrain {
             if let x = crew.first(where: { $0 !== m }) { m.onSocial?(.began(kind, partner: x.steerID)) }
             if m === crew.first { m.roomCue(.social(kind)) }
         }
+        if MeetLog.on { MeetLog.began(s, crew) }
         return s
     }
 
