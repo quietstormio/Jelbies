@@ -40,3 +40,63 @@ nonisolated enum MoveCrowd {
 
 /// Read by the scoreboard (tests): the switches as they stand.
 enum MoveCrowdInfo { static var text: String { MoveCrowd.text } }
+
+struct CrowdBook {
+    var lookClock: Float = -10
+}
+
+extension MoveCrowd {
+    /// part: the extra wait (s) per earlier-leaving mate after a moment, and the least angle between two strollers' directions (cos: below this).
+    nonisolated(unsafe) static var partStagger = num("MOVECROWD_PART_STAGGER", 1.0)
+    nonisolated(unsafe) static var partSplitCos = num("MOVECROWD_PART_SPLIT", -0.2)
+    /// look: how often (s) a walker on a waypoint leg looks ahead.
+    nonisolated(unsafe) static var lookEvery = num("MOVECROWD_LOOK_EVERY", 0.5)
+    /// yield: the head-on walker with the right of way still veers by this share of `gap` to his right (the other clears by the whole gap alone).
+    nonisolated(unsafe) static var headOnKeep = num("MOVECROWD_HEADON_KEEP", 0.25)
+}
+
+extension BlobBrain {
+    /// A free, autonomous walker at home or on a park visit (no job, no command, no social, no toy / ball game, no race): the only bodies MoveCrowd steers.
+    /// Meals never qualify (`homeRoom` is false while the tray is out), nor the café, the Show, the race or any choreographed walk.
+    var crowdLive: Bool {
+        MoveCrowd.on && (homeRoom || outingPlay) && roomFree && social == nil && !race.active && !volley.active && toy.waitUID < 0 && toy.chaseSpot == nil && bubbleLeash == nil && !tossBusy
+    }
+    /// goal: nobody stands within `gap` of the spot, and nobody is walking to a spot within `gap` of it.
+    func crowdGoalFree(_ p: SIMD2<Float>) -> Bool {
+        let g = MoveCrowd.gap
+        for o in socialOthers() where o !== self {
+            if simd_distance(o.position, p) < g { return false }
+            if case .walk(let t, _) = o.script, simd_distance(t, p) < g { return false }
+        }
+        return true
+    }
+    /// yield: at a crossing, do I give way? The one who reaches the meeting second gives way (`roomAhead`); too close to call: the one with less far to go; then the lower id.
+    func crowdGiveWay(his id: Int, at pos: SIMD2<Float>, vel: SIMD2<Float>, root: SIMD2<Float>, dir: SIMD2<Float>, vSelf: Float, myLeft: Float) -> Bool {
+        let s = roomAhead(of: id, at: pos, vel: vel, root: root, dir: dir, vSelf: vSelf)
+        if abs(s) > RoomTraffic.tieBand { return s > 0 }
+        if let o = socialBrain(id), case .walk(let t, _) = o.script {
+            let hisLeft = simd_distance(t, pos)
+            if abs(hisLeft - myLeft) > 0.5 { return myLeft < hisLeft }
+        }
+        return steerID < id
+    }
+}
+
+extension BlobBrain {
+    /// look (from `steerTarget` while a waypoint is ahead): every `lookEvery` s the leg to the waypoint is looked at like a plain leg. nil = carry on to the waypoint;
+    /// .some(nil) = stand this beat (give way); .some(w2) = a detour point put in front of the waypoint.
+    func crowdWaypointLook(_ root: SIMD2<Float>, _ w: SIMD2<Float>) -> SIMD2<Float>?? {
+        guard MoveCrowd.lookOn, crowdLive else { return nil }
+        if yieldT > 0 {          // (already giving way on this leg: keep asking every step until clear)
+        } else { guard peerClock - crowd.lookClock >= MoveCrowd.lookEvery else { return nil } }
+        crowd.lookClock = peerClock
+        switch lookAhead(root, w) {
+        case .via(let w2):
+            guard route.count < 4, simd_distance(w2, w) > 0.3 else { return nil }
+            route.insert(w2, at: 0)
+            return .some(w2)
+        case .wait: return .some(nil)
+        case .clear: return nil
+        }
+    }
+}

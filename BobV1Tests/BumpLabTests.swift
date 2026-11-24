@@ -42,6 +42,7 @@ final class BumpLabTests: XCTestCase {
         var hard = 0, push = 0, standOff: Float = 0, moments = 0, emotes = 0, kinds = 0
         var walkSecPerU: Float = 0
         var gapNil = 0, gapAll = 0
+        var f14Same = 0, f14Route = 0, f14After = 0          // free encounters entering 1.4: both walking the same way (< 90 deg), one on a waypoint leg, one left a moment within 6 s
         var cols: [Float] {
             let m = max(mins, 1e-3)
             func pc(_ a: Int, _ b: Int) -> Float { b == 0 ? 0 : Float(a) / Float(b) * 100 }
@@ -52,7 +53,7 @@ final class BumpLabTests: XCTestCase {
     }
 
     /// One encounter of a pair, open while their centres are within 2.0 (closed after 2 s outside).
-    struct Enc { var minD: Float = 9; var touched = false; var partners = false; var walkersAtMin = 0; var outT: Float = 0 }
+    struct Enc { var minD: Float = 9; var touched = false; var partners = false; var walkersAtMin = 0; var outT: Float = 0; var sameWay = false; var onRoute = false; var afterMoment = false }
 
     func run(_ scene: Scene, seed: UInt64, seconds: Float) -> Score {
         EmoteSpot.reset(); RoomTraffic.waitFor = [:]; RoomTraffic.waited = [:]; MoveMix.soccerNextAt = 0
@@ -96,10 +97,11 @@ final class BumpLabTests: XCTestCase {
         var open = [Int: Enc]()
         var lastP = lab.rigs.map { $0.brain.position }, stillT = [Float](repeating: 0, count: n), sampT: Float = 0
         var sessions = Set<ObjectIdentifier>(), keepSess: [AnyObject] = []
+        var lastSocial = [Float](repeating: -99, count: n), clockT: Float = 0
         func close(_ e: Enc) {
             sc.enc += 1; if e.minD < 1.4 { sc.enc14 += 1 }; if e.touched { sc.encTouch += 1 }
             if e.partners { sc.part += 1; if e.minD < 1.4 { sc.part14 += 1 }; if e.touched { sc.partTouch += 1 }; return }
-            sc.free += 1; if e.minD < 1.4 { sc.free14 += 1 }; if e.touched { sc.freeTouch += 1 }
+            sc.free += 1; if e.minD < 1.4 { sc.free14 += 1; if e.sameWay { sc.f14Same += 1 }; if e.onRoute { sc.f14Route += 1 }; if e.afterMoment { sc.f14After += 1 } }; if e.touched { sc.freeTouch += 1 }
             if e.walkersAtMin == 2 { sc.ww += 1; if e.minD < 1.4 { sc.ww14 += 1 }; if e.touched { sc.wwTouch += 1 } }
             else if e.walkersAtMin == 1 { sc.ws += 1; if e.minD < 1.4 { sc.ws14 += 1 }; if e.touched { sc.wsTouch += 1 } }
         }
@@ -107,6 +109,8 @@ final class BumpLabTests: XCTestCase {
             lab.tick(watching: false)
             if scene == .park { DecorField.shared.tick(dt: dt) }
             let br = lab.rigs.map { $0.brain }
+            clockT += dt
+            for i in 0..<n where br[i].social != nil { lastSocial[i] = clockT }
             let walking = br.map { $0.activity == .walking || $0.activity == .coming }
             for b in br { if let s = b.social, sessions.insert(ObjectIdentifier(s)).inserted { keepSess.append(s) } }
             for i in 0..<n { for j in (i + 1)..<n {
@@ -119,7 +123,7 @@ final class BumpLabTests: XCTestCase {
                 } else if d < 2.0 { open[key] = Enc() }
                 guard var e = open[key] else { continue }
                 if a.social != nil && a.social === b.social { e.partners = true }
-                if d < e.minD { e.minD = d; e.walkersAtMin = (walking[i] ? 1 : 0) + (walking[j] ? 1 : 0) }
+                if d < e.minD { e.minD = d; e.walkersAtMin = (walking[i] ? 1 : 0) + (walking[j] ? 1 : 0); e.sameWay = walking[i] && walking[j] && cosf(a.yaw - b.yaw) > 0; e.onRoute = (walking[i] && !a.steerRoute.isEmpty) || (walking[j] && !b.steerRoute.isEmpty); e.afterMoment = clockT - lastSocial[i] < 6 || clockT - lastSocial[j] < 6 }
                 if d < 2.0 {
                     sc.gapAll += 1
                     let g: Float
@@ -171,16 +175,17 @@ final class BumpLabTests: XCTestCase {
             for s in seeds {
                 let sc = run(scene, seed: s, seconds: seconds)
                 rows.append(sc.cols)
-                MotionLog.write("SCORE \(tag) \(scene.rawValue) seed \(s): " + Self.fmt(sc.cols) + " | kinds \(sc.kinds) gapNil \(sc.gapNil)/\(sc.gapAll) enc \(sc.enc) free \(sc.free) ww \(sc.ww) ws \(sc.ws) part \(sc.part)")
+                MotionLog.write("SCORE \(tag) \(scene.rawValue) seed \(s): " + Self.fmt(sc.cols) + " | f14 same \(sc.f14Same) route \(sc.f14Route) afterMoment \(sc.f14After) | kinds \(sc.kinds) gapNil \(sc.gapNil)/\(sc.gapAll) enc \(sc.enc) free \(sc.free) ww \(sc.ww) ws \(sc.ws) part \(sc.part)")
                 pooled.mins += sc.mins; pooled.enc += sc.enc; pooled.enc14 += sc.enc14; pooled.encTouch += sc.encTouch; pooled.free += sc.free; pooled.free14 += sc.free14; pooled.freeTouch += sc.freeTouch
                 pooled.ww += sc.ww; pooled.ww14 += sc.ww14; pooled.ws += sc.ws; pooled.ws14 += sc.ws14; pooled.part += sc.part; pooled.part14 += sc.part14; pooled.partTouch += sc.partTouch
+                pooled.f14Same += sc.f14Same; pooled.f14Route += sc.f14Route; pooled.f14After += sc.f14After
                 pooled.hard += sc.hard; pooled.push += sc.push; pooled.standOff = max(pooled.standOff, sc.standOff); pooled.moments += sc.moments; pooled.emotes += sc.emotes
                 pooled.walkSecPerU += sc.walkSecPerU / Float(seeds.count)
             }
             let k = Float(rows.count), cols = rows[0].count
             let mean = (0..<cols).map { c in rows.map { $0[c] }.reduce(0, +) / k }
             let sd = (0..<cols).map { c in sqrtf(rows.map { ($0[c] - mean[c]) * ($0[c] - mean[c]) }.reduce(0, +) / max(k - 1, 1)) }
-            MotionLog.write("SCORE \(tag) \(scene.rawValue) POOLED: " + Self.fmt(pooled.cols))
+            MotionLog.write("SCORE \(tag) \(scene.rawValue) POOLED: " + Self.fmt(pooled.cols) + " | free>1.4 n \(pooled.free14): same-way \(pooled.f14Same) route \(pooled.f14Route) afterMoment \(pooled.f14After) | partners \(pooled.part) >1.4 \(pooled.part14) touch \(pooled.partTouch)")
             MotionLog.write("SCORE \(tag) \(scene.rawValue) MEAN: " + Self.fmt(mean))
             MotionLog.write("SCORE \(tag) \(scene.rawValue) SD: " + Self.fmt(sd))
         }

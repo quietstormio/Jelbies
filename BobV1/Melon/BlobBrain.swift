@@ -197,6 +197,8 @@ final class BlobBrain {
     var emoteSpot = EmoteSpotState()
     /// move-mix-r1 (Melon/MoveMix.swift): what the last pick was, the no-social wait, a stroll that is due.
     var mix = MixBook()
+    /// move-crowd-r1 (Melon/MoveCrowd.swift): the waypoint-leg look-ahead clock.
+    var crowd = CrowdBook()
     var napWhy = "table"          // (round 2b: which roll started the last sleep: the logger counts nap causes)
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
@@ -1062,6 +1064,7 @@ final class BlobBrain {
         let centreBias = min(1, centreDwell / IdleTuning.centreDwellFull)
         var best: (SIMD2<Float>, Float)?
         var valid = 0
+        let crowdGoal = MoveCrowd.goalOn && crowdLive          // (move-crowd-r1; read once)
         let mixTries = MoveMix.on ? 2 : 1
         for attempt in 0..<mixTries {
         if attempt == 1 { if best != nil { break }; lo = zone != nil ? 2.5 : 1.5; guard maxL > lo else { break }; valid = 0 }
@@ -1073,6 +1076,7 @@ final class BlobBrain {
             let d = simd_length(cand - here)
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             if attempt == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
+            if crowdGoal, !crowdGoalFree(cand) { continue }          // (move-crowd-r1 goal: nobody stands at or walks to within the gap of it)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
@@ -1445,6 +1449,7 @@ final class BlobBrain {
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
             else if roomWaypointWait(root, w) { return nil }          // (the 11-15 room round, T5: nothing looked ahead on a waypoint leg; the one who gets there second stands a beat)
+            else if let r = crowdWaypointLook(root, w) { return r }          // (move-crowd-r1 look: a walker on a waypoint leg looks ahead too, MoveCrowd.swift)
             else if legClear(root, w, margin: steerMargin) { return w }
             else { route = [] }
         }
