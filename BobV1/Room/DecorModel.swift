@@ -596,7 +596,6 @@ final class DecorField {
     /// A Jelly may start using it: a single-seat piece nobody uses, or a multi-seat one with a seat free.
     func available(_ f: DecorFoot) -> Bool {
         guard f.uid != held else { return false }
-        if f.kind == .slide, !SlideZones.clear(f, among: feet) { return false }          // (no-clip-r1: other furniture on the climb or landing floor: his arms would go through it)
         if f.kind == .minigoal, feet.contains(where: { $0.kind == .soccerball }) { return false }          // (with a ball the goal is shot at through the ball, never booped)
         if f.kind.sitPoints.count > 1 { return (seatOccupant[f.uid]?.count ?? 0) < f.kind.sitPoints.count }
         if f.kind.maxUsers > 1 {

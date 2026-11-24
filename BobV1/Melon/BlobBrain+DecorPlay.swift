@@ -17,7 +17,7 @@ extension BlobBrain {
                                             SIMD2(0.88, 0.264), SIMD2(1.01, 0.214), SIMD2(1.14, 0.174), SIMD2(1.27, 0.145), SIMD2(1.4, 0.13), SIMD2(1.75, 0.0)]
     /// The steps: (z, y) he hops to, then the platform.
     static let slideSteps: [SIMD2<Float>] = slideSteps0.map { $0 * DecorKind.slide.scale }
-    private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.52, 0.22), SIMD2(-1.28, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the first two hops stand 0.3 further back (was -1.28, -1.04): his belly is 1.1 wide, the steps 0.3 deep, so on the exported spots it sank into the next riser)
+    private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.46, 0.22), SIMD2(-1.22, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the first two hops stand 0.18 further back (was -1.28, -1.04; further and the feet hang off the step edges at -1.75 / -1.45): his belly is 1.1 wide, the steps 0.3 deep, so on the exported spots it sank into the next riser)
     static let slideRunOut: Float = 0.2
     static var slideLength: Float {
         var L: Float = 0

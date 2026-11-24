@@ -20,7 +20,10 @@ extension BlobBrain {
     static func decorOffers() -> Set<IdleKind> {
         let f = DecorField.shared
         var s = Set<IdleKind>()
-        for p in f.feet where f.available(p) { if let k = p.kind.activeInteraction { s.insert(k) } }
+        for p in f.feet where f.available(p) {
+            if p.kind == .slide, p.uid != ParkToys.slideUID, !SlideZones.clear(p, among: f.feet) { continue }          // (no-clip-r1: on his own he does not take a home slide that has other furniture on its climb or landing floor: his arms would go through it. The park's slide, a voice command and a tap are not gated)
+            if let k = p.kind.activeInteraction { s.insert(k) }
+        }
         return s
     }
 

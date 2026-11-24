@@ -1,8 +1,8 @@
 //
 //  SlideZones.swift
 //  no-clip-r1: the floor a Jelmiko stands on, hops over and lands on when he uses a slide must be clear of other furniture, or his arms (and belly) go through it: the climb behind the
-//  slide (he hops up the steps with his arms out) and the landing in front of it. ClipProbe saw arms 37-48 cm inside a wardrobe and an aquarium standing there. A slide whose zones are not
-//  clear is not offered to him on his own (it still stands, and a voice command / the player's tap still works). Position-independent: everything is measured from the slide's own frame.
+//  slide (he hops up the steps with his arms out) and the landing in front of it. ClipProbe saw arms 37-48 cm inside a wardrobe and an aquarium standing there. A home slide whose zones are not
+//  clear is not offered to him on his own (`BlobBrain.decorOffers`; it still stands, and a voice command / the player's tap still work; the park's slide is never gated). Position-independent: everything is measured from the slide's own frame.
 //
 
 import simd
@@ -12,7 +12,7 @@ enum SlideZones {
     static let halfX: Float = 1.0
     static let climb: ClosedRange<Float> = -3.0 ... -1.9
     static let landing: ClosedRange<Float> = 1.9 ... 3.5
-    static let margin: Float = 0.25
+    static let margin: Float = 0.1
 
     /// The zone boxes in the world (axis-aligned: a quarter turn swaps the half extents).
     static func zones(_ f: DecorFoot) -> [(lo: SIMD2<Float>, hi: SIMD2<Float>)] {
