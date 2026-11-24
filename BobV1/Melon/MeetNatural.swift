@@ -22,6 +22,8 @@ enum MeetNatural {
     static let kinds: Set<SocialKind> = [.boop, .squabble, .cheekSquish, .hopAlong, .highFive, .chestBump, .twirl, .nuzzle, .sitTogether, .swayHug, .whisperGiggle, .shyWave, .danceOff, .spinHug, .backToBack, .cuddleLean, .bellyBounce, .mirrorDance, .peekaboo, .tag, .littleRace, .leapfrog, .ringAround]
     static let minLeg: Float = 0.7
     static let minShift: Float = 0.35
+    /// Tests only: the headless rigs have no room floor (`roamProvider`); the floor rules of the brain are the check there.
+    nonisolated(unsafe) static var headless = ProcessInfo.processInfo.environment["MEETNATURAL_HEADLESS"] == "1"          // (env MEETNATURAL_HEADLESS=1: the social / contact suites run with the joint approach on)
     static let partnerLag: Float = 0.08
     nonisolated(unsafe) static var why = [0, 0, 0, 0]
     /// A walk's speed (u/s) for the ETA.
@@ -49,7 +51,8 @@ extension BlobBrain {
     func meetShift(goal ga: SIMD2<Float>, with o: BlobBrain) -> (c: SIMD2<Float>, etaA: Float, etaO: Float)? {
         let pa = position, po = o.position
         let L = simd_distance(ga, pa)
-        guard L > MeetNatural.minLeg, let rf = roamProvider?() else { return nil }
+        let rf = roamProvider?()
+        guard L > MeetNatural.minLeg, rf != nil || MeetNatural.headless else { return nil }          // (nil in the headless rigs: the floor rules `fixed` / `closeFixed` below are the check there)
         let va = meetSpeed(), vo = o.meetSpeed()
         var best: (c: SIMD2<Float>, etaA: Float, etaO: Float)?
         var bestDiff = Float.infinity
@@ -67,7 +70,7 @@ extension BlobBrain {
                 let diff = abs(etaA - etaO) + abs(ang) * 0.15
                 guard diff < bestDiff - 0.02 || best == nil else { continue }
                 do {
-                    guard rf.contains(af), rf.contains(of) else { MeetNatural.why[0] += 1; continue }
+                    guard rf?.contains(af) ?? true, rf?.contains(of) ?? true else { MeetNatural.why[0] += 1; continue }
                     guard simd_distance(closeFixed(af), af) < 0.1, simd_distance(o.fixed(of), of) < 0.1 else { MeetNatural.why[1] += 1; continue }
                     guard spotFree(af, besides: [self, o]), spotFree(of, besides: [self, o]) else { MeetNatural.why[2] += 1; continue }
                     guard o.legClear(po, of, margin: o.steerMargin) else { MeetNatural.why[3] += 1; continue }

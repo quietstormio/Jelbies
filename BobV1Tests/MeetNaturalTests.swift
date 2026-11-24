@@ -10,8 +10,8 @@ import simd
 
 @MainActor
 final class MeetNaturalTests: XCTestCase {
-    override func setUp() { RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12 }
-    override func tearDown() { RoomLayout.dynamicBoxes = []; MeetNatural.enabled = true }
+    override func setUp() { RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12; MeetNatural.headless = true }
+    override func tearDown() { RoomLayout.dynamicBoxes = []; MeetNatural.enabled = true; MeetNatural.headless = false }
 
     struct Result { var gap: Float; var moved: [Float]; var turn: [Float]; var phase2: Bool; var yawErr: [Float]; var seconds: Float }
 
