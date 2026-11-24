@@ -75,18 +75,17 @@ extension BlobBrain {
         if level >= 3 {
             // start: a small crouch-and-lean into the first steps (the run's crouch-launch, a third of it); the last step settles
             let st = wp.walkT / 0.30
-            if st < 1 { let cr = sinf(.pi * st); lift -= 0.006 * cr * a; dip -= 0.018 * cr; pitch += 0.02 * cr }
+            if st < 1 { let cr = sinf(.pi * st); dip -= 0.018 * cr; pitch += 0.02 * cr }          // (squash only: nothing lifts the body off the planted feet)
             if walkFinal { let sp = sinf(.pi * u); dip -= 0.025 * sp; pitch -= 0.025 * sp * k }
         }
         squash += dip
         if level >= 2 {
-            // follow-through: a damped spring chasing the bob; the body lags a few frames and overshoots on landings, the head-top wobbles
-            let tgt = (squash - 1)
-            wp.springV += ((tgt - wp.spring) * 260 - wp.springV * 11) * dt
+            // follow-through: a damped spring chasing the landing dip only (the locked walk's own stretch is left as it is: a spring on the whole bob halved it); the body lags a few frames and overshoots, the head-top wobbles
+            wp.springV += ((dip - wp.spring) * 260 - wp.springV * 11) * dt
             wp.spring += wp.springV * dt
-            let lag = wp.spring - tgt
-            squash += lag * 0.5 * ws
-            pitch += lag * 0.9 * ws
+            let lag = wp.spring - dip
+            squash += lag * 0.8
+            pitch += lag * 1.4
         }
     }
 
