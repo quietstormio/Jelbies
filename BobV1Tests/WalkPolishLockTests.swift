@@ -75,9 +75,9 @@ final class WalkPolishLockTests: XCTestCase {
             XCTAssertEqual(a.count, b.count, "\(label) \(k) sample count")
             let cut = (label.hasPrefix("run-level") && Self.level > 0) ? (Self.firstOn[k] ?? a.count) : a.count          // (a run-like gait that has ended and gone back to a plain walk may polish from then on)
             if cut < a.count { MotionLog.write("LOCK \(label) \(k): polish first on at row \(cut) of \(a.count) (compared before it)") }
-            let a = Array(a.prefix(cut)), b = Array(b.prefix(cut))
+            let aa = Array(a.prefix(cut)), bb = Array(b.prefix(cut))
             var worst = 0.0, worstAt = ""
-            for (i, (x, y)) in zip(a, b).enumerated() {
+            for (i, (x, y)) in zip(aa, bb).enumerated() {
                 XCTAssertEqual(x.count, y.count, "\(label) \(k) row \(i) width")
                 for (j, (u, v)) in zip(x, y).enumerated() where abs(u - v) > worst { worst = abs(u - v); worstAt = "row \(i) col \(j)" }
             }
