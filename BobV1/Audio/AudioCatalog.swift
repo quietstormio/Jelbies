@@ -100,6 +100,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .bubbleChirp: return 1.5
         case .congaTick: return 0.2
         case .ringChime: return 0.25
+        case .cafeDoorBell: return 1.5
         case .letgo: return 0.25
         case .chomp, .slurp, .crunchNugget, .crunchFries: return 0.25
         case .soapbubbles, .lintroller, .splash: return 0.45
