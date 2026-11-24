@@ -216,7 +216,7 @@ final class CafeBusyTests: XCTestCase {
                         var discs = bodies.map { CafeRoute.Disc(c: $0, r: GameCare.crowdMinGap + 0.1) }
                         discs.append(.init(c: p.centre, r: 1.0)); for tb in all { discs.append(.init(c: tb, r: 0.6)) }
                         discs = discs.map { d in .init(c: d.c, r: min(d.r, min(simd_distance(d.c, door), simd_distance(d.c, end)) - 0.02)) }
-                        let route = CafeRoute.path(from: door, to: end, discs: discs, inside: { abs($0.x) <= 7.5 && $0.y > -3.8 && $0.y < 2.9 })
+                        let route = CafeRoute.path(from: door, to: end, discs: discs, inside: { $0.x >= -3.9 && $0.x <= 7.5 && $0.y > -3.8 && $0.y < 2.9 })
                         var a = door
                         for q in route {
                             let steps = max(1, Int(simd_distance(a, q) / 0.1))

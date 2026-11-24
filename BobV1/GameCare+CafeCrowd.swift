@@ -282,7 +282,7 @@ extension GameCare {
                 let near = min(simd_distance(d.c, from), simd_distance(d.c, to))
                 return .init(c: d.c, r: max(min(d.r + extra, near - 0.02), min(d.r, near - 0.02)))
             }
-            let r = CafeRoute.path(from: from, to: to, discs: discs, inside: { abs($0.x) <= 7.5 && $0.y > -3.8 && $0.y < 2.9 })
+            let r = CafeRoute.path(from: from, to: to, discs: discs, inside: { $0.x >= -3.9 && $0.x <= 7.5 && $0.y > -3.8 && $0.y < 2.9 })
             if !r.isEmpty { return r }
         }
         return []
