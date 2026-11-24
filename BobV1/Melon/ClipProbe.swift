@@ -286,7 +286,9 @@ enum ClipProbe {
             for (i, a) in ids.enumerated() { for c in ids[(i + 1)...] {
                 guard let g = ContactField.gap(a, c, features: false) else { continue }
                 let key = a * 64 + c, sunk = g < -0.02
-                if sunk { pairAgg.frames += 1; pairAgg.maxD = max(pairAgg.maxD, -g); if pairNow[key] != true { pairNow[key] = true; pairAgg.episodes += 1 } }
+                if sunk { pairAgg.frames += 1; pairAgg.maxD = max(pairAgg.maxD, -g); if pairNow[key] != true { pairNow[key] = true; pairAgg.episodes += 1
+                    let pa = byID[a]?.sim.centroid() ?? .zero, pc = byID[c]?.sim.centroid() ?? .zero
+                    NSLog("[clip] pair start t=%.1f %d/%d sunk=%.1fcm at (%.2f,%.2f) / (%.2f,%.2f) doing [%@] / [%@]", t, a, c, -g * 100, pa.x, pa.z, pc.x, pc.z, doing(byID[a]?.brain), doing(byID[c]?.brain)) } }
                 else if pairNow[key] == true { pairNow[key] = false }
             } }
         }
