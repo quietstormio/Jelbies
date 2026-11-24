@@ -92,7 +92,7 @@ extension GameCare {
     /// A leg may take its walk at this pace (u/s; measured 0.6-1.1 u/s on the stage, the turn to the camera and the one in front included) plus `lineGrace` s.
     static let lineWalkPace: Float = 0.8, lineGrace: Float = 1.5, lineMaxLeg: Float = 7.0
     /// Not moving for `lineStall` s (a body with nothing to do) or `lineStallWalk` s (a body inside a walk: the half turn on the spot before a step takes ~1.7 s), off its seat, not waiting its turn: carried.
-    static let lineStall: Float = 1.0, lineStallWalk: Float = 3.0, lineWaitMax: Float = 6.0
+    static let lineStall: Float = 1.5, lineStallWalk: Float = 2.9, lineWaitMax: Float = 4.0, lineWindow: Float = 1.0
     /// A body this close to its seat is in it. A carry never passes closer than `lineClearOf` to another body.
     static let lineAt: Float = 0.3, lineClearOf: Float = 1.15, glideSpeed: Float = 3.2
     /// Off only for a capture that wants the old behaviour (`-ShowLineKeepOff 1`, dev arguments): the baseline measurement.
@@ -167,15 +167,18 @@ extension GameCare {
                 let waiting = book.pendingWalks.contains { $0.id == a.id } || book.via[a.id] != nil
                 if waiting { k.waited += dt; if k.waited > Self.lineWaitMax { k.off = max(k.off, k.budget + 1) } } else { k.off += dt }          // (a body waiting its turn for the gate or the middle is not late: the wait is bounded by the one it waits for, who is kept to his own allowance)
                 k.probeT += dt
-                if k.probeT >= 0.5 { k.still = simd_distance(here, k.probe) < 0.05 && !waiting ? k.still + k.probeT : 0; k.probe = here; k.probeT = 0 }
+                if k.probeT >= Self.lineWindow {          // (net progress over a window, not step by step: a body held by a seated one jiggles a few cm and goes nowhere)
+                    k.still = simd_distance(here, k.probe) < 0.3 && !waiting ? k.still + k.probeT : 0; k.probe = here; k.probeT = 0
+                }
                 let idle = b.pending == nil && { if case .none = b.script { return true }; return false }()
                 // a body that stands still off its seat: one fresh ask for a seat that is not the middle (the middle walks have their own retry), then the carry
-                if k.still > 0.5, !k.asked, simd_distance(seat, ShowStage.playerSpot) > 0.01 { k.asked = true; showRoute(a, to: seat) }
+                if k.still > 0.1, !k.asked, simd_distance(seat, ShowStage.playerSpot) > 0.01 { k.asked = true; showRoute(a, to: seat) }
                 if k.still > (idle || b.heldByPeer ? Self.lineStall : Self.lineStallWalk) { k.off = max(k.off, k.budget + 1) }          // (held by a body on its leg that the planner cannot go round: the same as standing)
                 if k.off > k.budget {
                     let aim = k.viaGate && simd_distance(here, ShowStage.gate) > 0.3 && (here.y < Self.backRowLine) != (seat.y < Self.backRowLine) ? ShowStage.gate : seat
                     // the line to the carry's goal is free of bodies, or the wait for it is over (then the carry goes regardless: the others have their own allowance)
-                    if lineClear(here, aim, except: a.id, bodies) || k.off > k.budget + Self.lineWaitMax { k.gliding = true; showLineBegin(a, b) }
+                    let otherGliding = bodies.contains { $0.id != a.id && (book.keep[$0.id]?.gliding ?? false) }
+                    if !otherGliding && lineClear(here, aim, except: a.id, bodies) || k.off > k.budget + Self.lineWaitMax { k.gliding = true; showLineBegin(a, b) }          // (one carry at a time: two carried through the gate meet there)
                 }
             }
             if k.gliding {
