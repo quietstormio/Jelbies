@@ -118,6 +118,9 @@ enum RoomLayout {
         return 0.14
     }()
 
+    /// The park / home slide's walls are 0.9 high and 0.16 thick: a walker's arm reached 0.24 past the footprint and 11 cm into them, so the slide keeps the walker this much further.
+    static let slideArmPad: Float = 0.12
+
     /// Pushes a sphere (centre, radius) out of walls, sofa and props; returns the corrected centre (y untouched).
     static func resolve(position p0: SIMD3<Float>, radius: Float, lowPropScale: Float = 1, ignoreDecor: Int? = nil) -> SIMD3<Float> {
         var p = p0
@@ -151,7 +154,7 @@ enum RoomLayout {
             }
             for b in dynamicBoxes { pushOut(&p, radius: radius * lowPropScale, box: b) }
             for b in tableBoxes.values { pushOut(&p, radius: radius * lowPropScale, box: b) }
-            for f in decorFeet where f.spec.solid && f.uid != ignoreDecor { pushOut(&p, radius: radius * f.spec.reach + armPad, box: f.box) }
+            for f in decorFeet where f.spec.solid && f.uid != ignoreDecor { pushOut(&p, radius: radius * f.spec.reach + armPad + (f.kind == .slide ? slideArmPad : 0), box: f.box) }
             if !ballSpheres.isEmpty { pushOutOfBalls(&p, radius: radius, ignore: ignoreDecor) }
         }
         return p
