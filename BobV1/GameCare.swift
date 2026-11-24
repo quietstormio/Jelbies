@@ -26,6 +26,7 @@ final class GameCare {
     /// no-stuck-r1: the general release guard's clocks and count (GameCare+StuckRelease.swift).
     @ObservationIgnored var stuckHeldT: [String: Float] = [:]
     @ObservationIgnored var stuckReleased = 0
+    @ObservationIgnored var stuckSeenFree: Set<ObjectIdentifier> = []
     /// A group action (call everyone / come here walking to its spots, a group serving, a group bedtime walk) is on: the Cancel pill shows from its start.
     var cancelPill = false
     /// A voice command asked for a Town screen ("let's race" / "time to train" open the Track for the selected Jelly): GameScreen watches `townRequest`.

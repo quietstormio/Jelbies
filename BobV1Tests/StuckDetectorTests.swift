@@ -71,7 +71,7 @@ final class StuckDetectorTests: XCTestCase {
         step(r, 10)
         for a in r.actors { a.profile?.needs.set(.hunger, 0.1) }
         r.care.feed()
-        step(r, 90)
+        step(r, 100)
     }
 
     func testFlagsTheLostCallBeforeTheFix() {

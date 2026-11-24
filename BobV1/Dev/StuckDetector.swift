@@ -32,7 +32,7 @@ final class StuckDetector {
 
     // limits (game seconds)
     static let autonomyOffAfter: Float = 8, motionlessAfter: Float = 45, commandedAfter: Float = 15, reservedAfter: Float = 30, callLostAfter: Float = 6
-    static let feedTapAfter: Float = 75, comeTapAfter: Float = 6, mealLockAfter: Float = 240, approachAfter: Float = 40, leavingAfter: Float = 12, cancelPillAfter: Float = 150
+    static let feedTapAfter: Float = 90, comeTapAfter: Float = 6, mealLockAfter: Float = 240, approachAfter: Float = 40, leavingAfter: Float = 12, cancelPillAfter: Float = 150
     static let bathAfter: Float = 420, tripAfter: Float = 1500, welcomeAfter: Float = 180, outingAfter: Float = 120, socialAfter: Float = 240, audioAfter: Float = 25
 
     private var acc: Float = 0
@@ -44,16 +44,18 @@ final class StuckDetector {
     private var still: [Int: (p: SIMD2<Float>, sig: String, t: Float)] = [:]
     private var lastSummary: Float = 0
     // taps (GameCare calls `noteTap`)
-    struct Tap { let what: String; let at: Float; let notice: Int; let msgs: Int }
+    struct Tap { let what: String; let at: Float; let notice: Int; let msgs: Int; let phases: Int; var ate = false }
+    private var phaseChanges = 0
+    private var everFree = Set<ObjectIdentifier>()          // (a body never free - a test rig's pinned Jelly 0 - is not "switched off")
     private var taps: [Tap] = []
     private var phaseAge: (FocusPhase, Float) = (.roaming, 0)
 
-    func reset() { events = [:]; log = []; simTime = 0; lastSummary = 0; acc = 0; age = [:]; flagged = [:]; still = [:]; taps = []; phaseAge = (.roaming, 0) }
+    func reset() { everFree = []; phaseChanges = 0; events = [:]; log = []; simTime = 0; lastSummary = 0; acc = 0; age = [:]; flagged = [:]; still = [:]; taps = []; phaseAge = (.roaming, 0) }
 
     /// GameCare calls this when the player taps Feed / Water ("feed" / "water") or Come here ("come").
     func noteTap(_ what: String, care: GameCare) {
         guard Self.on else { return }
-        taps.append(Tap(what: what, at: simTime, notice: care.noticeSerial, msgs: GameMessageCenter.shared.stuckSerial))
+        taps.append(Tap(what: what, at: simTime, notice: care.noticeSerial, msgs: GameMessageCenter.shared.stuckSerial, phases: phaseChanges))
     }
 
     /// The release guard (GameCare+StuckRelease.swift) let a body go: counted as a bug of its own kind.
@@ -68,7 +70,10 @@ final class StuckDetector {
         guard Self.on else { return }
         simTime += dt; acc += dt
         let p = care.focus.phase
-        if p == phaseAge.0 { phaseAge.1 += dt } else { phaseAge = (p, 0) }
+        if p == phaseAge.0 { phaseAge.1 += dt } else { phaseAge = (p, 0); phaseChanges += 1 }
+        if !taps.isEmpty, care.raceBook.actors.contains(where: { $0.brain?.activity == .eating || $0.brain?.activity == .drinking }) || care.brainFor(0).map({ $0.activity == .eating || $0.activity == .drinking }) == true {
+            for i in taps.indices { taps[i].ate = true }
+        }
         guard acc >= 1 else { return }
         let step = acc; acc = 0
         judge(findings(care: care, step: step), step: step)
@@ -114,7 +119,8 @@ final class StuckDetector {
             let parked = trip || c.tripFrozen(id) || c.parkHides(id)
             // a body whose life is off while nothing holds it
             let guest = id >= c.jellies.count          // (a visiting friend: his walk in / out runs with autonomy off; only `motionless` applies)
-            if homeQuiet, !guest, !b.autonomy, !b.isSleeping, b.social == nil, !b.reserved, b.commandedIdle == nil, !b.race.active, !b.volley.active {
+            if b.autonomy { everFree.insert(ObjectIdentifier(b)) }
+            if homeQuiet, !guest, !b.autonomy, everFree.contains(ObjectIdentifier(b)), !b.isSleeping, b.social == nil, !b.reserved, b.commandedIdle == nil, !b.race.active, !b.volley.active {
                 out.append(Finding(kind: "autonomy-off", who: id, limit: Self.autonomyOffAfter, detail: "\(line(b)) | \(game)"))
             }
             if b.commanded, b.job == nil, b.pending == nil, b.scriptIsNone, b.commandedIdle == nil, !trip {
@@ -144,12 +150,12 @@ final class StuckDetector {
             let el = simTime - t.at
             let said = c.noticeSerial != t.notice || GameMessageCenter.shared.stuckSerial != t.msgs
             switch t.what {
-            case "come":
-                if c.focus.phase != .roaming || said { return true }
+            case "come":          // answered: the call started (the phase moved, even if a Cancel came in the same second) or a line said why not
+                if c.focus.phase != .roaming || phaseChanges != t.phases || said { return true }
                 if el >= Self.comeTapAfter { out.append(Finding(kind: "tap-no-effect", who: -1, limit: 0, detail: "come tap \(Int(el)) s ago: nothing | \(game)")); return true }
-            default:
-                if c.dining.isPresent || said && !c.trayOut { return true }
-                if el >= Self.feedTapAfter { out.append(Finding(kind: "tap-no-effect", who: -1, limit: 0, detail: "\(t.what) tap \(Int(el)) s ago: no tray | wanted=\(c.wanted != nil ? 1 : 0) meal=\(c.meal != nil ? 1 : 0) \(game)")); return true }
+            default:              // answered: somebody ate / drank, or the serving is over (refused with a line, or the tray came and went: "not hungry")
+                if t.ate || !c.trayOut && (said || el > 2) { return true }
+                if el >= Self.feedTapAfter { out.append(Finding(kind: "tap-no-effect", who: -1, limit: 0, detail: "\(t.what) tap \(Int(el)) s ago: nobody ate | trayPresent=\(c.dining.isPresent ? 1 : 0) wanted=\(c.wanted != nil ? 1 : 0) meal=\(c.meal != nil ? 1 : 0) \(game)")); return true }
             }
             return false
         }

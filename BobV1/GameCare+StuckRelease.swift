@@ -4,7 +4,7 @@
 //  generalised from "a body the close-up took" to ANY Jelmiko. When nothing in the game holds anybody (no close-up or call, no trip or outing, no meal / tray / group serving, no bath,
 //  no welcome, no Play, no Show stage, no bedtime walk), a Jelmiko whose life is still switched off, or who is still `commanded` with nothing to do, is let go after `stuckReleaseAfter` s.
 //  Each release logs `[stuck] released id=... was=...` so it is counted as a bug (the dev soak's stuck detector counts these too), never hidden.
-//  Never touches a sleeper, a pair / group moment (`social`), a reserved body, a commanded idle or a race / volley body. `-StuckRelease 0` (dev builds; also `-FreezeFix 0`) = off, for baselines.
+//  Only a body that has been free before (autonomy on at some point) is given its life back. Never touches a sleeper, a pair / group moment (`social`), a reserved body, a commanded idle or a race / volley body. `-StuckRelease 0` (dev builds; also `-FreezeFix 0`) = off, for baselines.
 //
 
 import Foundation
@@ -29,11 +29,12 @@ extension GameCare {
     /// Once per fixed step (Jelly 0's care tick).
     func stuckReleaseTick(dt: Float) {
         guard Self.stuckReleaseOn else { return }
+        for id in 0..<max(jellies.count, 1) { if let b = brainFor(id), b.autonomy { stuckSeenFree.insert(ObjectIdentifier(b)) } }
         guard nothingHolds else { if !stuckHeldT.isEmpty { stuckHeldT = [:] }; return }
         for id in 0..<max(jellies.count, 1) {
             guard let b = brainFor(id), b.enabled else { continue }
             let free = b.isSleeping || b.social != nil || b.reserved || b.commandedIdle != nil || b.race.active || b.volley.active
-            let off = !free && !b.autonomy
+            let off = !free && !b.autonomy && stuckSeenFree.contains(ObjectIdentifier(b))          // (only a life the game switched off: a body that was never free - a test rig's pinned one, a dev `-BlobNoWander` - is left alone)
             let orphan = !free && b.commanded && b.job == nil && b.pending == nil && b.scriptIsNone && b.commandedDecor == nil && !b.commandedFlip && !b.commandedNameHop
             for (what, on) in [("autonomy-off", off), ("commanded", orphan)] {
                 let k = "\(what)#\(id)"
