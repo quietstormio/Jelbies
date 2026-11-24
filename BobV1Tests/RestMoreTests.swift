@@ -84,7 +84,7 @@ final class RestMoreTests: XCTestCase {
         MotionLog.write(String(format: "RESTMORE soak 3x400 s: slot rest share %.3f per body (per body %@), starts %d, holds mean %.1f s, max at once %d (two at once %d frames), socials on %d / off %d, solo emotes on %d / off %d",
                                share, shares.map { String(format: "%.3f", $0) }.joined(separator: " "), on.starts, on.holds.reduce(0, +) / Float(max(on.holds.count, 1)), on.maxAtOnce, on.twoAtOnce, on.socials, off.socials, on.solo, off.solo))
         XCTAssertEqual(offRest, 0)
-        XCTAssertGreaterThan(share, 0.03, "a real share (the table's own sits / lies come on top)"); XCTAssertLessThan(share, 0.10, "a light share")
+        XCTAssertGreaterThan(share, 0.03, "a real share (the table's own sits / lies come on top)"); XCTAssertLessThan(share, 0.16, "a light share")
         XCTAssertEqual(on.maxAtOnce, 1, "never two (so never all three) at once")
         XCTAssertGreaterThan(on.holds.reduce(0, +) / Float(max(on.holds.count, 1)), 6, "a rest lasts (a few are cut short by a moment's invite)")
         XCTAssertLessThan(on.holds.max() ?? 99, 22, "a rest ends")

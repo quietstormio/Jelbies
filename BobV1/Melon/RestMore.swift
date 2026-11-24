@@ -19,7 +19,7 @@ nonisolated enum RestMore {
     }
     nonisolated(unsafe) static var on: Bool = flag()
     /// Seconds between one slot rest and the next urge (per body), the hold (s), the share of sits (the rest lie down).
-    nonisolated(unsafe) static var gap: ClosedRange<Float> = 125...210
+    nonisolated(unsafe) static var gap: ClosedRange<Float> = 60...110
     nonisolated(unsafe) static var firstGap: ClosedRange<Float> = 25...100
     /// A rest only starts while the special cooldown still has this many seconds to run (it counts down during the rest: the next pick is due about when he is up).
     static let minCooldown: Float = 1.5
@@ -27,7 +27,7 @@ nonisolated enum RestMore {
     static let sitShare: Float = 0.6
     /// Clear of every other body by this much (u) to sit / to lie; a refused try is made again after `retry` s.
     static let sitClear: Float = 1.2, lieClear: Float = 1.8
-    static let retry: ClosedRange<Float> = 4...9
+    static let retry: ClosedRange<Float> = 3...6
     /// The gap is shorter for a grumpy body (tired) and longer in the evening is NOT used: the evening gets the table's own sit weight.
     static let grumpyGapMul: Float = 0.75
 }
