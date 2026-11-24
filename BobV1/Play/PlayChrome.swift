@@ -72,7 +72,7 @@ struct PlayChrome: View {
                     .accessibilityIdentifier("play-surface")
                 Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
                     .onChange(of: play.phase == .inHand && !thrown && play.camBlend > 0.8, initial: true) { _, on in          // (the hint is a line on the one message bar)
-                        if on { GameMessageCenter.shared.post("Flick the ball to a Jelmiko", priority: .chatty, identifier: "play-hint", sticky: GameMessageCenter.hintsSticky) }
+                        if on { GameMessageCenter.shared.post(PlayHint.text(toy: play.toyTitle), priority: .chatty, identifier: "play-hint", sticky: GameMessageCenter.hintsSticky) }
                         else { GameMessageCenter.shared.dismiss(identifier: "play-hint") }          // (thrown, or the toy is away: the hint has done its job)
                     }
                 // hearts from the hand
@@ -176,5 +176,13 @@ struct PassBackPill: View {
         .accessibilityIdentifier("play-pass-back")
         .accessibilityLabel("Pass it back")
         .accessibilityHint("Asks the Jelmiko to send the ball back to you")
+    }
+}
+
+/// The Play hint line, with the toy's own name ("Flick the bouncy ball to a Jelmiko"). The bubble wand has its own line ("Hold the wand to blow bubbles", Toys/BubbleOverlay.swift).
+enum PlayHint {
+    static func text(toy title: String) -> String {
+        let t = title.trimmingCharacters(in: .whitespaces).lowercased()
+        return "Flick the \(t.isEmpty ? "toy" : t) to a Jelmiko"
     }
 }
