@@ -44,6 +44,20 @@ nonisolated enum VolleyTuning {
     static let bodyTop: Float = 1.35             // a resting Jelbie's crown
     /// `-VolleyOld 1`: the play and the serve ball as they were before 2026-11-17 (the "before" numbers of the win-rate table and the serve-timing pin).
     nonisolated(unsafe) static var old: Bool = UserDefaults.standard.bool(forKey: "VolleyOld")
+    /// `-VolleyHard 0`: the play and the computer team as they were at install 10t (the "before" of the harder-and-polished round, 2026-11-24).
+    nonisolated(unsafe) static var hard: Bool = {
+        #if STANDALONE
+        if let v = ProcessInfo.processInfo.environment["HARD"] { return v != "0" }
+        #endif
+        return UserDefaults.standard.object(forKey: "VolleyHard") == nil ? true : UserDefaults.standard.bool(forKey: "VolleyHard")
+    }()
+    /// `-VolleyFacing 0`: bodies do not turn to the ball and a touch may begin with the ball behind the hitter (as before 2026-11-24). Independent of `hard`: `-VolleyHard 0 -VolleyFacing 1` is the old play with only the facing rule.
+    nonisolated(unsafe) static var facing: Bool = {
+        #if STANDALONE
+        if let v = ProcessInfo.processInfo.environment["FACING"] { return v != "0" }
+        #endif
+        return UserDefaults.standard.object(forKey: "VolleyFacing") == nil ? true : UserDefaults.standard.bool(forKey: "VolleyFacing")
+    }()
     // match
     static let pointsToWin = 3               // rally scoring: first to 3, no win-by-2, no cap
     static let maxTouches = 3                // bump, set, spike
@@ -51,6 +65,8 @@ nonisolated enum VolleyTuning {
     static let serveWaitAI: Float = 1.1
     static let introSeconds: Float = 1.6
     // players
+    /// A hit starts only with the ball in front of the hitter: inside this half angle of where he looks, or inside `overheadRadius` of him (right over his head).
+    static let facingHalfAngle: Float = .pi / 3, overheadRadius: Float = 0.45
     static let restYaw: Float = 0.95             // 3/4 toward the camera, facing the net
     /// Two bodies on one side never come closer than this (centre to centre): a body is ~1.1 wide, plus a margin. `partnerGap` is how far apart two teammates' wishes are
     /// kept (the one nearer the ball keeps his spot, the other steps aside); `brainGap` is the least a step, jump or dive may end from the partner's body.
@@ -125,7 +141,9 @@ nonisolated struct VolleyStats: Codable, Equatable, Sendable {
     /// The computer team of a tier.
     static func team(_ t: VolleyTier) -> VolleyStats {
         let s = t.skill
-        return VolleyStats(speed: 0.15 + 0.7 * s, power: 0.2 + 0.6 * s, hops: 0.2 + 0.6 * s, timing: 0.2 + 0.7 * s)
+        let add: Float = VolleyTuning.hard ? 0.20 : 0          // (2026-11-24: the visitors are a lot quicker on their feet, by tier)
+        let more: Float = VolleyTuning.hard ? 0.10 : 0          // (and a little stronger, higher and truer at the top)
+        return VolleyStats(speed: min(1, 0.15 + 0.7 * s + add * (0.4 + s)), power: min(1, 0.2 + 0.6 * s + more * s), hops: min(1, 0.2 + 0.6 * s + more * s), timing: min(1, 0.2 + 0.7 * s + more * s))
     }
 }
 
