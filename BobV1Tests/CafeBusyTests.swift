@@ -74,6 +74,20 @@ final class CafeBusyTests: XCTestCase {
         XCTAssertGreaterThan(gaps.reduce(0, +) / Float(gaps.count), 25)
     }
 
+    func testNoEntranceRightAfterAnExit() {
+        var c = CafeCrowd(slots: 1, seed: 21)
+        _ = c.seatInitial()
+        var t: Float = 0, lastGone: Float = -99
+        var checked = 0
+        while t < 400 {
+            t += 1.0 / 60
+            for e in c.tick(dt: 1.0 / 60) { switch e {
+                case .enter(let g): XCTAssertGreaterThanOrEqual(t - lastGone, CafeCrowd.coolAfterLeave - 0.05, "the door bell of an entrance never falls inside the gap of the exit's"); checked += 1; c.seated(g.id)
+                case .leave(let id): c.gone(id); lastGone = t } }
+        }
+        XCTAssertGreaterThan(checked, 2)
+    }
+
     func testOnlyOneGroupWalksAtATime() {
         var c = CafeCrowd(slots: 3, seed: 5)
         _ = c.seatInitial()

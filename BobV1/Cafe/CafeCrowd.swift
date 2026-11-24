@@ -84,6 +84,9 @@ nonisolated struct CafeCrowd {
     var bodies: Int
     private(set) var groups: [CafeCrowdGroup] = []
     private(set) var nextArrival: Float
+    /// Seconds after a group has left before the next one may walk in (the door bell's own gap is 1.5 s: two bells back to back would sound as one).
+    private(set) var cool: Float = 0
+    static let coolAfterLeave: Float = 4
     private var serial = 0
     var entered = 0, left = 0
 
@@ -118,20 +121,20 @@ nonisolated struct CafeCrowd {
 
     /// The runtime reports: the whole group is seated (its stay starts) / the whole group is out of the door (its table and bodies are free again).
     mutating func seated(_ id: Int) { if let i = groups.firstIndex(where: { $0.id == id }) { groups[i].phase = .seated } }
-    mutating func gone(_ id: Int) { if groups.contains(where: { $0.id == id }) { groups.removeAll { $0.id == id }; left += 1 } }
+    mutating func gone(_ id: Int) { if groups.contains(where: { $0.id == id }) { groups.removeAll { $0.id == id }; left += 1; cool = Self.coolAfterLeave } }
 
     /// Once per step. Only one group walks at a time: a due entrance or exit waits until nobody is walking.
     mutating func tick(dt: Float) -> [Event] {
         var out: [Event] = []
         for i in groups.indices where groups[i].phase == .seated { groups[i].stay -= dt }
-        nextArrival -= dt
+        nextArrival -= dt; cool = max(0, cool - dt)
         guard !walking else { return out }
         if let i = groups.indices.filter({ groups[$0].phase == .seated && groups[$0].stay <= 0 }).min(by: { groups[$0].stay < groups[$1].stay }) {
             groups[i].phase = .leaving
             out.append(.leave(group: groups[i].id))
             return out
         }
-        if nextArrival <= 0, groups.count < Self.maxGroups, !freeSlots.isEmpty {
+        if nextArrival <= 0, cool <= 0, groups.count < Self.maxGroups, !freeSlots.isEmpty {
             let slot = freeSlots[min(freeSlots.count - 1, Int(rng.next() * Float(freeSlots.count)))]
             guard let g = makeGroup(slot: slot, phase: .arriving) else { return out }
             groups.append(g); entered += 1
