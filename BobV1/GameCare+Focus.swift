@@ -33,7 +33,7 @@ final class FocusGroup {
     /// Bodies the safety net released (tests / diagnostics).
     var netReleased = 0
     /// Dev / test switches: the single hand-back when the call ends (off = the earlier per-path behaviour), and the safety net.
-    nonisolated(unsafe) static var handBackFix = true, netEnabled = true
+    nonisolated(unsafe) static var handBackFix = ProcessInfo.processInfo.environment["FREEZE_FIX_OFF"] == nil, netEnabled = ProcessInfo.processInfo.environment["FREEZE_FIX_OFF"] == nil
     /// Jellies whose `.come` walk has just finished (reported by their brain).
     var came: Set<Int> = []
     /// The Jelly under the finger in the close-up (set by the stage); his centroid anchors the hearts (`touchAnchor`).
@@ -328,7 +328,7 @@ extension GameCare {
         select.cancel()
         // a close-up that has just ended hands the paused Jellies' wandering back one brain per step (`driveFocus`); a call landing inside that window used
         // to wipe `saved` in `begin` and leave them with autonomy off for good (2026-10-21: "the other ones are stuck"). Hand it back here first.
-        handBackEveryone()          // (a call that lands inside the window after one has just ended: everyone is given back first, Jelly 0 too, so no snapshot below records an "off")
+        if FocusGroup.handBackFix { handBackEveryone() } else { for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a } }          // (a call that lands inside the window after one has just ended: everyone is given back first, Jelly 0 too, so no snapshot below records an "off")
         focusGroup.rowSpacing = isPreview ? GameCamera.pickRowSpacing : GameCamera.focusRowSpacing
         let others = (isPreview || !FocusGroup.sleeperFix) ? [] : (0..<jellies.count).filter { !ids.contains($0) && brainFor($0)?.isSleeping == true }.compactMap { floorOf($0) }          // (the uncalled who LIE: the row is laid clear of them; an awake one walks out of the camera's wedge by himself, `evictFromKeepOut`)
         focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }), avoiding: others, reachable: { p in ids.compactMap { self.brainFor($0) }.allSatisfy { simd_distance($0.fixed(p), p) < 0.12 } })
