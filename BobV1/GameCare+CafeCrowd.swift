@@ -353,13 +353,14 @@ extension GameCare {
                 var route = crowdRoute(g, m, from: from, to: to, landscape: landscape)
                 if !route.isEmpty {
                     let inward = Self.crowdInward()
-                    if g.phase == .arriving, !m.replan {          // one straight, continuous walk in: a lead point well inside the floor, then the route from there
+                    let along = simd_dot(g.phase == .arriving ? (to - from) : (from - to), inward)          // (how far the seat lies in from the entrance, along the way in)
+                    if g.phase == .arriving, !m.replan, along > 3.4 {          // one straight, continuous walk in: a lead point well inside the floor, then the route from there
                         let lead = from + inward * 2.4
                         if CafeRoute.clearLine(from, lead, base: crowdDiscs(for: g, excluding: m, landscape: landscape), gap: Self.crowdMinGap - 0.2) {
                             let rest = crowdRoute(g, m, from: lead, to: to, landscape: landscape)
                             if !rest.isEmpty { route = [lead] + rest }
                         }
-                    } else if g.phase == .leaving, !m.replan {          // out the same way: the last leg is a straight walk out of the entrance
+                    } else if g.phase == .leaving, !m.replan, along > 3.4 {          // out the same way: the last leg is a straight walk out of the entrance
                         let leadOut = to + inward * 2.4          // (2.4 u inside the entrance: the last leg is straight)
                         let pre = crowdRoute(g, m, from: from, to: leadOut, landscape: landscape)
                         if !pre.isEmpty { route = pre + [to] }
