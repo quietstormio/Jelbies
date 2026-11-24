@@ -225,7 +225,7 @@ final class BlobNeeds {
     /// Reads the stored levels and applies the time since the stored stamp through `applyAway`; seeds a first launch.
     func load() {
         guard let d = defaults.dictionary(forKey: key), let l = d["levels"] as? [Double], l.count == 3, let t = d["time"] as? Double else {
-            raw = [NeedsTuning.seedHunger, NeedsTuning.seedOthers, NeedsTuning.seedOthers]       // first launch: hunger wanting
+            raw = [NeedsTuning.seedArrival, NeedsTuning.seedArrival, NeedsTuning.seedArrival]       // first launch (a new Jelmiko arriving): every need full
             lastWantedSet = wantedSet
             if persists { save() }
             publish(force: true)
