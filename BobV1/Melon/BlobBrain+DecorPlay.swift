@@ -86,10 +86,10 @@ extension BlobBrain {
         bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y, apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
     }
 
-    /// no-clip-r1: while he sits, rides and gets up the arms go up in the cheer's own arm pose (`armDirEl` 0.95: the stretch / jacks / win cheer): at his sides they lay in the chute's walls (up to 13 cm).
+    /// no-clip-r1: while he sits, rides and gets up the arms point forward down the chute: at his sides they lay in the chute's walls and the ladder posts (up to 13 cm).
     private func slideArmsUp(_ k: Float, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         armWalkWant = 1
-        armDirW = smooth01(k); armDirEl = [1.1, 1.1]; armDirSa = [0.10, 0.10]; armDirOut = 0          // (straight up, no splay: with 0.07 the tips reached 0.83 out, into the ladder posts at 0.77)
+        armDirW = smooth01(k); armDirEl = [0.35, 0.35]; armDirSa = [1.25, 1.25]; armDirOut = 0          // (the arms point FORWARD down the chute: raised or at his sides the stubs reach 0.85 out, over the rails and posts that stand at 0.77; the chute is as wide as his belly)
         driveArms(sim, skinner, dt)
     }
 
