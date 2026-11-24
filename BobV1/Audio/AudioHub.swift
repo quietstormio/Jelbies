@@ -580,10 +580,9 @@ final class AudioHub {
         case .countdown: play(.countdownBeep)
         case .go: play(.whistle)
         case .ring: play(.tick, volume: 0.5)
-        case .land: play(.statUp, volume: 0.8); play(.cheerSmall, volume: 0.6)
+        case .land: play(.statUp, volume: 0.8)
         case .flop: play(.wobble); play(.boop, volume: 0.5)
         case .burst: play(.perkSparkle); play(.sparkle)
-        case .applause: play(.cheerSmall)
         case .jingle(let win): playJingle(win ? .win : .lose)
         }
     }

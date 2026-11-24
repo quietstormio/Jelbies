@@ -39,7 +39,6 @@ nonisolated enum SoundCaptions {
         case .volleyPoint: return "Crowd cheers for the point"
         case .statUp: return "Level-up chime"
         case .perfectStreak: return "Streak chime"
-        case .cheerSmall: return "Crowd cheers"
         case .tired: return name.map { "\($0) sighs" } ?? "Tired sigh"
         case .storeOpen: return "Shop bell"
         case .doorbell: return "Doorbell"
