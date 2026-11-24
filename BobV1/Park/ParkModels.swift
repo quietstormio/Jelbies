@@ -120,8 +120,9 @@ nonisolated struct ParkVisitor: Codable, Identifiable, Equatable, Sendable {
     /// A worn item (a hat, glasses, a bow ...), sometimes.
     var wear: WearLook?
     var style: ParkStyle
-    /// One short line about them, and what they say hello with.
+    /// One short line about them.
     var blurb: String
+    /// Unused since park-no-greeting-r1 (always ""; kept so old saves still decode).
     var greeting: String
     /// The line they say when the friendship reaches Pal / Friend / Best friend, by level raw value ("1", "2", "3"). Cached once.
     var levelLines: [String: String] = [:]
@@ -207,15 +208,10 @@ nonisolated enum ParkWords {
         }
         return r.pick(l)
     }
+    /// (park-no-greeting-r1) Visitors no longer carry a greeting line: nothing is written. The one random draw it used to take stays, so every later pick of a visitor's colour / style / name is unchanged.
     static func greeting(_ name: String, _ s: ParkStyle, _ r: inout ParkRandom) -> String {
-        let l: [String]
-        switch s {
-        case .energetic: l = ["Hi hi hi! Catch me!", "Race you to the bench!", "Ooh, play with me!"]
-        case .calm: l = ["Hello, nice to see you.", "What a lovely day.", "Hi. Come sit with me."]
-        case .playful: l = ["Hee hee, hello!", "Want to be silly together?", "Boop! Hi there!"]
-        case .balanced: l = ["Hello, friend!", "Hi! Good to see you.", "Hey, nice day, isn't it?"]
-        }
-        return r.pick(l)
+        _ = r.pick(["", "", ""])
+        return ""
     }
     static func levelLine(_ name: String, _ level: ParkFriendLevel) -> String {
         switch level {
@@ -340,7 +336,7 @@ nonisolated enum ParkPool {
             let s: ParkVisitor? = stock.indices.contains(vs[i].id) ? stock[vs[i].id] : nil
             if !ParkTextSafety.isSafe(vs[i].name, isName: true) { vs[i].name = s?.name ?? ParkWords.names[vs[i].id % ParkWords.names.count]; changed = true }
             if !ParkTextSafety.isSafe(vs[i].blurb) { var r = ParkRandom(UInt64(vs[i].id) &+ 0xB1); vs[i].blurb = s?.blurb ?? ParkWords.blurb(vs[i].style, &r); changed = true }
-            if !ParkTextSafety.isSafe(vs[i].greeting) { var r = ParkRandom(UInt64(vs[i].id) &+ 0x67); vs[i].greeting = s?.greeting ?? ParkWords.greeting(vs[i].name, vs[i].style, &r); changed = true }
+            vs[i].greeting = ""          // (the greeting line is gone: an old save's text is dropped)
             for (k, line) in vs[i].levelLines where !ParkTextSafety.isSafe(line) { vs[i].levelLines[k] = nil; changed = true }
         }
         return changed

@@ -30,14 +30,16 @@ final class NeedsTests: XCTestCase {
 
     // MARK: seed + decay
 
-    func testFirstLaunchIsSeededWithHungerWantingAndOnlyHunger() {
+    func testFirstLaunchIsSeededFullWithNothingWanting() {
         let d = suite()
         let n = make(d)
-        XCTAssertEqual(n.level(.hunger), NeedsTuning.seedHunger, accuracy: 1e-6)
-        XCTAssertEqual(n.wantedNeed, .hunger, "open the app -> food bubble")
-        XCTAssertEqual(n.wantingCount, 1)
-        XCTAssertEqual(n.mood, .grumpy)
-        // a later launch does not seed again
+        for k in NeedKind.allCases { XCTAssertEqual(n.level(k), 1, accuracy: 1e-6) }
+        XCTAssertNil(n.wantedNeed, "a new Jelmiko arrives full: no bubble")
+        XCTAssertEqual(n.wantingCount, 0)
+        XCTAssertEqual(n.mood, .happy)
+        // a later launch does not seed again: the saved (lower) levels come back
+        n.set(.hunger, 0.2); n.save()
+        XCTAssertEqual(make(d).wantedNeed, .hunger, "an existing save is not re-seeded")
         n.restore(.hunger); n.save()
         let again = make(d)
         XCTAssertGreaterThan(again.level(.hunger), 0.99)
