@@ -50,6 +50,8 @@ enum PlayEvent: Equatable {
 enum OwnGame: Equatable {
     case none
     case passing(left: Int, from: Int, to: Int)
+    /// beach-volley-r1: a bout of the beach ball (PlayBout.swift): the Jelmiko bounce it between each other, wherever they stand, until it touches the floor, 12 touches, or the button.
+    case bout
 }
 
 @MainActor
@@ -73,14 +75,14 @@ final class PlayToss {
         var left = override ?? pendingPasses; if case .passing(let l, _, _) = ownGame { left = l }
         NSLog("[chain] end throw=%d passes=%d left=%d reason=%@ clock=%.2f", throwSerial, passes, left, reason, clock)
     }
-    var keeping: Bool { if case .passing = ownGame { return true }; return false }
+    var keeping: Bool { switch ownGame { case .passing, .bout: return true; case .none: return false } }
     var active: Bool { phase != .off }
     /// The ball game is on (the Jelbies are held to their play line); a non-ball toy (the bubble wand, `.toy`) leaves them free.
     var ballGame: Bool { active && phase != .toy }
     private(set) var ballKind: DecorKind = .ball
     private(set) var toyTitle = ""
     /// Rally of the last throw (hand-offs between a Jelbie and the ball), shown as a small "x3" for a moment after a catch.
-    private(set) var rally = 0
+    var rally = 0
     private(set) var shownRally = 0
     private(set) var catchSerial = 0
     private(set) var throwSerial = 0
@@ -97,7 +99,7 @@ final class PlayToss {
     @ObservationIgnored private(set) var nudges = 0
     @ObservationIgnored var looseT: Float = 0          // (play-net-r1: internal set)
     @ObservationIgnored private(set) var flightT: Float = 0
-    @ObservationIgnored private(set) var headers = 0
+    @ObservationIgnored var headers = 0
     @ObservationIgnored private(set) var rescues = 0
     @ObservationIgnored private(set) var passes = 0
     @ObservationIgnored private(set) var leftHand = false
@@ -113,7 +115,7 @@ final class PlayToss {
     @ObservationIgnored private var footPlan: [Int: (spot: SIMD2<Float>, dir: SIMD2<Float>, planned: Float, until: Float)] = [:]
     @ObservationIgnored private var kickHeightT: Float?
     /// The passes this throw is meant to make before the ball goes back (rolled at the throw from the style: 0 = none) and when the player asked for it back.
-    @ObservationIgnored private(set) var pendingPasses = 0
+    @ObservationIgnored var pendingPasses = 0
     @ObservationIgnored private var recallAt: Float?
     @ObservationIgnored private var passStill: Float?
     /// A pass under way: where the ball is to come to rest and how hard it is braked (m/s^2).
@@ -127,16 +129,18 @@ final class PlayToss {
     var netUp = false
     @ObservationIgnored var net = PlayNetState()
     @ObservationIgnored private var bumpNeeded = false
-    @ObservationIgnored private var interceptAt: [Int: (p: SIMD2<Float>, t: Float)] = [:]
+    @ObservationIgnored var interceptAt: [Int: (p: SIMD2<Float>, t: Float)] = [:]
     @ObservationIgnored private var saved: [Int: (reserved: Bool, idleBlocked: Bool, waitFocus: SIMD2<Float>?)] = [:]
+    // beach-volley-r1 (PlayBout.swift): the bout's state
+    @ObservationIgnored var bout = BoutState()
     @ObservationIgnored private var rng: UInt64 = 0x9E3779B97F4A7C15
     @ObservationIgnored private(set) var clock: Float = 0
     /// For tests: pins the header quality (nil = rolled).
     @ObservationIgnored var forceQuality: Quality?
     @ObservationIgnored var spots: [Int: SIMD2<Float>] = [:]
     /// Each Jelbie's place on the play line (by id) and when he was last sent back to it.
-    @ObservationIgnored private var home: [Int: SIMD2<Float>] = [:]
-    @ObservationIgnored private var homeT: [Int: Float] = [:]
+    @ObservationIgnored var home: [Int: SIMD2<Float>] = [:]
+    @ObservationIgnored var homeT: [Int: Float] = [:]
     @ObservationIgnored private var turnT: [Int: Float] = [:]
 
     nonisolated deinit {}
@@ -155,7 +159,7 @@ final class PlayToss {
     static let kickHeightAbove: Float = 0.30
     static func contactDist(_ r: Float) -> Float { TossTuning.bodyRadius + r + 0.08 }
 
-    private func rand() -> Float {
+    func rand() -> Float {
         rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17
         return Float(rng >> 40) / Float(1 << 24)
     }
@@ -233,6 +237,7 @@ final class PlayToss {
         phase = .inHand
         rally = 0; shownRally = 0; nudges = 0; looseT = 0; bumper = nil; passTo = nil; finger = nil; leftHand = false
         chainEnd("begin"); setOwn(.none); pendingPasses = 0; passPlan = nil; recallAt = nil
+        bout = BoutState()          // (beach-volley-r1)
         camGoal = 1
         if snapCamera { camBlend = 1; GameCamera.playBlend = 1 }
         frameOn()
@@ -254,6 +259,7 @@ final class PlayToss {
         guard phase != .off else { return }
         netEnd()          // (play-net-r1)
         phase = .off
+        boutAbort("end"); bout = BoutState()          // (beach-volley-r1)
         chainEnd("end"); setOwn(.none); pendingPasses = 0; passPlan = nil
         camGoal = 0
         finger = nil
@@ -347,12 +353,13 @@ final class PlayToss {
         guard var t = TossAim.throwFor(f, bodies: bodies, radius: ball.radius) else { return }
         // the ball starts in the hand (never behind the camera or inside the catch band's far edge)
         t.start.y = max(t.start.y, ball.radius + 0.2)
-        let foot = rollFoot()
+        let boutGo = rollBout()          // (beach-volley-r1: rolled before the foot roll; a bout throw is a header throw with no chain)
+        let foot = boutGo ? false : rollFoot()
         footAimed = false
         var v = t.velocity
         // play-ball-s2: a ball that is played by foot is thrown to come down at his feet, just in front of him on the player's side, not at his crown (the gentle nudge cannot move a ball two units, and the one it is heading for should not have to walk backwards with his back to the room)
         if foot, t.flight > 0, let id = t.assistedBody, let b = jelly(id), let tv = footThrow(from: t.start, flight: t.flight, to: b) { v = tv; footAimed = true }
-        letGo(from: t.start, velocity: v, foot: foot)
+        letGo(from: t.start, velocity: v, foot: foot, bout: boutGo)
     }
 
     /// The seeded roll for one incoming flight: by foot (1 - headShare) or by head. No roll for a ball that is always headed (the bouncy ball keeps its random stream).
@@ -392,11 +399,13 @@ final class PlayToss {
         letGo(from: start, velocity: v, foot: rollFoot())
     }
 
-    private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>, foot: Bool = false) {
+    private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>, foot: Bool = false, bout planned: Bool = false) {
         footFlight = foot; footChoice = nil; footPlan = [:]; kickHeightT = nil
+        boutAbort("new throw"); bout.homing = false
         chainEnd("new-throw"); setOwn(.none); passPlan = nil; recallAt = nil; pendingPasses = rollChain()
+        if planned { pendingPasses = 0; bout = BoutState(); bout.planned = true; bout.startedAt = clock }          // (beach-volley-r1)
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playchain] throw=%d planned=%d foot=%d", throwSerial + 1, pendingPasses, foot ? 1 : 0) }
-        ball.pos = start; ball.vel = v; ball.floorBounces = 0; ball.ignoring = nil
+        ball.pos = start; ball.vel = v; ball.floorBounces = 0; ball.ignoring = nil; ball.ignoreAll = false; ball.ignoreAllBut = nil          // (beach-volley-r1)
         phase = .flying
         rally = 0; nudges = 0; looseT = 0; flightT = 0; leftHand = false; touched = false; bumper = nil; passTo = nil; headers = 0; rescues = 0; passes = 0
         throwSerial += 1
@@ -448,6 +457,7 @@ final class PlayToss {
 
     /// The view changed shape: the play floor is rebuilt and the Jelmiko on the line walk to their new places.
     private func reframe() {
+        boutAbort("reframe")          // (beach-volley-r1)
         frameAspect = viewAspect
         GameCamera.refreshRoam(aspect: frameAspect)
         frontWall()
@@ -474,11 +484,11 @@ final class PlayToss {
     private func watch(_ p: SIMD3<Float>) {
         for j in jellies {
             // play-ball-r2: the head follows the ball everywhere, but the BODY keeps facing the player (a ball that flew past him to the back wall, or sideways along the row, turned the outer ones right round and the next ball found them 60-80 degrees off)
-            let body: SIMD2<Float> = PlayTuning.ballReturnOld ? SIMD2(p.x, p.z) : playerPoint()          // (the ball sweeps past the outer ones sideways: a body that turned to it was 75-80 degrees off the player when it arrived)
+            let body: SIMD2<Float> = PlayTuning.ballReturnOld ? SIMD2(p.x, p.z) : faceTarget(j)          // (beach-volley-r1: in a bout the one the ball comes from)          // (the ball sweeps past the outer ones sideways: a body that turned to it was 75-80 degrees off the player when it arrived)
             var look = SIMD2(p.x, p.z)
             if !PlayTuning.ballReturnOld {          // (the head follows the ball while it is within about 45 degrees of the player's line from him; past that his look turns his whole body toward it, and the ball sweeping past the outer ones in landscape found them 75-80 degrees round)
-                let a = look - j.pos, b = playerPoint() - j.pos
-                if simd_length(a) > 1e-3, simd_length(b) > 1e-3, simd_dot(a, b) < 0.7 * simd_length(a) * simd_length(b) { look = playerPoint() }
+                let a = look - j.pos, b = faceVec(j)
+                if simd_length(a) > 1e-3, simd_length(b) > 1e-3, simd_dot(a, b) < 0.7 * simd_length(a) * simd_length(b) { look = faceTarget(j) }
             }
             j.brain.trackPoint = look; j.brain.waitFocus = body
             // turned well away from it (he walked back to his place with his back to the room): he turns to watch it, on the spot
@@ -495,7 +505,7 @@ final class PlayToss {
         let before = ball.pos
         let events = ball.step(dt, in: world)
         for j in jellies where !j.brain.tossBusy && !j.brain.feet.active && j.brain.idleState.kind == nil { standTop[j.id] = j.headTop }
-        if !PlayTuning.ballReturnOld { for o in jellies { let P = playerPoint() - o.pos; o.brain.tossFaceYaw = (o.brain.tossBusy && simd_length(P) > 1e-3) ? atan2f(P.x, P.y) : nil } }          // (the header's hop turns him toward the player in the air)
+        if !PlayTuning.ballReturnOld { for o in jellies { let P = faceVec(o); o.brain.tossFaceYaw = (o.brain.tossBusy && simd_length(P) > 1e-3) ? atan2f(P.x, P.y) : nil } }          // (the header's hop turns him toward the player in the air)
         if let tr = passTrack, phase == .loose {
             let here = SIMD2(ball.pos.x, ball.pos.z), to = tr.spot - here, dist = simd_length(to)
             if dist < 0.06 { ball.vel.x = 0; ball.vel.z = 0; passTrack = nil } else {
@@ -509,10 +519,14 @@ final class PlayToss {
         for e in events {
             switch e {
             case .floorBounce(let s):
+                if bout.homing { onEvent?(.floorBounce(speed: s)); continue }          // (beach-volley-r1: the bout's ball is on its way to the hand by its own bounces: nobody fetches it)
+                if bout.on { boutFloor(); if !bout.homing, phase == .flying { phase = .loose; looseT = 0 }; continue }          // (beach-volley-r1: the bout's ball came down: it is over, no point)
+                if bout.planned { boutAbort("floor before the first header") }
                 if kickHeightT == nil { kickHeightT = clock }
                 onEvent?(.floorBounce(speed: s))
                 if phase == .flying { phase = .loose; looseT = 0 }
             case .bodyHit(let id, let s):
+                if bout.on || bout.homing { if s > 0.9 { onEvent?(.bodyBoop(id: id)) }; break }          // (beach-volley-r1: a bout ball that meets a body's side bounces off and flies on; only the floor ends it)
                 // play-ball-s2: any contact with the Jelmiko who is set to kick it is a strike, not a soft bounce
                 if footFlight || footChoice != nil, let kj = jelly(id), ball.pos.y < ball.radius + 0.9, !PlayTuning.ballReturnOld, kj.brain.tossFootApproach || !kj.brain.tossBusy {
                     strikeByContact(kj)
@@ -527,20 +541,22 @@ final class PlayToss {
             case .net(let n): netEvent(n)          // (play-net-r1)
             }
         }
+        if bout.on, ball.onFloor { boutFloor(); if !bout.homing, phase == .flying { phase = .loose; looseT = 0 } }
+        boutHomingTick(dt: dt)          // (beach-volley-r1: a soft landing ends it too)
         if netUp, netHoldTick(dt: dt) { return }          // (play-net-r1: the ball lies in the net after a goal; nobody goes for it until it rolls out)
-        if ball.resting || (ball.onFloor && phase == .flying) { if phase == .flying { phase = .loose; looseT = 0 } }
+        if !bout.homing, ball.resting || (ball.onFloor && phase == .flying) { if phase == .flying { phase = .loose; looseT = 0 } }
         if netUp { netReturnTick(dt: dt) }          // (play-net-r2: after the cheer the net sends the ball back to the player; it stays a flying return until caught)
         if kickHeightT == nil, ball.pos.y <= ball.radius + Self.kickHeightAbove + 0.02, ball.vel.y <= 0.3, ball.ignoring == nil { kickHeightT = clock }
         if passPlan != nil { preparePassReceiver() }
         if !PlayTuning.ballReturnOld, footFlight || footChoice != nil { footTick() }
         // back at the bottom of the screen: caught
-        if leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
+        if !bout.active, leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
             caught(); return
         }
         if netUp, net.returning { return }          // (play-net-r2: the net's return to the player is a plain flight to the hand: no flight planning, no kick plan, nobody sent to fetch it; `caught()` above ends it)
         if phase == .loose { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) } }          // (a ball on the floor: nobody holds a header stand for it)
         if phase != .flying { headChoice = nil }
-        if phase == .flying { steerReturn(dt: dt); intercepts(dt: dt, before: before) }
+        if phase == .flying { if bout.on { boutIntercepts() } else if !bout.homing { steerReturn(dt: dt); intercepts(dt: dt, before: before) } }          // (beach-volley-r1: a bout has its own one to go for the ball)
         restWatch(dt: dt)
         if phase == .loose { looseT += dt; loose(dt: dt) }
     }
@@ -553,7 +569,7 @@ final class PlayToss {
     }
 
     /// Capture aid (`-PlayDemo`): one line per strike with the striker's visible facing error toward the player (the hand), its lift and the screen points for cutting pictures.
-    private func touchLog(_ kind: String, _ j: PlayJelly) {
+    func touchLog(_ kind: String, _ j: PlayJelly) {
         netNoteToucher(j.id)          // (play-net-r1: the last one to touch it is the scorer)
         guard UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
         let hand = handWorld()
@@ -588,19 +604,22 @@ final class PlayToss {
 
     // MARK: header
 
-    private func jelly(_ id: Int) -> PlayJelly? { jellies.first { $0.id == id } }
+    func jelly(_ id: Int) -> PlayJelly? { jellies.first { $0.id == id } }
 
     /// The ball is on `id`'s crown: it goes back toward the hand, with a quality.
     private func header(by id: Int) {
         guard let j = jelly(id) else { return }
         footFlight = false; footChoice = nil
         if j.brain.tossFootApproach { j.brain.tossFootRelease(j.sim, j.skinner) }
+        // beach-volley-r1: a header in a bout goes to another Jelmiko; at the cap or after the button it is the ordinary header to the player, a good one
+        let inBout = bout.active
+        if inBout, boutStrike(by: j) { return }
         var q: Quality = forceQuality ?? {
             let r = rand()
             return r < 0.74 ? .good : (r < 0.94 ? .short : .weak)
         }()
         // hitting a pass lands better: the friend meant it
-        if passTo == id { q = .good }
+        if passTo == id || inBout { q = .good }
         let from = ball.pos
         let hand = handWorld()
         let tz = catchZ() + 0.55
@@ -641,6 +660,7 @@ final class PlayToss {
             }
         }
         v.y = max(v.y, (PlayTuning.ballReturnOld ? 2.6 : 1.75) / TossTuning.slow)          // (play-ball-r2: a lower, quicker departure; seen from the room's camera a high slow one cancels its own move toward the player and the ball seems to hang on the crown)
+        if inBout { boutLift(&v, from: from, by: id) }          // (beach-volley-r1: the last header of a bout comes from wherever he stands: lifted over any Jelmiko in its way)
         ball.vel = v
         ball.pos.y = max(ball.pos.y, j.headTop + ball.radius * 0.8)
         ball.ignoring = id; ball.ignoreT = 0.45
@@ -649,7 +669,7 @@ final class PlayToss {
         looseT = 0
         touchLog("header", j)
         j.brain.jellyKick = max(j.brain.jellyKick, 2.2)
-        if !j.brain.tossBusy, Self.canHop(j.brain) { let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }; j.brain.tossHeaderStart(j.sim, j.skinner, jump: !PlayTuning.ballReturnOld) }
+        if !j.brain.tossBusy, Self.canHop(j.brain) { let P = faceVec(j); if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }; j.brain.tossHeaderStart(j.sim, j.skinner, jump: !PlayTuning.ballReturnOld) }
         onEvent?(.header(id: id, quality: q))
     }
 
@@ -668,7 +688,7 @@ final class PlayToss {
 
     /// Safety nets for a ball that lies where nobody sends it back: after 2 s it is lobbed to the hand; a dropped ball that never left the hand is simply caught.
     private func restWatch(dt: Float) {
-        guard phase == .loose || phase == .flying else { restT = 0; return }
+        guard phase == .loose || phase == .flying, !bout.active, !bout.homing else { restT = 0; return }          // (beach-volley-r1: a bout ball is not a stuck ball)
         if ball.onFloor, ball.speedXZ < 0.35, bumper == nil || !(jelly(bumper!)?.brain.tossBusy ?? false) { restT += dt } else { restT = 0 }
         guard restT > (leftHand ? (PlayTuning.old ? Self.restRescueAfter : PlayTuning.restRescue) : 0.8) else { return }
         restT = 0
@@ -697,7 +717,7 @@ final class PlayToss {
 
     // MARK: intercepts (the Jelbie it is heading for steps under it and hops)
 
-    private func arrival(_ j: PlayJelly) -> (t: Float, xz: SIMD2<Float>)? {
+    func arrival(_ j: PlayJelly) -> (t: Float, xz: SIMD2<Float>)? {
         let g = TossTuning.gravity
         let yHead = j.headTop + ball.radius * 0.55
         let y0 = ball.pos.y - yHead, vy = ball.vel.y
@@ -711,6 +731,7 @@ final class PlayToss {
     private func intercepts(dt: Float, before: SIMD3<Float>) {
         guard ball.ignoring == nil || ball.ignoreT < 0.2 else { return }
         if netUp, net.deadFlight || net.returning { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }          // (play-net keep-out: the net's dead-ball return flies to the player; nobody heads it back toward the goal)
+        guard !ball.ignoreAll, ball.ignoreAllBut == nil else { return }          // (beach-volley-r1: a ball only one Jelmiko may touch is that one's alone; a returning ball nobody)
         if footFlight, !PlayTuning.ballReturnOld, footIntercepts() { return }
         var best: (j: PlayJelly, t: Float, xz: SIMD2<Float>, d: Float)?
         for j in jellies {
@@ -743,7 +764,7 @@ final class PlayToss {
             let off = meet - j.pos
             if simd_length(off) > Self.steerReach { stand = meet - off / simd_length(off) * (Self.steerReach * 0.6) }
             stand = netStand(stand)          // (play-net keep-out: never a stand in the goal)
-            let dirP = playerPoint() - stand
+            let dirP = bout.active ? faceVec(j) : playerPoint() - stand
             let dir = simd_length(dirP) > 1e-3 ? simd_normalize(dirP) : SIMD2<Float>(0, 1)
             j.brain.tossFire = nil
             if j.brain.tossBumpStart(j.sim, j.skinner, stand: stand, dir: dir, header: true) { interceptAt[j.id] = (meetXZ, clock) }
@@ -771,7 +792,7 @@ final class PlayToss {
         }
         // fallback: no approach could be set (mid-step ...): the old hop, timed so the top of it meets the ball
         if !busy, b.d < (PlayTuning.ballReturnOld ? 0.55 : Self.lateWalk), b.t <= BlobBrain.tossHeaderLead + (PlayTuning.ballReturnOld ? 0.03 : 0.10), Self.canHop(j.brain) {
-            let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }
+            let P = faceVec(j); if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }
             j.brain.tossHeaderStart(j.sim, j.skinner, jump: !PlayTuning.ballReturnOld)
         }
     }
@@ -784,7 +805,7 @@ final class PlayToss {
     static let steerReach: Float = 0.8
     /// The cap on the sideways speed the nudge may add (m/s): a gentle curve, never a snap.
     static let steerMaxDV: Float = 1.7
-    private func steerOntoCrown(_ j: PlayJelly, arriveIn t: Float, to spot: SIMD2<Float>? = nil) {
+    func steerOntoCrown(_ j: PlayJelly, arriveIn t: Float, to spot: SIMD2<Float>? = nil) {
         guard !PlayTuning.ballReturnOld, j.brain.tossBusy, t > 0.04, t < 1.4 else { return }
         let target: SIMD2<Float> = spot ?? ((j.brain.idleState.kind == .tossBump && j.brain.idleState.toss.walking) ? j.brain.idleState.toss.stand : j.pos)
         let here = SIMD2(ball.pos.x, ball.pos.z) + SIMD2(ball.vel.x, ball.vel.z) * t
@@ -799,14 +820,14 @@ final class PlayToss {
     }
 
     /// The seconds a jump takes to raise the crown by `h` (the hop's parabola: apex `tossCrownRise` at `tossJumpLead`).
-    private static func riseTime(_ h: Float) -> Float {
+    static func riseTime(_ h: Float) -> Float {
         let k = min(max(h / BlobBrain.tossCrownRise, 0), 1)
         return BlobBrain.tossJumpLead * (1 - (1 - k).squareRoot())
     }
-    @ObservationIgnored private var standTop: [Int: Float] = [:]
-    @ObservationIgnored private var headChoice: Int?
+    @ObservationIgnored var standTop: [Int: Float] = [:]
+    @ObservationIgnored var headChoice: Int?
     /// Where the falling ball is met: the highest rise of his crown (from a list, the top of the jump first) at which the ball's own path still comes down through the crown's height, and the seconds until then.
-    private func meetTime(_ j: PlayJelly) -> (t: Float, rise: Float)? {
+    func meetTime(_ j: PlayJelly) -> (t: Float, rise: Float)? {
         let top = standTop[j.id] ?? (j.sim.restCentroid.y + BobShape.H * 0.5)
         let g = TossTuning.gravity, vy = ball.vel.y
         for h in [Float(0.38), 0.28, 0.18, 0.08] {
@@ -827,6 +848,7 @@ final class PlayToss {
         switch ownGame {
         case .none: left = pendingPasses; pendingPasses = 0
         case .passing(let l, let from, _): left = l; prev = from
+        case .bout: break          // (beach-volley-r1: a bout never passes)
         }
         let styled = PlayTuning.style(ballKind).headShare < 1 && !PlayTuning.ballReturnOld
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playchain] hop by=%d left=%d", j.id, left) }
@@ -917,6 +939,12 @@ final class PlayToss {
     /// The player asks for the ball back (the "Pass it back" button): nothing waits and nobody is interrupted; the chain is over and the NEXT strike of the ball goes to the player.
     func recall() {
         guard keeping, !PlayTuning.ballReturnOld else { return }
+        if bout.on {          // beach-volley-r1: the NEXT touch of a bout goes to the player: nothing waits, nobody is interrupted
+            bout.toPlayer = true; recallAt = clock
+            setOwn(.none); pendingPasses = 0
+            NSLog("[playrecall] clock=%.3f phase=%@ bout touches=%d ball=%.2f,%.2f,%.2f", clock, String(describing: phase), bout.touches, ball.pos.x, ball.pos.y, ball.pos.z)
+            return
+        }
         var to = -1
         if case .passing(_, _, let t) = ownGame { to = t }
         recallAt = clock
@@ -933,7 +961,7 @@ final class PlayToss {
         }
     }
 
-    private func noteRecallStrike() {
+    func noteRecallStrike() {
         guard let t = recallAt else { return }
         NSLog("[playrecall] strike dt=%.2f", clock - t)
     }
@@ -1204,6 +1232,7 @@ final class PlayToss {
 
     /// The safety net: a ball that will not come (stuck behind furniture ...) is rolled to the front by a nudge from nobody in particular.
     private func rescue() {
+        boutAbort("rescue")          // (beach-volley-r1)
         let ballXZ = SIMD2(ball.pos.x, ball.pos.z)
         let tz = catchZ() + 0.6
         let lim = Self.ballReach(tz) - 0.9
@@ -1236,6 +1265,7 @@ final class PlayToss {
     }
 
     private func caught() {
+        boutAbort("caught"); bout.homing = false; ball.ignoreAll = false; ball.ignoreAllBut = nil          // (beach-volley-r1)
         catchFrom = ball.pos; catchT = 0
         phase = .catching
         shownRally = rally

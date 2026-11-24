@@ -18,6 +18,7 @@ final class PlayFrameTests: XCTestCase {
     override func tearDown() { Self.reset(); super.tearDown() }
     static func reset() {
         PlayTuning.old = false; PlayTuning.zoomOverride = nil
+        PlayTuning.boutOff = true          // (beach-volley-r1: these tests count straight returns of the beach ball per minute / per throw; the bouts are tested in PlayTossBoutTests and the real-app gate)
         GameCamera.playBlend = 0; RoomLayout.ballSpheres = []
         DecorField.shared.clear()
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: Float(portrait.width / portrait.height))
