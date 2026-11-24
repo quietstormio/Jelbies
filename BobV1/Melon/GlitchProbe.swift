@@ -227,8 +227,18 @@ final class GlitchProbe {
 
     /// Which drawn vertices to sample and their group (built once per skinner layout).
     private func layout(_ sk: Skinner, key: Int) -> (group: [UInt8], idx: [Int32]) {
-        let sig = [sk.vertexCount, sk.tailFirst] + sk.armFirst + sk.beanFirst          // (the blocks are configured after the first frames: a layout is rebuilt when they change)
+        let sig = Self.layoutSignature(sk)          // (the blocks are configured after the first frames: a layout is rebuilt when they change)
         if let g = groups[key], g.sig == sig { return (g.group, g.idx) }
+        let l = Self.buildLayout(sk)
+        groups[key] = (sig, l.group, l.idx)
+        NSLog("[glitch] layout key=%d verts=%d egg=%d arms=%@ feet=%@ tail=%d", key, sk.vertexCount, l.egg, sk.armFirst.map(String.init).joined(separator: ","), sk.beanFirst.map(String.init).joined(separator: ","), sk.tailFirst)
+        return (l.group, l.idx)
+    }
+
+    nonisolated static func layoutSignature(_ sk: Skinner) -> [Int] { [sk.vertexCount, sk.tailFirst] + sk.armFirst + sk.beanFirst }
+
+    /// The sampled drawn vertices (every 7th of the body egg, every 3rd of the limb / feature blocks) and their group.
+    nonisolated static func buildLayout(_ sk: Skinner) -> (group: [UInt8], idx: [Int32], egg: Int) {
         let n = sk.vertexCount
         var gr = [UInt8](repeating: GlitchGroup.feature.rawValue, count: n)
         var starts: [Int] = []
@@ -242,9 +252,30 @@ final class GlitchProbe {
             let stride = gr[i] == GlitchGroup.body.rawValue ? 7 : 3
             if i % stride == 0 { idx.append(Int32(i)); g.append(gr[i]) }
         }
-        groups[key] = (sig, g, idx)
-        NSLog("[glitch] layout key=%d verts=%d egg=%d arms=%@ feet=%@ tail=%d", key, n, egg, sk.armFirst.map(String.init).joined(separator: ","), sk.beanFirst.map(String.init).joined(separator: ","), sk.tailFirst)
-        return (g, idx)
+        return (g, idx, egg)
+    }
+
+    /// One body's drawn state (`dyn` = its skinned vertices, 6 floats each) as the core compares it. The stage and the headless tests build it the same way.
+    static func makeSample(sim: SoftBody, skinner sk: Skinner, brain: BlobBrain?, dyn: UnsafePointer<Float>, group g: [UInt8], idx: [Int32]) -> GlitchSample {
+        let pose = sim.bodyPose()
+        let inv = pose.rotation.inverse
+        var local = [SIMD3<Float>](); local.reserveCapacity(idx.count)
+        for i in idx { let o = 6 * Int(i); local.append(inv.act(SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) - pose.centroid)) }
+        var feet: [(minY: Float, xz: SIMD2<Float>)]? = nil
+        if sk.beansActive, sk.beanBlend > 0.9, sk.beanFirst.count == 2 {
+            var fs: [(minY: Float, xz: SIMD2<Float>)] = []
+            for s in 0..<2 {
+                let f = sk.beanFirst[s]
+                var mn: Float = .greatestFiniteMagnitude
+                var c = SIMD2<Float>.zero
+                for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); mn = min(mn, dyn[o + 1]); c += SIMD2(dyn[o], dyn[o + 2]) }          // (the whole piece's centre: a contact patch jumps between heel and toe as the boot rocks)
+                fs.append((mn, c / Float(FootBean.vertexCount)))
+            }
+            feet = fs
+        }
+        return GlitchSample(centroid: pose.centroid, rotation: pose.rotation, tilt: pose.tilt, moveSerial: sim.moveSerial, brainYaw: brain?.yaw,
+                            local: local, group: g, index: idx, feet: feet, blends: [sk.beanBlend, sk.armBlend],
+                            footMorph: brain.map { b in (0..<2).map { s in b.feet.swinging && b.feet.side == s ? 1 : b.beanMorphLast[s] } })          // (a foot in a step's swing is never planted, even when the step does not lift it)
     }
 
     private func moveName(_ b: BlobBrain?, asleep: Bool) -> String {
@@ -288,28 +319,11 @@ final class GlitchProbe {
             seenFrame[key] = frame
             let sk = a.skinner
             let (g, idx) = layout(sk, key: key)
-            let pose = a.sim.bodyPose()
-            let inv = pose.rotation.inverse
-            var local = [SIMD3<Float>](); local.reserveCapacity(idx.count)
-            for i in idx { let o = 6 * Int(i); local.append(inv.act(SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) - pose.centroid)) }
-            var feet: [(minY: Float, xz: SIMD2<Float>)]? = nil
-            if sk.beansActive, sk.beanBlend > 0.9, sk.beanFirst.count == 2 {
-                var fs: [(minY: Float, xz: SIMD2<Float>)] = []
-                for s in 0..<2 {
-                    let f = sk.beanFirst[s]
-                    var mn: Float = .greatestFiniteMagnitude
-                    var c = SIMD2<Float>.zero
-                    for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); mn = min(mn, dyn[o + 1]); c += SIMD2(dyn[o], dyn[o + 2]) }          // (the whole piece's centre: a contact patch jumps between heel and toe as the boot rocks)
-                    fs.append((mn, c / Float(FootBean.vertexCount)))
-                }
-                feet = fs
-            }
-            let s = GlitchSample(centroid: pose.centroid, rotation: pose.rotation, tilt: pose.tilt, moveSerial: a.sim.moveSerial, brainYaw: a.brain?.yaw,
-                                 local: local, group: g, index: idx, feet: feet, blends: [sk.beanBlend, sk.armBlend], footMorph: a.brain.map { b in (0..<2).map { s in b.feet.swinging && b.feet.side == s ? 1 : b.beanMorphLast[s] } })          // (a foot in a step's swing is never planted, even when the step does not lift it)
+            let s = Self.makeSample(sim: a.sim, skinner: sk, brain: a.brain, dyn: UnsafePointer(dyn), group: g, idx: idx)
             let evs = core.observe(s, steps: steps)
             cores[key] = core
             if evs.isEmpty { continue }
-            let ctx = "\(ctxBase) move=\(m.name) prev=\(m.prev) since=\(Int((now - m.t) * 1000))"
+            let ctx = "\(ctxBase) move=\(m.name) prev=\(m.prev) since=\(Int((now - m.t) * 1000)) steps=\(steps) slept=\(a.asleep ? 1 : 0)"
             for e in evs { burst.add(e, who: "\(key)", ctx: ctx, now: now) }
         }
         for o in burst.flush(now: now) { emit(o) }
