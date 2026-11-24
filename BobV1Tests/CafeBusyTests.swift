@@ -135,7 +135,7 @@ final class CafeBusyTests: XCTestCase {
             }
             let door = CafeTables.door(landscape: landscape)
             for t in CafeTables.customerTables(landscape: landscape) {
-                for s in [t - SIMD2(GameCare.pairSideX, 0), t + SIMD2(GameCare.pairSideX, 0)] { XCTAssertGreaterThanOrEqual(simd_distance(s, door), GameCare.crowdMinGap + 0.2, "a seated customer never stands in the entrance (\(s))") }
+                for s in [t - SIMD2(GameCare.pairSideX, 0), t + SIMD2(GameCare.pairSideX, 0)] { XCTAssertGreaterThanOrEqual(simd_distance(s, door), GameCare.crowdMinGap + 0.1, "a seated customer never stands in the entrance (\(s))") }
             }
         }
     }
@@ -150,6 +150,7 @@ final class CafeBusyTests: XCTestCase {
         for q in p { for d in discs { XCTAssertTrue(CafeRoute.segmentClear(a, q, d), "leg \(a) -> \(q) clears every body") }; a = q }
         XCTAssertEqual(p.last!, SIMD2(-4, 0))
         XCTAssertEqual(CafeRoute.path(from: SIMD2(0, 3), to: SIMD2(2, 3), discs: discs), [SIMD2(2, 3)], "a clear line is one leg")
+        XCTAssertEqual(CafeRoute.path(from: SIMD2(0, 0.5), to: SIMD2(2, 0), discs: [CafeRoute.Disc(c: SIMD2(1, 0), r: 5)], inside: { _ in false }), [], "no way round: an empty path, never a walk through somebody")
     }
 
     // MARK: calm after the treat

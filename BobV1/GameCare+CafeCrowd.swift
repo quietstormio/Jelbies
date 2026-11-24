@@ -28,6 +28,7 @@ final class CafeMember {
     var state: State = .waiting
     var path: [SIMD2<Float>] = []
     var stuck: Float = 0
+    var waitT: Float = 0
     var lastPos: SIMD2<Float> = .zero
     var held = false
     init(actor: JellyActor, visitor: ParkVisitor, index: Int) { self.actor = actor; self.visitor = visitor; self.index = index }
@@ -69,7 +70,9 @@ extension CafeTuning {
 }
 
 extension GameCare {
-    static let crowdMinGap: Float = 1.1
+    /// A walking or seated customer keeps this far from every seated body: the room's keep-apart gap is `MelonController.jellyGap` (1.4), under which the stage pushes bodies apart and asks the free one to step aside,
+    /// so a customer passing at 1.1 moved the player's Jelmiko (seen in the real app). 1.65 keeps every pass clear of that.
+    static let crowdMinGap: Float = 1.65
     /// Dev capture aids.
     static var cafeSeedArg: UInt64? { DevArgs.enabled ? UserDefaults.standard.string(forKey: "CafeSeed").flatMap { UInt64($0) } : nil }
     static var cafeTableArg: Int? { DevArgs.enabled ? UserDefaults.standard.string(forKey: "CafeTable").flatMap { Int($0) } : nil }
@@ -261,25 +264,33 @@ extension GameCare {
                     if a.state == .walking {
                         let ap = Self.floorPos(a.actor.brain!, a.actor.sim)
                         let ref = g.phase == .leaving ? g.table.stands[a.index] : door
-                        if simd_distance(ap, ref) < (g.phase == .leaving ? 1.3 : 1.6) { continue }
+                        if simd_distance(ap, ref) < (g.phase == .leaving ? 1.7 : 1.9) { continue }
                     }
                 }
                 let from = g.phase == .leaving ? g.table.stands[m.index] : door
                 let to = g.phase == .leaving ? door : g.table.stands[m.index]
-                if g.phase == .arriving {
+                let discs = crowdDiscs(for: g, excluding: m, landscape: landscape).filter { simd_distance($0.c, from) > $0.r - 0.05 && simd_distance($0.c, to) > $0.r - 0.05 }
+                let route = CafeRoute.path(from: from, to: to, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.4 })
+                if route.isEmpty {          // no way round the seated bodies yet: he waits (off the floor when coming in) and looks again; after 10 s he is simply seated
+                    m.waitT += dt
+                    if g.phase == .arriving, m.waitT > 10 { m.path = [to]; m.state = .walking; m.stuck = 6.1; rehome(m.actor, at: to); Self.crowdLog("no route for member \(m.actor.id): seated directly") }
+                    else if g.phase == .leaving, m.waitT > 10 { m.path = [door]; m.state = .walking; m.stuck = 0 }
+                    continue
+                }
+                m.waitT = 0
+                m.path = route
+                if g.phase == .arriving {          // (he appears at the entrance, the bell rings once for the group)
                     rehome(m.actor, at: door)
                     b.restTimer = 0.2; b.reserved = false; b.mealFaceYaw = nil
                     if i == 0 { crowdBell(g, entering: true); g.belled = true }
                 }
-                let discs = crowdDiscs(for: g, excluding: m, landscape: landscape).filter { simd_distance($0.c, from) > $0.r - 0.05 && simd_distance($0.c, to) > $0.r - 0.05 }
-                m.path = CafeRoute.path(from: from, to: to, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.4 })
-                m.state = .walking; m.stuck = 0; m.lastPos = pos
+                m.state = .walking; m.stuck = 0; m.lastPos = g.phase == .arriving ? door : pos
                 if g.phase == .leaving { b.reserved = false; b.mealFaceYaw = nil }
             case .walking:
                 // yield: a follower stops while the one ahead of it in this group is closer than 1.3
                 var hold = false
                 for (j, o) in g.members.enumerated() where j < i && o.state == .walking {
-                    if simd_distance(Self.floorPos(o.actor.brain!, o.actor.sim), pos) < 1.3 { hold = true }
+                    if simd_distance(Self.floorPos(o.actor.brain!, o.actor.sim), pos) < 1.55 { hold = true }
                 }
                 if hold { if !m.held { m.held = true; b.requestNow(.goTo(pos)) }; continue }
                 m.held = false

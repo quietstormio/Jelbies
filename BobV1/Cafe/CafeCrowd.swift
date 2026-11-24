@@ -30,7 +30,7 @@ nonisolated enum CafeTables {
     /// The customers' tables (the ENDS table: two places facing each other, a single customer takes one).
     static func customerTables(landscape: Bool) -> [SIMD2<Float>] {
         landscape ? [SIMD2(2.8, -2.6), SIMD2(2.2, 1.2), SIMD2(-0.4, -2.9)]
-                  : [SIMD2(2.7, -3.3), SIMD2(-3.0, -2.9), SIMD2(-2.5, 0.9), SIMD2(2.3, 0.4)]
+                  : [SIMD2(2.7, -3.3), SIMD2(-3.0, -2.9), SIMD2(-2.5, 0.9)]
     }
     /// Which player table this visit takes: weighted by `weight`, from the candidates `allowed` lets through (nil = none fits). `roll` is 0..<1.
     static func pickPlayer(landscape: Bool, roll: Float, allowed: (SIMD2<Float>) -> Bool) -> Int? {
@@ -122,7 +122,7 @@ nonisolated struct CafeCrowd {
 }
 
 /// A path round discs (seated bodies, tables). Nodes: the start, the goal and eight points round every disc; an edge is open when it misses every disc (the start / goal's
-/// own discs excluded by the caller). Dijkstra over that. When no path exists the straight line is returned (the caller's yield rule still keeps walkers apart).
+/// own discs excluded by the caller). Dijkstra over that. When no path exists an empty list is returned (the caller waits and looks again).
 nonisolated enum CafeRoute {
     struct Disc { var c: SIMD2<Float>; var r: Float }
     static func segmentClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ d: Disc) -> Bool {
@@ -148,7 +148,7 @@ nonisolated enum CafeRoute {
                 if nd < dist[v] { dist[v] = nd; prev[v] = u }
             }
         }
-        guard prev[1] >= 0 else { return [to] }
+        guard prev[1] >= 0 else { return [] }
         var out: [SIMD2<Float>] = [], k = 1
         while k != 0 { out.append(nodes[k]); k = prev[k] }
         return out.reversed()
