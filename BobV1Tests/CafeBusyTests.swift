@@ -163,6 +163,48 @@ final class CafeBusyTests: XCTestCase {
         }
     }
 
+    /// Round 2: the capacity rule. A customer table takes a pair only when BOTH ends can be reached from its entrance without coming within the keep-apart clearance of the player's bodies,
+    /// one customer (at the near end) when only that end can; the route to every reachable end stays clear of the player's stands all the way (sampled every 0.1 u).
+    func testCustomerTableCapacityKeepsEveryRouteClearOfThePlayersBodies() {
+        XCTAssertEqual(CafeTables.door(landscape: false, table: SIMD2(2.7, -3.3)), SIMD2(3.8, -2.4), "the back-right table has its own entrance")
+        XCTAssertEqual(CafeTables.door(landscape: false, table: SIMD2(-1.6, -3.3)), SIMD2(3.7, 1.8))
+        XCTAssertEqual(CafeTables.door(landscape: true, table: SIMD2(2.8, -2.6)), SIMD2(4.4, 1.0))
+        for (name, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
+            let landscape = aspect >= 1
+            DiningLayout.ends = true; DiningLayout.sideX = 1.3; DiningLayout.reachFood = true; DiningLayout.endsYaw = DiningLayout.cafeEndsYaw
+            let layout = DiningLayout.make(n: 3)
+            let all = CafeTables.customerTables(landscape: landscape)
+            for (i, p) in CafeTables.playerTables(landscape: landscape).enumerated() {
+                let bodies = layout.places.map { p.centre + $0.rel }
+                var usable = 0
+                var line: [String] = []
+                for t in all {
+                    let door = CafeTables.door(landscape: landscape, table: t)
+                    var stands = [t - SIMD2(GameCare.pairSideX, 0), t + SIMD2(GameCare.pairSideX, 0)]
+                    stands.sort { simd_distance($0, door) > simd_distance($1, door) }
+                    guard stands.allSatisfy({ s in bodies.allSatisfy { simd_distance($0, s) >= GameCare.pairMargin } }) else { continue }
+                    let cap = CafeTables.capacity(table: t, stands: stands, door: door, bodies: bodies, origin: p.centre, tables: all, gap: GameCare.crowdMinGap)
+                    line.append("\(t)=\(cap)")
+                    if cap >= 1 { usable += 1 }
+                    for (k, end) in stands.enumerated() where cap == 2 || (cap == 1 && k == 1) {
+                        var discs = bodies.map { CafeRoute.Disc(c: $0, r: GameCare.crowdMinGap + 0.1) }
+                        discs.append(.init(c: p.centre, r: 1.0)); for tb in all { discs.append(.init(c: tb, r: 0.6)) }
+                        discs = discs.map { d in .init(c: d.c, r: min(d.r, min(simd_distance(d.c, door), simd_distance(d.c, end)) - 0.02)) }
+                        let route = CafeRoute.path(from: door, to: end, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.9 })
+                        var a = door
+                        for q in route {
+                            let steps = max(1, Int(simd_distance(a, q) / 0.1))
+                            for n in 0...steps { let pt = a + (q - a) * (Float(n) / Float(steps)); for b in bodies { XCTAssertGreaterThanOrEqual(simd_distance(pt, b), GameCare.crowdMinGap - 0.03, "\(name) player table \(i): the way to \(end) of \(t) passes \(pt) near \(b)") } }
+                            a = q
+                        }
+                    }
+                }
+                print("[cafebusy-test] capacity \(name) player table \(i): \(line.joined(separator: " "))")
+                XCTAssertGreaterThanOrEqual(usable, 1, "\(name) player table \(i) keeps a usable customer table")
+            }
+        }
+    }
+
     // MARK: paths
 
     func testRouteGoesRoundSeatedBodiesKeepingTheGap() {

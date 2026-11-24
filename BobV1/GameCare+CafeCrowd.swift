@@ -16,6 +16,9 @@ final class CafeCustomerTable {
     let centre: SIMD2<Float>
     let table: DiningSet
     var stands: [SIMD2<Float>] = [], yaws: [Float] = [], placeOf: [Int] = []
+    var door: SIMD2<Float> = .zero
+    /// 2 = a pair may sit (both ends reachable at the keep-apart gap), 1 = one customer at the near end, 0 = unused this visit.
+    var capacity = 2
     init(slot: Int, centre: SIMD2<Float>, table: DiningSet) { self.slot = slot; self.centre = centre; self.table = table }
     nonisolated deinit {}
 }
@@ -30,6 +33,11 @@ final class CafeMember {
     var stuck: Float = 0
     var waitT: Float = 0
     var replan = false, replans = 0
+    /// The waypoint last handed to goTo and how long ago; walks of the proximity guard.
+    var reqWp: SIMD2<Float>?
+    var reqT: Float = 0
+    var guards = 0
+    var guardAt: Float = -9
     var lastPos: SIMD2<Float> = .zero
     var held = false
     init(actor: JellyActor, visitor: ParkVisitor, index: Int) { self.actor = actor; self.visitor = visitor; self.index = index }
@@ -116,10 +124,13 @@ extension GameCare {
                 && !RoomCatalog.cafe.allBoxes.contains { b in abs(e.stand.x - b.centre.x) < b.halfExtents.x + 0.3 && abs(e.stand.y - b.centre.z) < b.halfExtents.z + 0.3 }
         }
         guard fits else { table.reset(); Self.crowdLog("table slot \(slot) at \(t) does not fit"); return nil }
-        let door = CafeTables.door(landscape: landscape)
+        let door = CafeTables.door(landscape: landscape, table: t)
         ends.sort { simd_distance($0.stand, door) > simd_distance($1.stand, door) }          // (the first in takes the FAR end: the second never walks past the first)
         let ct = CafeCustomerTable(slot: slot, centre: t, table: table)
         ct.stands = ends.map(\.stand); ct.yaws = ends.map(\.yaw); ct.placeOf = ends.map { $0.yaw > 0 ? 1 : 2 }
+        ct.door = door
+        ct.capacity = CafeTables.capacity(table: t, stands: ct.stands, door: door, bodies: player, origin: book.origin, tables: CafeTables.customerTables(landscape: landscape), gap: Self.crowdMinGap)
+        guard ct.capacity >= 1 else { table.reset(); Self.crowdLog("table slot \(slot) at \(t) has no clear way in (capacity 0)"); return nil }
         book.extraTables.append(table); book.extraFrames.append(nil)
         return ct
     }
@@ -172,7 +183,7 @@ extension GameCare {
                 if let t = cafeMakeCustomerTable(slot: i, at: c, landscape: landscape) { cs.tables.append(t) }
             }
             // the crowd indexes the tables that fit
-            var crowd = CafeCrowd(slots: cs.tables.count, bodies: cs.pool.count, seed: cs.seed)
+            var crowd = CafeCrowd(slots: cs.tables.count, capacity: cs.tables.map(\.capacity), bodies: cs.pool.count, seed: cs.seed)
             for g in crowd.seatInitial() { cafeCrowdStart(g, seated: true, landscape: landscape) }
             cs.preseated = crowd.groups.count
             cs.crowd = crowd
@@ -209,7 +220,8 @@ extension GameCare {
         let free = cs.pool.filter { m in !cs.live.values.contains { $0.members.contains { $0 === m } } }
         guard free.count >= cg.size else { return }
         let g = CafeLiveGroup(id: cg.id, table: table, phase: seated ? .seated : .arriving)
-        for k in 0..<cg.size { let m = free[k]; m.index = k; m.state = seated ? .seated : .waiting; m.replan = false; m.replans = 0; m.waitT = 0; g.members.append(m) }
+        for k in 0..<cg.size { let m = free[k]; m.index = cg.size == 1 ? 1 : k;          // (one customer sits at the NEAR end)
+             m.state = seated ? .seated : .waiting; m.replan = false; m.replans = 0; m.waitT = 0; m.guards = 0; m.reqWp = nil; g.members.append(m) }
         cs.live[cg.id] = g
         cs.tablesUsed.append(table.slot)
         if seated {
@@ -227,9 +239,9 @@ extension GameCare {
     private func cafeCrowdLeave(_ id: Int, landscape: Bool) {
         guard let g = cafeBook.crowd.live[id] else { return }
         g.phase = .leaving
-        let door = CafeTables.door(landscape: landscape)
+        let door = g.table.door
         g.members.sort { simd_distance(g.table.stands[$0.index], door) < simd_distance(g.table.stands[$1.index], door) }          // (the one nearer the door first)
-        for m in g.members { m.state = .waiting; m.path = []; m.held = false; m.replan = false; m.replans = 0 }
+        for m in g.members { m.state = .waiting; m.path = []; m.held = false; m.replan = false; m.replans = 0; m.guards = 0; m.reqWp = nil }
         g.belled = false
         Self.crowdLog(String(format: "t=%.1f LEAVE group %d", cafeBook.crowd.clock, id))
     }
@@ -245,7 +257,7 @@ extension GameCare {
 
     private func tickCrowdGroup(_ g: CafeLiveGroup, dt: Float, landscape: Bool) {
         let book = cafeBook, cs = book.crowd
-        let door = CafeTables.door(landscape: landscape)
+        let door = g.table.door
         // each member in turn
         for (i, m) in g.members.enumerated() {
             guard let b = m.actor.brain else { continue }
@@ -314,16 +326,30 @@ extension GameCare {
                     rehome(m.actor, at: last); m.path = [last]; m.stuck = 0
                     continue
                 }
+                m.reqT += dt
+                // the proximity guard: never nearer than 1.45 u to another body (the player's, a seated customer): look for a new way from here (three times at most)
+                var nearest: Float = .infinity
+                for a in book.actors { if let ob = a.brain { nearest = min(nearest, simd_distance(Self.floorPos(ob, a.sim), pos)) } }
+                for og in cs.live.values { for om in og.members where om !== m && om.state == .seated { nearest = min(nearest, simd_distance(Self.floorPos(om.actor.brain!, om.actor.sim), pos)) } }
+                if nearest < 1.45, m.guards < 3, cs.clock - m.guardAt > 2 {
+                    m.guards += 1; m.guardAt = cs.clock; m.replan = true; m.state = .waiting; m.waitT = 0; m.stuck = 0
+                    b.requestNow(.goTo(pos))
+                    Self.crowdLog(String(format: "member %d only %.2f from a body at (%.2f,%.2f): new route (guard %d)", m.actor.id, nearest, pos.x, pos.y, m.guards))
+                    continue
+                }
                 guard idleNow else { continue }
                 if let wp = m.path.first {
                     let lastLeg = m.path.count == 1
+                    let d = simd_distance(pos, wp)
+                    // he walked to this spot and stopped short of it (the walkable floor clamps it): that counts as there
+                    let stoppedShort = m.reqWp == wp && m.reqT > 0.8
                     // leaving: the entrance itself may lie past the walkable floor, so the last leg counts as done within 1.3 u of it (or when he has stopped within 2 u of it)
-                    let atDoor = g.phase == .leaving && lastLeg && (simd_distance(pos, wp) < 1.3 || (m.stuck > 2.5 && simd_distance(pos, wp) < 2.0))
+                    let atDoor = g.phase == .leaving && lastLeg && (d < 1.3 || (stoppedShort && d < 2.0))
                     if atDoor { m.path.removeAll(); crowdArrived(g, m, landscape: landscape); continue }
-                    if simd_distance(pos, wp) < (lastLeg ? 0.45 : 0.35) {
-                        m.path.removeFirst()
-                        if let n = m.path.first { b.requestNow(.goTo(n)) } else { crowdArrived(g, m, landscape: landscape) }
-                    } else { b.requestNow(.goTo(wp)) }
+                    if d < (lastLeg ? 0.45 : 0.45) || (stoppedShort && (!lastLeg || d < 0.9)) {
+                        m.path.removeFirst(); m.reqWp = nil
+                        if let n = m.path.first { m.reqWp = n; m.reqT = 0; b.requestNow(.goTo(n)) } else { crowdArrived(g, m, landscape: landscape) }
+                    } else if m.reqWp != wp { m.reqWp = wp; m.reqT = 0; b.requestNow(.goTo(wp)) }
                 } else { crowdArrived(g, m, landscape: landscape) }
             }
         }

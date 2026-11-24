@@ -13,11 +13,14 @@ import simd
 
 nonisolated enum CafeTables {
     /// The entrance: the right-hand side of the room (just inside the floor), where the guests have always come in.
-    static func door(landscape: Bool) -> SIMD2<Float> {
+    /// `table`: the customer table the group is going to. In portrait the back-right table has its own entrance on the right wall at its depth (so its group never walks past the
+    /// player's table); every other table uses the front-right one. nil = the front entrance.
+    static func door(landscape: Bool, table: SIMD2<Float>? = nil) -> SIMD2<Float> {
         if DevArgs.enabled, let s = UserDefaults.standard.string(forKey: landscape ? "CafeDoorL" : "CafeDoorP") {          // capture aid: -CafeDoorP 4.4,1.2 (an "m" in front of a number is a minus)
             let v = s.split(separator: ",").compactMap { t in Float(t.hasPrefix("m") ? "-" + t.dropFirst() : String(t)) }
             if v.count == 2 { return SIMD2(v[0], v[1]) }
         }
+        if !landscape, let t = table, t.y < -2.0, t.x > 1.5 { return SIMD2(3.8, -2.4) }
         return landscape ? SIMD2(4.4, 1.0) : SIMD2(3.7, 1.8)
     }
     /// Tables the player's group may take (floor x, z of the table centre) with their weight. The first of each aspect is the old fixed spot ("the middle").
@@ -31,6 +34,22 @@ nonisolated enum CafeTables {
     static func customerTables(landscape: Bool) -> [SIMD2<Float>] {
         landscape ? [SIMD2(2.8, -2.6), SIMD2(1.0, 1.4), SIMD2(-0.4, -2.9)]
                   : [SIMD2(2.7, -3.3), SIMD2(-1.6, -3.3)]
+    }
+    /// How many customers a customer table can take with this player table: 2 when BOTH ends can be reached from its entrance without ever coming within `gap` of the player's bodies
+    /// (the first of a pair walks to the far end), 1 when only the near end can (a single customer sits there), 0 when neither. `stands` are the table's two stands, far end first.
+    static func capacity(table t: SIMD2<Float>, stands: [SIMD2<Float>], door: SIMD2<Float>, bodies: [SIMD2<Float>], origin: SIMD2<Float>, tables: [SIMD2<Float>], gap: Float) -> Int {
+        guard stands.count == 2 else { return 0 }
+        func reachable(_ end: SIMD2<Float>) -> Bool {
+            guard bodies.allSatisfy({ simd_distance($0, end) >= gap - 0.02 }) else { return false }
+            var discs = bodies.map { CafeRoute.Disc(c: $0, r: gap + 0.1) }
+            discs.append(.init(c: origin, r: 1.0))
+            for tb in tables { discs.append(.init(c: tb, r: 0.6)) }
+            discs = discs.map { d in .init(c: d.c, r: min(d.r, min(simd_distance(d.c, door), simd_distance(d.c, end)) - 0.02)) }
+            return !CafeRoute.path(from: door, to: end, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.9 }).isEmpty
+        }
+        let near = reachable(stands[1]), far = reachable(stands[0])
+        if near && far { return 2 }
+        return near ? 1 : 0
     }
     /// Which player table this visit takes: weighted by `weight`, from the candidates `allowed` lets through (nil = none fits). `roll` is 0..<1.
     static func pickPlayer(landscape: Bool, roll: Float, allowed: (SIMD2<Float>) -> Bool) -> Int? {
@@ -61,14 +80,15 @@ nonisolated struct CafeCrowd {
 
     var rng: CafeChatRNG
     var slots: Int
+    var capacity: [Int]
     var bodies: Int
     private(set) var groups: [CafeCrowdGroup] = []
     private(set) var nextArrival: Float
     private var serial = 0
     var entered = 0, left = 0
 
-    init(slots: Int, bodies: Int = CafeCrowd.poolBodies, seed: UInt64) {
-        rng = CafeChatRNG(seed: seed); self.slots = slots; self.bodies = bodies
+    init(slots: Int, capacity: [Int]? = nil, bodies: Int = CafeCrowd.poolBodies, seed: UInt64) {
+        rng = CafeChatRNG(seed: seed); self.slots = slots; self.bodies = bodies; self.capacity = capacity ?? [Int](repeating: 2, count: slots)
         nextArrival = 0
         nextArrival = rng.range(Self.firstInterval.lowerBound, Self.firstInterval.upperBound)
     }
@@ -90,7 +110,7 @@ nonisolated struct CafeCrowd {
     }
     private mutating func makeGroup(slot: Int, phase: CafeCrowdGroup.Phase) -> CafeCrowdGroup? {
         let size = rng.chance(Self.pairShare) ? 2 : 1
-        let fit = min(size, bodies - usedBodies)
+        let fit = min(size, bodies - usedBodies, capacity.indices.contains(slot) ? capacity[slot] : 2)
         guard fit >= 1 else { return nil }
         serial += 1
         return CafeCrowdGroup(id: serial, size: fit, slot: slot, phase: phase, stay: rng.range(Self.stay.lowerBound, Self.stay.upperBound))
@@ -111,8 +131,9 @@ nonisolated struct CafeCrowd {
             out.append(.leave(group: groups[i].id))
             return out
         }
-        if nextArrival <= 0, groups.count < Self.maxGroups, let slot = freeSlots.first, var g = makeGroup(slot: slot, phase: .arriving) {
-            g.slot = freeSlots[min(freeSlots.count - 1, Int(rng.next() * Float(freeSlots.count)))]
+        if nextArrival <= 0, groups.count < Self.maxGroups, !freeSlots.isEmpty {
+            let slot = freeSlots[min(freeSlots.count - 1, Int(rng.next() * Float(freeSlots.count)))]
+            guard let g = makeGroup(slot: slot, phase: .arriving) else { return out }
             groups.append(g); entered += 1
             nextArrival = rng.range(Self.interval.lowerBound, Self.interval.upperBound)
             out.append(.enter(group: g))
