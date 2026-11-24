@@ -288,9 +288,6 @@ struct VisitorCard: View {
                     .accessibilityElement(children: .combine).accessibilityLabel("\(prof.name): \(lvl.title)")
                 }
             }
-            Text("\u{201C}\(visitor.greeting)\u{201D}").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
-                .padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.7)))
             if home {
                 Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); care.guestSayGoodbye() } label: {
                     HStack(spacing: 8) { Image(systemName: "hand.wave.fill"); Text("Say goodbye") }
