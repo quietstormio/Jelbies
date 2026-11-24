@@ -30,7 +30,7 @@ enum ToyTuning {
     static let directGap: Float = 20
     /// toy-audit-r1: a grumpy Jelmiko plays with the kick / hop toys at this share of a happy one's rate (a shorter go: no run of kicks, fewer bounces).
     nonisolated(unsafe) static var grumpyPlay: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ToyGrumpy") != nil && UserDefaults.standard.integer(forKey: "ToyGrumpy") == 0)          // (dev: -ToyGrumpy 0 = the old never)
-    static var grumpyShare: Float { grumpyPlay ? 0.5 : 0 }
+    static var grumpyShare: Float { grumpyPlay ? 0.25 : 0 }          // (direct pick chance x 0.25; the idle table gives the kick / hop toys 0.6 / 0.55 against the happy 2.4 / 2.2: measured about half of a happy one's rate)
     /// Founding set-up (launch, room switches) is not news.
     nonisolated(unsafe) static var settle: TimeInterval = 5
 }
