@@ -368,8 +368,9 @@ extension GameCare {
         #if targetEnvironment(simulator)
         if DevArgs.enabled { let c = a.sim.centroid(); print(String(format: "[showturn] walk actor %d from (%.2f, %.2f) to (%.2f, %.2f) goal (%.2f, %.2f) t=%.3f", a.id, c.x, c.z, p.x, p.y, showBook.goals[a.id]!.x, showBook.goals[a.id]!.y, CACurrentMediaTime())) }
         #endif
-        b.requestNow(.come(to: p))
+        b.requestNow(.come(to: p + Self.settleOffset))          // (show-line-r1: a walker's body settles 0.15 further back (z) than the point it is sent to, measured at every seat: the walk is sent that much forward so the body RESTS on the seat)
     }
+    static let settleOffset = SIMD2<Float>(0, 0.15)
     /// On its side the near seat (-1.65, 0) stands 1.3 from the straight line between the gate and the left back seat: that walk bends through this point (0.3, -0.3) so it never brushes the one who sits there.
     private func seatWaypoint(_ seat: SIMD2<Float>) -> SIMD2<Float>? {
         GameCamera.aspect > 1 && seat.x < -0.5 && seat.y < Self.backRow ? SIMD2(0.3, -0.3) : nil

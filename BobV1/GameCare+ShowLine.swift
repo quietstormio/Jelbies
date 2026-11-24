@@ -92,7 +92,7 @@ extension GameCare {
     /// A leg may take its walk at this pace (u/s; measured 0.6-1.1 u/s on the stage, the turn to the camera and the one in front included) plus `lineGrace` s.
     static let lineWalkPace: Float = 0.7, lineGrace: Float = 2.5, lineMaxLeg: Float = 9.0
     /// Not moving for `lineStall` s (a body with nothing to do) or `lineStallWalk` s (a body inside a walk: the half turn on the spot before a step takes ~1.7 s), off its seat, not waiting its turn: carried.
-    static let lineStall: Float = 1.5, lineStallWalk: Float = 2.9, lineWaitMax: Float = 8.0, lineWindow: Float = 1.0
+    static let lineStall: Float = 1.5, lineStallWalk: Float = 2.9, lineWaitMax: Float = 14.0, lineWindow: Float = 1.0
     /// A body this close to its seat is in it. A carry never passes closer than `lineClearOf` to another body.
     static let lineAt: Float = 0.3, lineClearOf: Float = 1.15, glideSpeed: Float = 3.2
     /// Off only for a capture that wants the old behaviour (`-ShowLineKeepOff 1`, dev arguments): the baseline measurement.
