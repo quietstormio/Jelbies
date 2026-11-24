@@ -152,6 +152,7 @@ enum ClipProbe {
         let df = DecorField.shared
         for f in df.feet {
             if f.kind == .slide, f.uid != ParkToys.slideUID, !slideLogged.contains(f.uid) { slideLogged.insert(f.uid); NSLog("[clip] home slide uid %d at (%.2f,%.2f) q%d zonesClear=%d", f.uid, f.centre.x, f.centre.y, f.quarter, SlideZones.clear(f, among: df.feet) ? 1 : 0) }
+            if f.kind == .slide, f.uid != ParkToys.slideUID, slideLogged.contains(f.uid), slideLogged.count == 1, frame % 600 == 1 { for g in df.feet where g.uid != f.uid { let b = df.position(g), h = g.spec.half; NSLog("[clip] slide neighbour %@ at (%.2f,%.2f) half (%.2f,%.2f) solid=%d zones %@", g.kind.rawValue, b.x, b.y, h.x, h.y, g.spec.solid ? 1 : 0, SlideZones.zones(f).map { "[\($0.lo.x),\($0.lo.y)..\($0.hi.x),\($0.hi.y)]" }.joined(separator: " ")) } }
             if f.kind == .slide, let fld = field(.slide) {
                 let c = f.centre, q = f.quarter, lift = f.lift
                 let lo = V3(c.x - 1.4, lift, c.y - 2.0), hi = V3(c.x + 1.4, lift + 1.6, c.y + 2.0)
