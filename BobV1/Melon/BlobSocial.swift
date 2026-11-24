@@ -377,7 +377,7 @@ extension BlobBrain {
     /// Start `kind` with `o` now (the scheduler's autonomous pick calls this; tests call it directly). False = not possible right now
     /// (either one is busy / blocked, too far or too near for this kind, no room).
     @discardableResult
-    func socialStart(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
+    func socialStartCore(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
         guard socialFree, o.socialFree, o !== self else { return false }
         currentPose(sim)          // (his own body only: the partner has a sim of his own, and re-seeding HIS root from THIS sim teleported him onto the initiator)
         let me = position, you = o.position
