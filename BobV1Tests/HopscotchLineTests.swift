@@ -250,10 +250,11 @@ final class HopscotchLineTests: XCTestCase {
         let brain = lab.rigs[0].brain
         let court = DecorField.shared.foot(uid)!
         let solids = DecorField.shared.feet.filter { $0.kind != .hopscotch && $0.spec.solid }
-        let slideCorners: [(String, SIMD2<Float>)] = [("slideLB", SIMD2(1.45, -1.4)), ("slideLF", SIMD2(1.45, 3.4)), ("ladder", SIMD2(2.9, -1.17))]
+        let dz = ParkOpen.slideZ - 1.0          // (park-open-r1: the slide's corner zones move with it; the 1.0 clearance is the same)
+        let slideCorners: [(String, SIMD2<Float>)] = [("slideLB", SIMD2(1.45, -1.4 + dz)), ("slideLF", SIMD2(1.45, 3.4 + dz)), ("ladder", SIMD2(2.9, -1.17 + dz))]
         let seesaw = SIMD2<Float>(-2.54, -2.2)          // (park-room-r2: the seesaw's right stand spot; the left one is (-3.86, -2.2))
         let seeStands: [SIMD2<Float>] = [SIMD2(-3.86, -2.2), SIMD2(-2.54, -2.2)]
-        let own: [SIMD2<Float>] = [SIMD2(-3.7, 1.9), SIMD2(1.7, -2.8), SIMD2(2.95, -2.65)]
+        let own: [SIMD2<Float>] = ParkToys.ownSpots
         for (label, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
             GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: aspect)
             let entries = ParkLayout.spots(count: 5)

@@ -15,7 +15,7 @@ extension BlobBrain {
     /// The lawn spots an ex-rider (or a stander asked off the foot) walks to, in the slide's own frame (x to the side, z along the chute). With the park's layout
     /// (slide (2.9, 1.0), court (-2.1, 1.9)) they are (-0.35, 3.5), (-0.5, 2.1), (-0.5, 0.65): one column left of the path, each at least `peerGap + 0.3` from
     /// the landing, 1.15 from every hopscotch square and one gap from the next. ParkSlideCrowdTests pins all three.
-    static let slideOutSpots: [SIMD2<Float>] = [SIMD2(-3.25, 2.5), SIMD2(-3.4, 1.1), SIMD2(-3.4, -0.35)]
+    static var slideOutSpots: [SIMD2<Float>] { ParkOpen.slideOutSpots }          // (park-open-r1: the third spot moved off the hopscotch queue; ParkOpen.swift)
 
     /// When each brain was last asked off the foot (its own `peerClock`): one ask per `slideFootEvery`, never one per tick.
     nonisolated(unsafe) static var slideFootAsked: [Int: Float] = [:]

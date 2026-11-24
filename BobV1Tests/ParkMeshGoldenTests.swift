@@ -15,7 +15,9 @@ final class ParkMeshGoldenTests: XCTestCase {
         mesh.vertices.withUnsafeBytes(feed); mesh.indices.withUnsafeBytes(feed)
         return h
     }
-    static let pinVertices = 97152, pinIndices = 522321, pinHash: UInt64 = 6753943185295414633
+    static let pinVertices = 97152, pinIndices = 522321
+    /// park-open-r1: the bench moved behind the back hedge facing away (same vertices, new positions): the new hash; the old one is fdb1acd0's (`-ParkOpen old` / PARKOPEN_OLD=1).
+    static var pinHash: UInt64 { ParkOpen.old ? 6753943185295414633 : 16014867645280178549 }
 
     func testParkMeshIsPinned() {
         let m = ParkScenery.build(theme: RoomCatalog.park.theme)

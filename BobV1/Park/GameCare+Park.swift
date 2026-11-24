@@ -567,7 +567,7 @@ enum ParkLayout {
     /// ~1.1 off it in portrait, between the path and the slide, clear of slot 0 by the hopscotch court and of the bench at the back.
     static let oldSlots: [(Float, Float)] = [(-0.35, 0.62), (0.30, 0.72), (0.0, 0.46), (-0.60, 0.26), (0.62, 0.30)]
     /// park-open-r1: the slide stands further back and the middle is open: five spots scattered over it (no two nearer than about 2.0 on the 7 x 8 floor, none on the court, none by the slide's new box or its climb spot).
-    static let openSlots: [(Float, Float)] = [(-0.20, 0.62), (0.62, 0.78), (0.25, 0.40), (-0.25, 0.14), (0.0, 0.92)]
+    static let openSlots: [(Float, Float)] = [(-0.30, 0.66), (0.62, 0.78), (0.35, 0.50), (-0.85, 0.14), (0.0, 0.92)]
     static var slots: [(Float, Float)] { ParkOpen.old ? oldSlots : openSlots }
     /// park-arrive-r2: no arrival spot starts nearer the slide's box than this (a wider screen spreads the shares: the spot is moved straight out from the box).
     static let slideClear: Float = 1.0

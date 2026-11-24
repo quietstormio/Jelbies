@@ -174,7 +174,8 @@ final class ParkSlideCrowdTests: XCTestCase {
 
     /// T1: the three out spots (slide frame) are on open lawn, clear of the landing and the court, one gap apart.
     func testSlideOutSpotsAreOnOpenLawn() {
-        let want: [SIMD2<Float>] = [SIMD2(-0.35, 3.5), SIMD2(-0.5, 2.1), SIMD2(-0.5, 0.65)]
+        let z = ParkOpen.slideZ          // (park-open-r1: the slide stands at z -0.3 now; its out spots are (-0.35, 2.2), (-0.1, 3.7) and (1.6, 3.7), moved off the hopscotch queue; fdb1acd0: (-0.35, 3.5), (-0.5, 2.1), (-0.5, 0.65))
+        let want: [SIMD2<Float>] = ParkOpen.old ? [SIMD2(-0.35, 3.5), SIMD2(-0.5, 2.1), SIMD2(-0.5, 0.65)] : [SIMD2(-0.35, 2.5 + z), SIMD2(-0.1, 4.0 + z), SIMD2(1.6, 4.0 + z)]
         for (name, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
             let lab = parkLab(seed: 5)
             _ = GameCamera.refreshRoam(aspect: aspect)
@@ -347,8 +348,8 @@ final class ParkSlideCrowdTests: XCTestCase {
 
     func testStanderInsideTheSlideZoneStepsOff() {
         for seed in UInt64(1)...4 {
-            _ = stepoff(variant: "V1", seed: seed, spotB: SIMD2(2.3, 2.9), spotC: SIMD2(1.58, 2.73))
-            _ = stepoff(variant: "V2", seed: seed, spotB: SIMD2(1.76, 3.23), spotC: SIMD2(0.38, 3.49))
+            _ = stepoff(variant: "V1", seed: seed, spotB: SIMD2(2.3, 2.9 + (ParkOpen.slideZ - 1.0)), spotC: SIMD2(1.58, 2.73 + (ParkOpen.slideZ - 1.0)))
+            _ = stepoff(variant: "V2", seed: seed, spotB: SIMD2(1.76, 3.23 + (ParkOpen.slideZ - 1.0)), spotC: SIMD2(0.38, 3.49 + (ParkOpen.slideZ - 1.0)))
         }
     }
 
@@ -358,7 +359,7 @@ final class ParkSlideCrowdTests: XCTestCase {
             let lab = parkLab(seed: seed)
             let sl = DecorField.shared.foot(ParkToys.slideUID)!
             let rigs = lab.rigs, b = rigs[1].brain
-            place(rigs[0], rigs[0].brain.fixed(SIMD2(-2.6, -1.0))); place(rigs[2], withFriend ? SIMD2(1.58, 2.73) : rigs[0].brain.fixed(SIMD2(-3.0, 0.5))); place(rigs[1], SIMD2(2.3, 2.9))
+            place(rigs[0], rigs[0].brain.fixed(SIMD2(-2.6, -1.0))); place(rigs[2], withFriend ? SIMD2(1.58, 2.73 + (ParkOpen.slideZ - 1.0)) : rigs[0].brain.fixed(SIMD2(-3.0, 0.5))); place(rigs[1], SIMD2(2.3, 2.9 + (ParkOpen.slideZ - 1.0)))
             for _ in 0..<5 { lab.tick(watching: false) }
             let landing = b.slideLanding(sl)
             var t: Float = 0, walkStarts = 0, prevNone = true
