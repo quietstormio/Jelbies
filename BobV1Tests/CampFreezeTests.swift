@@ -50,7 +50,7 @@ final class CampFreezeTests: XCTestCase {
             JellyCamp.restamp(id, now: weeks, d)
             let n = BlobNeeds(defaults: d, key: JellyKeys.needs(id), now: { self.weeks })
             XCTAssertEqual(n.lastAway, 0, "id \(id)")
-            XCTAssertEqual(n.level(.hunger), 0.6, accuracy: 1e-5); XCTAssertEqual(n.level(.thirst), 0.5, accuracy: 1e-5); XCTAssertEqual(n.level(.attention), 0.4, accuracy: 1e-5)
+            for k in NeedKind.allCases { XCTAssertEqual(n.level(k), 1, accuracy: 1e-5, "id \(id): comes home from Camp full") }
             XCTAssertEqual(n.asleepNow, false)
             let g = BlobGrime(persists: true, defaults: d, key: JellyKeys.grime(id), now: { self.weeks })
             XCTAssertEqual(g.lastAway, 0, "id \(id)")
@@ -84,7 +84,7 @@ final class CampFreezeTests: XCTestCase {
         let saved = d.dictionary(forKey: JellyKeys.needs(1))
         XCTAssertEqual(saved?["asleep"] as? Bool, false)
         XCTAssertEqual(saved?["time"] as? Double, weeks.timeIntervalSince1970)
-        XCTAssertEqual(saved?["levels"] as? [Double], [0.9, 0.9, 0.9], "levels untouched")
+        XCTAssertEqual(saved?["levels"] as? [Double], [1, 1, 1], "owner 11-24: a Jelmiko brought home from Camp arrives with every need full")
     }
 
     func testMissingKeysStayMissingAndNothingElseIsTouched() {
