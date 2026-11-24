@@ -107,6 +107,7 @@ extension BlobBrain {
             if cGap {          // (gap: the one who gives way clears the other's predicted spot by the whole gap ALONE; the other walks on (crossing) or keeps a small veer to his right (head on))
                 if abs(cosA) < 0.6 { if !iYield { return .clear } }
                 else if cosA < 0 { share = iYield ? 1.0 : MoveCrowd.headOnKeep }
+                else if !iYield { return .clear }          // (same way: only the one behind goes round; the one ahead walks on)
                 else { share = 1.0 }
             } else if abs(cosA) < 0.6 {          // crossing: the lower id swings out well, the other only when it is about to touch
                 if !iYield { if h.tc < 1.2 && h.dmin < clear * 0.75 { share = 0.6 } else { return .clear } }
