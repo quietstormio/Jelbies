@@ -2184,6 +2184,11 @@ final class BlobBrain {
             // off the floor (hop, jacks, flip, held in the air): the foot rounds into the ball
             var mo = scale == 1 ? Self.beanMorph(clearance: lo - sim.floorY) : 0
             if flipShape { mo = min(mo, Self.forceMorphCap) }
+            if scale == 1, Self.beanMorphEase {          // (glitch-hunt-r1: a hop's landing drops the foot 2-3 cm a step: the ball -> boot morph flipped in one step, the toe shot out ~10 cm; now at most `beanMorphStep` a step)
+                let m0 = beanMorphLast[s]
+                mo = m0 + max(-Self.beanMorphStep, min(Self.beanMorphStep, mo - m0))
+                if flipShape { mo = min(mo, Self.forceMorphCap) }          // (a flip's boot cap still wins over the rate limit)
+            }
             if scale == 1 { beanMorphLast[s] = mo }
             if mo > 0 {
                 for i in 0..<FootBean.vertexCount { var w = place(i, mo); if !keepShape { w.y = max(w.y + tuck, sim.floorY) } else { w.y += tuck }; dst[s][i] = w }
@@ -2205,6 +2210,9 @@ final class BlobBrain {
     /// Every airborne / landing phase of a volleyball move (crouch, jump, spike, dive, slide, peel, land): the soft body lags the attractor (tens of degrees in a spike or a dive), so the beans
     /// and the arm capsules ride the FITTED pose, whole and for the whole move (no flicker between the two poses, no limb left behind on the attractor's pose).
     var volleyFitted: Bool { Self.onePieceVolley && volley.active && volley.phase != .ground }
+    /// glitch-hunt-r1: the body-rigid feet (hops, jacks, emotes; not the walk) change their ball / boot morph by at most `beanMorphStep` per step. `-BeanMorphEase 0` (env BEANMORPH_OFF=1) = as before.
+    nonisolated(unsafe) static var beanMorphEase = ProcessInfo.processInfo.environment["BEANMORPH_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "BeanMorphEase") != nil && UserDefaults.standard.integer(forKey: "BeanMorphEase") == 0)
+    static let beanMorphStep: Float = 0.25
     nonisolated(unsafe) static var raceHopFeet = true          // (false = the old race jump feet: before / after captures)
     /// The planted soles' pop at take-off: the drawn beans stood on the world-planted soles (ahead of / behind the body by up to a stride), the hop's first frame draws them body-rigid
     /// under the body. `raceCarry` is that horizontal offset per foot, eased out over the crouch (`raceCarryT` seconds left of `raceCarryTime`).

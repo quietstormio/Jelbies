@@ -98,6 +98,14 @@ struct GaitDriver {
     private var waitTimer: Float = 0.4
     private var seed: UInt64 = 0x9E3779B97F4A7C15
 
+    /// glitch-hunt-r1 (2026-11-24): a plain hop's phase hand-overs are eased, never snapped. The landing's squash target used to jump from the flight's stretch (1.12) to the impact
+    /// squash (0.80) in ONE step, and a chained crouch from the landing's squash back to 1.0 and from the landing's full hold to strength 0: the attractor's anchor dropped 17 cm in a
+    /// step, the soft body jolted after it and everything placed on the attractor (the arm capsules, the feet) jumped 10-16 cm (the dev glitch probe's largest pose source).
+    /// Now the landing and the crouch start from the squash and strength the attractor had and reach their own profile in `easeTime`. `-HopEase 0` (or env HOPEASE_OFF=1) = as before.
+    nonisolated(unsafe) static var hopEase = ProcessInfo.processInfo.environment["HOPEASE_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "HopEase") != nil && UserDefaults.standard.integer(forKey: "HopEase") == 0)
+    static let easeTime: Float = 0.06
+    private var crouchK0: Float = 0, crouchSy0: Float = 1, landSy0: Float = 1
+
     var isBusy: Bool { phase != .idle }
     /// A plain hop is running (crouch, air or landing; not a flip or the belly slide, which have their own bean handling).
     var isHopping: Bool { move == .hop && (phase == .crouch || phase == .air || phase == .land) }
@@ -177,7 +185,7 @@ struct GaitDriver {
         from = SIMD2(pose.centroid.x, pose.centroid.z)
         to = from
         yaw0 = pose.yaw; yaw1 = yaw0
-        move = .flip; phase = .crouch; t = 0; tMove = 0; chained = false; flipPitch = 0; flipClock = 0
+        move = .flip; phase = .crouch; t = 0; tMove = 0; chained = false; flipPitch = 0; flipClock = 0; crouchK0 = 0          // (the flip's crouch ramps from 0 as before)
         sim.attractor.rotation = yawQ(yaw0)
     }
 
@@ -207,6 +215,7 @@ struct GaitDriver {
         yaw0 = pose.yaw
         yaw1 = simd_length(d) > 1e-3 ? atan2f(d.x, d.y) : yaw0
         move = .hop; phase = .crouch; t = 0; tMove = 0
+        crouchK0 = Self.hopEase ? sim.attractor.strength : 0; crouchSy0 = sim.attractor.squash          // (glitch-hunt-r1: the hold and squash he had are handed over, not dropped)
         groundFrom = sim.floorY; groundTo = hopToGround ?? sim.floorY; hopToGround = nil
         self.chained = chained
         sim.attractor.rotation = yawQ(yaw0)
@@ -263,8 +272,10 @@ struct GaitDriver {
             let tcDown = move == .flip ? flipCrouch : (chained ? crouchTime * 0.4 : crouchTime)
             let tc = tcDown + crouchHold          // (the deepest squash is held for `crouchHold` seconds: 0 = the old crouch)
             let u = crouchHold == 0 ? t / tc : min(1, t / tcDown)
-            let sy = 1 - (move == .flip ? 0.24 : crouchDepth) * amp * smooth(u)
-            let k = (move == .flip ? kFlip : kHop) * min(1, t / 0.06)
+            var sy = 1 - (move == .flip ? 0.24 : crouchDepth) * amp * smooth(u)
+            if Self.hopEase, move == .hop, t < Self.easeTime { sy = crouchSy0 + (sy - crouchSy0) * smooth(t / Self.easeTime) }          // (glitch-hunt-r1)
+            let kT = move == .flip ? kFlip : kHop
+            let k = crouchK0 + (kT - crouchK0) * min(1, t / 0.06)          // (glitch-hunt-r1, `hopEase`: from the strength at the hand-off; it restarted from 0: a step with the body let go at every chained hop)
             let yawNow = move == .flip ? yaw0 : yawEase(t / (tc + 0.3))
             if move == .flip { flipClock = min(t, tc) }
             setUpright(sim, xz: from, yaw: yawNow, squash: sy, lift: 0, strength: k)
@@ -398,12 +409,15 @@ struct GaitDriver {
             let gOff = groundFrom + (groundTo - groundFrom) * ge - sim.floorY
             setUpright(sim, xz: xz, yaw: yawNow, squash: sy, lift: h + gOff, strength: kHop)
             tuckFeet(sim, u: u, amp: amp)
-            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0 }
+            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0; landSy0 = sy }
 
         case .land:
             let amp2 = amp
             // squash on impact (0.80), then a decaying 5 Hz jiggle (1.06 -> 0.97 -> 1.0)
-            let sy = 1 - landDepth * amp2 * expf(-t / 0.08) * cosf(2 * .pi * 5 * t)
+            // (glitch-hunt-r1, `hopEase`: the flight's stretch goes into the full impact squash over `easeTime` (4 steps, not 1); the decay and the jiggle start from there, as deep as before)
+            let tp = Self.hopEase ? max(0, t - Self.easeTime) : t
+            var sy = 1 - landDepth * amp2 * expf(-tp / 0.08) * cosf(2 * .pi * 5 * tp)
+            if Self.hopEase, t < Self.easeTime { sy = landSy0 + (sy - landSy0) * smooth(t / Self.easeTime) }
             let faceT = chained ? 0 : smooth((t - 0.1) / 0.4)
             let yawNow = yaw1 + wrap(facingYaw - yaw1) * faceT
             let k = kHop * (1 - smooth((t - 0.4) / 0.25))
