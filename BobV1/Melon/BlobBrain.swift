@@ -367,6 +367,7 @@ final class BlobBrain {
     var runAir: Float = 0            // the run's airborne rise (world units) this tick: the planted bean tucks up with it, so both feet leave the floor
     var runDt: Float = 1.0 / 60, runSpring: Float = 0, runSpringV: Float = 0, runYawPrev: Float = 0, runYawRate: Float = 0
     var runArmS: [Float] = [0, 0], runArmV: [Float] = [0, 0]
+    var wp = WalkPolishState()          // walk-polish-r1: the polished walk's own state (BlobBrain+WalkPolish.swift); never the run's
     var runFalling = false           // the run blend is ramping out (the skid-stop)
     var pitchBase: Float = 0
     var chat = ChatOverlay()             // cafe-talk-r1: the café table talk's nod / lean / look / arms / mouth, additive and never moving the feet or `yaw` (BlobBrain+ChatOverlay.swift)
@@ -1679,7 +1680,7 @@ final class BlobBrain {
                 let pS = PerfProbe.begin(); let effOpt = steerTarget(to: target); PerfProbe.end("rs.steerTarget", pS)
                 if board != nil { publishToBoard(pos: position) }          // (the walk-board: once per step, after the route is settled; nothing reads it)
                 guard let eff = effOpt else {
-                    steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
+                    steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); if Self.walkPolish != 0 { walkPolishPose(amplitude) }; armWalkWant = 1
                     if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; MoveLog.note(.pinned); step(after: .none, sim, giveUp: true); restTimer = 0.25 }
                     else if steerWait > 0.25, heldByPeer, slideFootHoldStands { steerWait = 0; slideFootStand(sim) }          // (park-slide-r4: held on the slide's foot, he stands and waits: no walk on the spot)
                     return
@@ -1694,6 +1695,7 @@ final class BlobBrain {
                 }
             }
             gaitPose(sway: waddleRoll, bob: 0.12)
+            if Self.walkPolish != 0 { walkPolishPose(amplitude) }          // (walk-polish-r1: pose-only, off at level 0)
             armWalkWant = 1
 
         case .turn(let to, let then):
@@ -2578,7 +2580,7 @@ final class BlobBrain {
                     runArmV[si] += ((tgt - runArmS[si]) * 700 - runArmV[si] * 22) * dt
                     runArmS[si] += runArmV[si] * dt
                     tgt += (runArmS[si] - tgt) * min(1, runW)
-                } else { runArmS[si] = tgt; runArmV[si] = 0 }
+                } else { runArmS[si] = tgt; runArmV[si] = 0; if Self.walkPolish >= 2 { tgt = walkPolishArm(si, tgt, dt) } }
                 armLastS[si] = tgt
             }
             nubPhi[si] = (armLastS[si] - ArmPath.armWalkCentreDeg) / 33
