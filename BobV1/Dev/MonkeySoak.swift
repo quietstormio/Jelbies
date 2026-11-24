@@ -228,6 +228,11 @@ enum MonkeySoak {
             await sleep(2 + 6 * g.unit())
             if !AudioHub.shared.settings.musicOn || g.next(2) == 0 { AudioHub.shared.settings.musicOn = true }
         case "rotate": rotate(&g)
+        // script-only steps (never picked by the soak): the pieces of a found case, for a replay
+        case "welcome": care.showWelcomeHome(j, won: true, again: false)
+        case "playball": care.store.grant(DecorKind.ball.storeID); care.beginPlay(ball: .ball)
+        case "endplay": care.endPlay()
+        case "hungry": hungry(care)
         case "idle": await sleep(5 + 25 * g.unit())
         case "quiet": await sleep(120 + 120 * g.unit())          // (the room left alone: longer than any stuck limit)
         default: NSLog("[monkey] unknown step %@", a)
