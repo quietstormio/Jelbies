@@ -345,7 +345,7 @@ extension GameCare {
                         let ref = g.phase == .leaving ? g.table.stands[a.index] : door
                         // coming in, the one ahead must be fully ON the floor (0.6 u inside the visible edge) and 1.3 u from the entrance before the next appears; going out, 1.3 u from his seat
                         let onFloor = g.phase == .leaving || (Self.crowdBodyVisible(ap) && simd_distance(ap, door) > 2.2)
-                        if cs.clock - a.startedAt < 1.0 || simd_distance(ap, ref) < 1.8 || !onFloor { continue }          // (1.8: the room's keep-apart gap is 1.4: a body appearing 1.3 behind him shoved the leader, which slowed it near x 3.3 in round 4)
+                        if cs.clock - a.startedAt < 1.0 || simd_distance(ap, ref) < 2.6 || !onFloor { continue }          // (1.8: the room's keep-apart gap is 1.4: a body appearing 1.3 behind him shoved the leader, which slowed it near x 3.3 in round 4)
                     }
                 }
                 let from = m.replan ? pos : (g.phase == .leaving ? g.table.stands[m.index] : door)
@@ -404,7 +404,7 @@ extension GameCare {
                 // yield: a follower stops while the one ahead of it in this group is closer than 1.15
                 var hold = false
                 for (j, o) in g.members.enumerated() where j < i && o.state == .walking {
-                    if simd_distance(Self.floorPos(o.actor.brain!, o.actor.sim), pos) < 1.15 { hold = true }
+                    if simd_distance(Self.floorPos(o.actor.brain!, o.actor.sim), pos) < 1.4 { hold = true }
                 }
                 // a visible stop mid-route: speed under 0.15 u/s for 0.3 s, not at the start (1.5 s: a turn on the spot before the first step is not a stop) and not within 0.8 u of the end of the path
                 let speed = dt > 0 ? simd_distance(pos, m.prevPos) / dt : 1
