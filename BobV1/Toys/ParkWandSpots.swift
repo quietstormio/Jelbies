@@ -46,15 +46,15 @@ enum ParkWand {
         }
         guard !cands.isEmpty else { return [] }
         let mid = (lo + hi) * 0.5
-        // the spread of a set: its least pairwise distance (to each other and to `others`), capped at `wellApart`, less a small pull away from the middle (a tie goes to the more central set)
+        // the spread of a set: its least pairwise distance (capped at `wellApart`) plus 0.4 of its least distance to `others` (capped at 2.0), less a small pull away from the middle (a tie goes to the more central set)
         func score(_ set: [SIMD2<Float>]) -> Float {
-            var m: Float = wellApart
+            var own: Float = wellApart, oth: Float = 2.0
             for i in set.indices {
-                for j in set.indices where j > i { m = min(m, simd_distance(set[i], set[j])) }
-                for q in others { m = min(m, simd_distance(set[i], q)) }
+                for j in set.indices where j > i { own = min(own, simd_distance(set[i], set[j])) }
+                for q in others { oth = min(oth, simd_distance(set[i], q)) }
             }
             let far = set.reduce(Float(0)) { $0 + simd_distance($1, mid) } / Float(set.count)
-            return m - 0.05 * far
+            return own + 0.4 * oth - 0.05 * far          // (their own spacing first, then the distance to the visitors, who walk about anyway)
         }
         // farthest-first start, then swap moves: replace one spot by any candidate while that raises the score (3 spots fit 2.2 apart in the portrait box; the first pick alone left them 1.75 - 1.9 apart)
         var chosen: [SIMD2<Float>] = []

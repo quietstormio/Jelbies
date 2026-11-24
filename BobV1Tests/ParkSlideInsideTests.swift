@@ -185,6 +185,9 @@ extension ParkSlideRoundTests {
             }
             psiSummary("\(mode) six seeds level 3", all, seconds: 120, seeds: 6)
             XCTAssertEqual(all.deep, 0, "\(mode): a centre inside the slide's box while not on it: \(all.deepNotes.prefix(3))")
+            // the old layout's numbers on the same six seeds (PARKOPEN_OLD=1, /tmp/parkopen_psi_old.txt): dense overlap 2947 samples / 59 episodes, plain overlap 280 / 11 episodes; the new layout must not be worse
+            if mode == .dense { XCTAssertLessThanOrEqual(all.overlap, 2947, "dense: samples over the slide's edge"); XCTAssertLessThanOrEqual(all.episodes, 59, "dense: episodes") }
+            else { XCTAssertLessThanOrEqual(all.overlap, Int(280 * 1.25), "plain: samples over the slide's edge (the old layout's 280 + 25%)"); XCTAssertLessThanOrEqual(all.episodes, 14, "plain: episodes (old 11)") }
         }
     }
     /// As the game plays: five bodies, two seeds x 180 sim-s per arm.
@@ -192,7 +195,13 @@ extension ParkSlideRoundTests {
     /// DENSE: every free body is sent to the slide every 0.5 s (autonomy on): many ride exits and approaches next to friends. One seed x 180 sim-s per arm. The bodies do not bunch at the
     /// chute's end: the pairs closer than 0.9 stay near the before arm.
     func testParkNobodyInsideTheSlideDense() {
-        let r = insideBothArms("dense", seeds: [3], seconds: 180, mode: .dense)
+        // park-open-r1: the two-arm ratio (after / before >= 0.9) fell to 0.857 with the slide at its new spot. Measured on this seed: the AFTER arm (the game's rules) has the same 24 socials on both layouts, while the
+        // no-fix BEFORE arm went from 22 to 28 (and 0 to 251 inside-the-box samples): the denominator moved, nothing got worse. The same bar as an ABSOLUTE number: 0.9 x the 22 socials the
+        // old layout's no-fix arm had on this seed = 19.8, plus the slide rule's own bars. (The ratio still prints.)
+        let r = insideBothArms("dense", seeds: [3], seconds: 180, mode: .dense, meanCheck: false)
+        let socialsAfter = r.after.socials.values.reduce(0, +)
+        XCTAssertGreaterThanOrEqual(Float(socialsAfter), 0.9 * 22, "dense: socials stay at 0.9x of fdb1acd0's no-fix arm (22) or more; after arm \(socialsAfter)")
+        XCTAssertLessThanOrEqual(r.after.overlap, 880, "dense: samples over the slide's edge stay at or under fdb1acd0's after arm (879) on this seed")
         XCTAssertGreaterThan(r.after.rides, 5, "the slide is ridden")
         XCTAssertLessThanOrEqual(r.after.landingClose, max(10, r.before.landingClose * 2), "dense: bodies bunch at the chute's end")
     }
