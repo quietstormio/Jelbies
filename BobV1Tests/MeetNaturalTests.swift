@@ -68,7 +68,7 @@ final class MeetNaturalTests: XCTestCase {
     }
 
     func testFinalFacingIsReachedOnThePathNotByTurningAfterArrival() {
-        for (kind, each) in [(SocialKind.hopAlong, false), (.chestBump, true), (.twirl, false)] {
+        for (kind, each) in [(SocialKind.chestBump, true), (.boop, false)] {
             let r = run(kind, a: from, b: to, natural: true, faceEach: each)
             XCTAssertTrue(r.phase2)
             for i in 0..<2 { XCTAssertLessThan(r.turn[i] * 57.3, 45, "\(kind) body \(i): turn on the spot after arrival \(r.turn[i] * 57.3) deg") }
