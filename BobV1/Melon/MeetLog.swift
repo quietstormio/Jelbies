@@ -82,8 +82,9 @@ enum MeetLog {
             } else { side.append(0); turn.append(abs(wrap((ss.last?.yaw ?? 0) - (ss.first?.yaw ?? 0))) * 180 / .pi) }
         }
         let lo = arr.min() ?? 0, hi = arr.max() ?? 0
-        NSLog("[meetmoment] kind=%@ n=%d ok=%d why=%@ how=%@ t0=%.1f te=%.2f pre=%.2f gap=%.2f wait=%.2f side=%@ turn=%@ moved=%@", r.kind.rawValue, r.ids.count, ok ? 1 : 0, why, r.how, r.t0, te, r.sessionT >= 0 ? r.sessionT - r.t0 : -1, hi - lo, hi - lo,
-              side.map { String(format: "%.3f", $0) }.joined(separator: ","), turn.map { String(format: "%.0f", $0) }.joined(separator: ","), moved.map { String(format: "%.2f", $0) }.joined(separator: ","))
+        let ref = r.sessionT >= 0 ? r.sessionT : r.t0
+        NSLog("[meetmoment] kind=%@ n=%d ok=%d why=%@ how=%@ t0=%.1f te=%.2f pre=%.2f gap=%.2f wait=%.2f side=%@ turn=%@ moved=%@ arr=%@", r.kind.rawValue, r.ids.count, ok ? 1 : 0, why, r.how, r.t0, te, r.sessionT >= 0 ? r.sessionT - r.t0 : -1, hi - lo, hi - lo,
+              side.map { String(format: "%.3f", $0) }.joined(separator: ","), turn.map { String(format: "%.0f", $0) }.joined(separator: ","), moved.map { String(format: "%.2f", $0) }.joined(separator: ","), arr.map { String(format: "%.2f", $0 - ref) }.joined(separator: ","))
         if ok { count[r.kind.rawValue, default: 0] += 1 }
     }
 }

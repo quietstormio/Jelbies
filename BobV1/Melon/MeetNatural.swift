@@ -19,7 +19,7 @@ enum MeetNatural {
     static let enabledDefault = true
     /// Pair kinds whose start is "the initiator walks to a spot beside / before the partner, who waits": the two families (side by side facing the room, face to face) and the sit / hold kinds.
     /// Left on the old start: follow, chase, tag, sneak, keepAway, line, pass, bagSit, cuddle (a prop / a seat / a run), look, greet, zoomies, the travelling and the ring kinds.
-    static let kinds: Set<SocialKind> = [.boop, .squabble, .cheekSquish, .hopAlong, .highFive, .chestBump, .twirl, .nuzzle, .sitTogether, .swayHug, .whisperGiggle, .shyWave, .danceOff, .spinHug, .backToBack, .cuddleLean, .bellyBounce, .mirrorDance]
+    static let kinds: Set<SocialKind> = [.boop, .squabble, .cheekSquish, .hopAlong, .highFive, .chestBump, .twirl, .nuzzle, .sitTogether, .swayHug, .whisperGiggle, .shyWave, .danceOff, .spinHug, .backToBack, .cuddleLean, .bellyBounce, .mirrorDance, .peekaboo, .tag, .littleRace, .leapfrog, .ringAround]
     static let minLeg: Float = 0.7
     /// A walk's speed (u/s) for the ETA.
     static let baseSpeed: Float = 1.25
@@ -38,21 +38,25 @@ extension BlobBrain {
         let va = meetSpeed(), vo = o.meetSpeed()
         var best: (c: SIMD2<Float>, etaA: Float, etaO: Float)?
         var bestDiff = Float.infinity
-        let dir = (pa - ga)
-        for k in 0...16 {
-            let t = Float(k) / 20          // 0 ... 0.8 of the walk is the partner's
-            let c = dir * t
-            let af = ga + c, of = po + c
-            let etaA = meetTurnT(af - pa) + simd_distance(af, pa) / va
-            let etaO = (simd_length(c) > 0.05 ? o.meetTurnT(c) : 0) + simd_length(c) / vo
-            let diff = abs(etaA - etaO)
-            guard diff < bestDiff - 0.02 || (best == nil && k == 0) else { continue }
-            if k > 0 {
-                guard rf.contains(af), rf.contains(of), simd_distance(closeFixed(af), af) < 0.1, simd_distance(o.fixed(of), of) < 0.1 else { continue }
-                guard spotFree(af, besides: [self, o]), spotFree(of, besides: [self, o]) else { continue }
-                guard o.legClear(po, of, margin: o.steerMargin) else { continue }
+        let dir0 = (pa - ga)
+        for ang: Float in [0, 0.5, -0.5, 1.0, -1.0] {          // (the shift points toward the initiator; a few turned ones when that one is not legal: wall, third body)
+            let ca = cosf(ang), sa = sinf(ang)
+            let dir = SIMD2<Float>(dir0.x * ca - dir0.y * sa, dir0.x * sa + dir0.y * ca)
+            for k in 0...18 {
+                let t = Float(k) / 20          // 0 ... 0.9 of the walk is the partner's
+                let c = dir * t
+                let af = ga + c, of = po + c
+                let etaA = meetTurnT(af - pa) + simd_distance(af, pa) / va
+                let etaO = (simd_length(c) > 0.05 ? o.meetTurnT(c) : 0) + simd_length(c) / vo
+                let diff = abs(etaA - etaO) + abs(ang) * 0.15
+                guard diff < bestDiff - 0.02 || (best == nil && k == 0 && ang == 0) else { continue }
+                if k > 0 {
+                    guard rf.contains(af), rf.contains(of), simd_distance(closeFixed(af), af) < 0.1, simd_distance(o.fixed(of), of) < 0.1 else { continue }
+                    guard spotFree(af, besides: [self, o]), spotFree(of, besides: [self, o]) else { continue }
+                    guard o.legClear(po, of, margin: o.steerMargin) else { continue }
+                }
+                best = (c, etaA, etaO); bestDiff = diff
             }
-            best = (c, etaA, etaO); bestDiff = diff
         }
         guard let b = best, simd_length(b.c) > 0.3 else { return nil }
         return b
@@ -62,7 +66,7 @@ extension BlobBrain {
     func meetNaturalJoin(_ kind: SocialKind, with o: BlobBrain) {
         guard MeetNatural.enabled, MeetNatural.kinds.contains(kind), let s = social, s.kind == kind, o.social === s, s.end == nil, s.phase == 0,
               case .walk(let ga, _) = script, o.scriptIsNone, o.idleState.kind == nil, !o.socialTaken, o.activity != .walking else { return }
-        guard let p = meetShift(goal: ga, with: o) else { return }
+        guard let p = meetShift(goal: ga, with: o) else { if EmoteSpot.logOn { NSLog("[meetjoin] kind=%@ t=%.1f none (leg %.2f)", kind.rawValue, variety.now, simd_distance(ga, position)) }; return }
         if simd_distance(s.goal, ga) < 0.02 { s.goal = ga + p.c }
         emoteSendWalk(to: closeFixed(ga + p.c))
         o.emoteSendWalk(to: o.position + p.c)
@@ -74,5 +78,31 @@ extension BlobBrain {
         let ok = socialStartCore(kind, with: o, sim)
         if ok { meetNaturalJoin(kind, with: o) }
         return ok
+    }
+}
+
+// MARK: the group: everyone converges together
+
+extension MeetNatural {
+    /// seconds each member still waits before it sets off (steerID -> game time it may go), set once per group session
+    nonisolated(unsafe) static var goAt: [Int: Float] = [:]
+    nonisolated(unsafe) static var planned: ObjectIdentifier?
+}
+
+extension BlobBrain {
+    /// Phase 0 of a ring kind (`gather`): true = this member still waits for its turn to set off, so that every member arrives at about the same moment (the nearer ones start later, nobody stands at the place).
+    func meetGroupWait(_ s: SocialSession, _ mem: [BlobBrain]) -> Bool {
+        guard MeetNatural.enabled, s.phase == 0, !socialBook.hopStarted else { return false }
+        let sid = ObjectIdentifier(s)
+        if MeetNatural.planned != sid || s.t < 0.05 {
+            MeetNatural.planned = sid
+            var eta: [Int: Float] = [:]
+            for m in mem { eta[m.steerID] = simd_distance(m.position, m.slot(s)) / m.meetSpeed() + (simd_distance(m.position, m.slot(s)) > 0.3 ? 0.5 : 0) }
+            let mx = min(eta.values.max() ?? 0, 4)
+            MeetNatural.goAt = [:]
+            for m in mem { MeetNatural.goAt[m.steerID] = max(0, mx - (eta[m.steerID] ?? 0)) }
+            if MeetNatural.log || EmoteSpot.logOn { NSLog("[meetjoin] group=%@ t=%.1f delays=%@", s.kind.rawValue, variety.now, mem.map { String(format: "%.2f", MeetNatural.goAt[$0.steerID] ?? 0) }.joined(separator: ",")) }
+        }
+        return s.phaseT < (MeetNatural.goAt[steerID] ?? 0)
     }
 }

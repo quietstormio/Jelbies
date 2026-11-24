@@ -215,6 +215,7 @@ extension BlobBrain {
         switch s.phase {
         case 0:
             let spot = slot(s)
+            if meetGroupWait(s, mem) { if scriptIsNone, idleState.kind == nil { faceCentre(s) }; return true }          // (MeetNatural.swift: the nearer ones set off later, all arrive together)
             if !socialBook.hopStarted, fxFree {
                 socialBook.hopStarted = true
                 letGo()
