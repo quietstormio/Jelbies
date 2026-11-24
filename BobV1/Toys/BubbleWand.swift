@@ -676,13 +676,13 @@ final class BubbleWand: PlayToy {
         let was = GameCamera.playBlend
         GameCamera.playBlend = 1; defer { GameCamera.playBlend = was }          // (the area of the settled play view, whatever the camera's ease is now)
         let land = size.width > size.height
-        let xl: CGFloat = land ? 0.24 : 0.17, xr = 1 - xl
+        let xl: CGFloat = ParkWand.on ? ParkWand.sideFraction : (land ? 0.24 : 0.17), xr = 1 - xl          // (park-open-r1: the park's area reaches nearer the screen's sides: it was a 2.4 wide strip down the path, x -1.2 ... 1.2)
         let yTop: CGFloat = 0.40, yBot: CGFloat = land ? 0.68 : 0.70
         guard let back = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * (ParkWand.on ? ParkWand.topFraction : yTop)), size: size),          // (park-open-r1: in the park the area reaches further back, Toys/ParkWandSpots.swift)
               let front = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yBot), size: size),
               let l = GameCamera.floorPoint(screen: CGPoint(x: size.width * xl, y: size.height * yBot), size: size),
               let r = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) else { return nil }
-        var hx = max(min(abs(l.x), abs(r.x)) - 0.8, 1.2)          // (a body's half width inside the near edge)
+        var hx = max(min(abs(l.x), abs(r.x)) - (ParkWand.on ? ParkWand.sideMargin : 0.8), 1.2)          // (a body's half width inside the near edge)
         var zHi = min(front.y, GameCamera.roamMaxZ - 0.1)
         var zLo = max(back.y, GameCamera.parkRoamMaxZ != nil ? GameCamera.roamRect.min.y + (ParkWand.on ? ParkWand.backMargin : 0) : RoomLayout.minZ + 1.6)          // (the park: its roam rect's back edge)
         if GameCamera.playFrame, !PlayTuning.old, let rf = GameCamera.roamFloor {          // play-frame-r1: never outside the floor the play camera shows (whole bodies in frame)

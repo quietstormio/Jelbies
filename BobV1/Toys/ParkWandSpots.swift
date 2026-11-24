@@ -14,6 +14,8 @@ enum ParkWand {
     static var on: Bool { !ParkOpen.old && GameCamera.parkRoamMaxZ != nil }
     /// The back edge of the wand's area, as a fraction of the screen height from the top (home: 0.40).
     static let topFraction: CGFloat = 0.26
+    /// The park's area: the side edges at this fraction of the screen width (home 0.17 / 0.24), minus a body's half width.
+    static let sideFraction: CGFloat = 0.10, sideMargin: Float = 0.55
     /// The area never goes nearer the floor's back edge than this.
     static let backMargin: Float = 0.3
     /// A spot keeps this far off the hopscotch court's edge (a court is flat paint but nobody stands about on it) and off a solid piece's reach.
