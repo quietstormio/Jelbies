@@ -24,6 +24,9 @@ final class MeetRec {
 @MainActor
 enum MeetLog {
     nonisolated(unsafe) static var on: Bool { EmoteSpot.logOn }
+    /// `-MeetTrace 1`: a `[meettrace]` line per body at 5 Hz while a record is open (kind, phase, script, position, yaw): the diagnosis of a late arrival.
+    nonisolated(unsafe) static var trace: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "MeetTrace")
+    nonisolated(unsafe) static var lastTrace: [Int: Float] = [:]
     static var recs: [Int: MeetRec] = [:]          // by body id
     static var count: [String: Int] = [:]
 
@@ -52,6 +55,10 @@ enum MeetLog {
         guard on, let r = recs[b.steerID] else { return }
         let now = b.variety.now
         r.samples[b.steerID, default: []].append(MeetRec.S(t: now, p: b.position, yaw: b.yaw))
+        if trace, now - (lastTrace[b.steerID] ?? -1) >= 0.2 {
+            lastTrace[b.steerID] = now
+            NSLog("[meettrace] t=%.2f id=%d kind=%@ ph=%d sc=%@ act=%@ x=%.2f z=%.2f yaw=%.2f", now, b.steerID, r.kind.rawValue, b.social?.phase ?? -1, b.isWalkScript ? "walk" : (b.scriptIsNone ? "none" : "other"), String(describing: b.activity), b.px, b.pz, b.yaw)
+        }
         guard b.steerID == r.ids[0] else { return }
         if now - r.t0 > 40 { finish(r, ok: false, now: now, why: "timeout"); return }
         if let s = b.social {
