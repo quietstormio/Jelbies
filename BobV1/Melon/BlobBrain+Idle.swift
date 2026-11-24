@@ -336,9 +336,10 @@ extension BlobBrain {
                 return true
             }
         }
+        // rest-more-r1: the occasional sit / lie in place. Only in the dead time of the special cooldown (a body whose next pick is due keeps it): the rest never takes an emote's pick, it fills the walking
+        if RestMore.on, idleState.cooldown > RestMore.minCooldown, restSlotMaybeStart(sim) { return true }
         guard idleState.cooldown <= 0 else { return false }
         if anticsEnabled, runMoveDemo == nil, idleState.treat <= 0, treatMaybeStart(sim) { return true }
-        if RestMore.on, restSlotMaybeStart(sim) { return true }          // (rest-more-r1: the occasional sit / lie in place)
         let decorOffers: Set<IdleKind> = anticsEnabled && !decorLocked ? Self.decorOffers() : []
         // a toy is out: a direct chance (ToyTuning.directChance) to go and play with one, before the bag; not the toy he used last, at least directGap s between his sessions
         if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleNight < 0.6, variety.now - toy.lastDirect >= (outingPlay ? ParkPlayTuning.directGap : ToyTuning.directGap), rand() < (outingPlay ? ParkPlayTuning.directChance : ToyTuning.directChance) * (idleMood == .grumpy ? ToyTuning.grumpyShare : 1) {          // (toy-audit-r1: a grumpy one plays too, the kick / hop toys, at about half the rate; he never refuses a toy outright)
