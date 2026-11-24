@@ -57,6 +57,10 @@ final class ShowBook {
     var heading: [Int: (age: Float, limit: Float)] = [:]
     /// Second legs of walks through the gate: actor id -> where he goes on to.
     var via: [Int: (at: SIMD2<Float>, final: SIMD2<Float>)] = [:]
+    /// The line keeper (GameCare+ShowLine.swift): each body's leg and allowance, how long two bodies have touched, and how many bodies it has had to carry to their seats.
+    var keep: [Int: ShowSeatKeep] = [:]
+    var touchT: [Int: Float] = [:]
+    var placements = 0
     /// show-stayhome-r1: the stage is up and the housemates are away from the room: hidden, not stepped, not ticked, exactly as they were (`showStaysHome`).
     var roomAway = false
     /// Show asked while the contestant is asleep: the trip starts once he is upright (only he is woken and waited for).
@@ -81,6 +85,7 @@ extension GameCare {
         show.onRival = { [weak self] cue in self?.showRivalCue(cue) }
         show.rivalReady = { [weak self] who, centre in self?.showArrived(who, atCentre: centre) ?? true }
         show.rivalGiveUp = { [weak self] who in self?.showWalkExpired(who) ?? false }
+        show.lineFormed = { [weak self] in self?.showLineFormed() ?? true }
         let d = UserDefaults.standard
         if ShowCaptureArgs.auto(defaults: d) { show.auto = true }
         if DevArgs.enabled, d.object(forKey: "ShowHomeAfter") != nil { show.autoHomeAfter = Float(d.double(forKey: "ShowHomeAfter")) }
@@ -370,7 +375,7 @@ extension GameCare {
         GameCamera.aspect > 1 && seat.x < -0.5 && seat.y < Self.backRow ? SIMD2(0.3, -0.3) : nil
     }
     /// A walk between a seat and the middle (or between two seats): back seats are left and reached through the gate, so a walk never goes through a body that sits out. `via` holds where he goes on to.
-    private func showRoute(_ a: JellyActor, to p: SIMD2<Float>) {
+    func showRoute(_ a: JellyActor, to p: SIMD2<Float>) {
         let book = showBook
         let c = a.sim.centroid(), here = SIMD2(c.x, c.z)
         let backHere = here.y < Self.backRow, backThere = p.y < Self.backRow, oneBack = backHere != backThere
@@ -703,8 +708,12 @@ extension GameCare {
         if !(forfeitAsk && show.canPause) { show.tick(dt: dt) }          // (the "Go home?" card holds the stage still, except the dance: the song's own clock runs on)
         showSpotStep(dt: dt)
         tickPendingWalks(dt: dt)
+        tickShowLine(dt: dt)
         for k in showBook.heading.keys { showBook.heading[k]?.age += dt }
         guard show.active, show.onStage else { return }
+        #if targetEnvironment(simulator)
+        showLineProbeTick(dt: dt)
+        #endif
         let book = showBook
         for (a, v) in zip(book.extra, book.extraSpecs) {          // the borrowed rival bodies: held like the others, their species art on
             guard let b = a.brain else { continue }
