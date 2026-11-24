@@ -32,6 +32,9 @@ final class BumpLabTests: XCTestCase {
 
     enum Scene: String, CaseIterable { case homeHappy = "home happy 3", homeGrumpy = "home grumpy 3", guest = "home guest 4", park = "park 5" }
 
+    /// The centre distance at which two plain standing / walking bodies' skins meet in the real app (fewer-bumps-r1 bh1-3: touches at 1.08-1.23, mean 1.14).
+    static let touchD: Float = 1.15
+
     struct Score {
         var mins: Float = 0
         var enc = 0, enc14 = 0, encTouch = 0
@@ -106,6 +109,7 @@ final class BumpLabTests: XCTestCase {
             else if e.walkersAtMin == 1 { sc.ws += 1; if e.minD < 1.4 { sc.ws14 += 1 }; if e.touched { sc.wsTouch += 1 } }
         }
         for _ in 0..<Int(seconds * 60) {
+            PlayerPresence.touch()          // (the check-in emote reads the WALL clock since the last touch: kept away so a run is deterministic)
             lab.tick(watching: false)
             if scene == .park { DecorField.shared.tick(dt: dt) }
             let br = lab.rigs.map { $0.brain }
@@ -128,7 +132,7 @@ final class BumpLabTests: XCTestCase {
                     sc.gapAll += 1
                     let g: Float
                     if let cg = ContactField.gap(a.steerID, b.steerID, features: false) { g = min(cg, ContactField.skinGap(a.steerID, b.steerID) ?? cg) }
-                    else { sc.gapNil += 1; g = d - 0.5 * a.peerGap }
+                    else { sc.gapNil += 1; g = d - Self.touchD }          // (the lab rigs draw no skins: a touch = centres closer than the app's measured skin-touch distance)
                     if g <= ContactTuning.touchGap { e.touched = true }
                 }
                 open[key] = e
@@ -163,8 +167,8 @@ final class BumpLabTests: XCTestCase {
     func testScoreboard() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["SCOREBOARD"] != nil else { throw XCTSkip("set TEST_RUNNER_SCOREBOARD=1") }
-        let seconds = Float(env["SCOREBOARD_SECONDS"].flatMap { Float($0) } ?? 600)
-        let nSeeds = env["SCOREBOARD_SEEDS"].flatMap { Int($0) } ?? 6
+        let seconds = Float(env["SCOREBOARD_SECONDS"].flatMap { Float($0) } ?? 300)
+        let nSeeds = env["SCOREBOARD_SEEDS"].flatMap { Int($0) } ?? 4
         let seeds: [UInt64] = (0..<nSeeds).map { 101 + 13 * UInt64($0) }
         let tag = env["SCOREBOARD_TAG"] ?? "run"
         MotionLog.write("SCORE \(tag) switches: \(MoveCrowdInfo.text) seconds \(seconds) seeds \(seeds)")

@@ -1669,7 +1669,9 @@ final class BlobBrain {
                 return
             }
             // a requested walk (come, the meal, a stand at a piece) that has made no progress for 3 s plans its route afresh (round whatever blocks it)
-            if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; steerWait = 0; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
+            // (move-crowd-r1: while a PEER holds the leg (`heldByPeer`) the re-plan keeps `steerWait`: resetting it every 3 s meant the 6 s standing patience of `steerTarget` never ran out and the walker
+            //  stood forever beside a body inside the leg's margin; now the patience ends and the walk goes on, the stander asked aside by makeRoom / the spring. `-MoveCrowd 0` = the old reset.)
+            if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; if !(MoveCrowd.on && heldByPeer) { steerWait = 0 }; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
             if !feet.active {
                 if walkFinal { walkFinal = false; step(after: then, sim); return }
                 let pF = PerfProbe.begin(); let fl = flourishMaybe(sim, skinner, target: target); PerfProbe.end("rs.flourishMaybe", pF)
