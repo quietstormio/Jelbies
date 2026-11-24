@@ -75,26 +75,6 @@ final class StoryEventsTests: XCTestCase {
         XCTAssertFalse(w.keys.contains(where: { $0.hasPrefix("recent") }))
     }
 
-    func testNewsIsPreferredReplacesTheLineAndIsUsedForOneDay() {
-        let d = suite()
-        let day = Box(100)
-        let b = StoryBook(defaults: d)
-        b.today = { day.v }; b.busy = { false }; b.lowPower = { false }
-        b.chain = StoryChain([TemplateWriter(memory: b.memory)])
-        let before = b.aboutLine(facts())!.text                                   // no news: a favourite or a routine
-        XCTAssertFalse(before.contains("today"))
-        let e = StoryEvent(kind: "race", day: 100, d: ["tier": "Puddle", "win": "1"])
-        XCTAssertTrue(b.newsAvailable(e))
-        let news = b.aboutLine(facts(news: e))!.text                              // the same day: fresh news replaces the line
-        XCTAssertEqual(news, "Berry won the Puddle race today.")
-        XCTAssertEqual(b.aboutLine(facts(news: e))!.text, news)                    // and stays while it is news
-        day.v = 101
-        XCTAssertTrue(b.newsAvailable(e) == false)                                // used on day 100: finished on day 101
-        var next = facts(today: 101); next.news = b.newsAvailable(e) ? e : nil
-        let moved = b.aboutLine(next)!.text
-        XCTAssertNotEqual(moved, news)                                            // the line moves on (back to favourites / routines)
-        XCTAssertFalse(moved.contains("race"))
-    }
     final class Box { var v: Int; init(_ v: Int) { self.v = v } }
 
     func testTheNewsLineIsGuardedLikeAnyOther() {

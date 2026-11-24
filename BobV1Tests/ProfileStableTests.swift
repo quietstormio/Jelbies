@@ -109,7 +109,7 @@ final class ProfileStableTests: XCTestCase {
         }
     }
 
-    // MARK: the story slots (Story/): the living line and the friend rows
+    // MARK: the story slots (Story/): the friend rows
 
     /// Every line the pre-written bank can say with the longest names, plus the longest text the guard allows (90 characters that still fit two lines at 375 pt) and "no line".
     private func livingLines() -> [String] {
@@ -120,16 +120,6 @@ final class ProfileStableTests: XCTestCase {
         let longest = out.filter { StoryGuard.checkFinal($0, kind: .about, checkTone: false) == nil }.max { $0.count < $1.count } ?? ""
         out.append(longest)
         return out
-    }
-
-    func testTheLivingLineBoxIsTheSameHeightForEveryLine() {
-        let lines = livingLines()
-        XCTAssertGreaterThan(lines.count, 60)
-        for w in phones {
-            var h: [String: CGFloat] = [:]
-            for t in lines { h[t] = height(StoryLivingBubble(text: t, byModel: t.count % 2 == 0, tint: .pink), width: inner(w)) }
-            assertSame("living line @\(w)", h)
-        }
     }
 
     func testEveryLineThatPassesTheGuardFitsTwoLinesAt375() {

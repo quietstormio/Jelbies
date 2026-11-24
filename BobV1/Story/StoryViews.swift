@@ -1,7 +1,6 @@
 //
 //  StoryViews.swift
-//  The Profile's two story slots, built for the FIXED SKELETON (the owner's rule: the page never moves because a line is longer or shorter):
-//    StoryLivingBubble: the living line, ALWAYS the same box (two lines of space, the sparkle inside it, a tinted bubble that simply is not drawn when there is no line).
+//  The Profile's housemate-note slots, built for the FIXED SKELETON (the owner's rule: the page never moves because a line is longer or shorter):
 //    StoryFriendRow: one housemate: two small heads, the names (one line) and the note (two lines of space); StoryFriendRow.placeholder keeps a row's height when there is nobody.
 //  The guard (StoryGuard.fitsLines) rejects any text that would need a third line at the narrowest phone width, so nothing is ever cut with "...".
 //
@@ -12,7 +11,7 @@ import SwiftUI
 nonisolated enum StoryLayout {
     static let narrowPhone: CGFloat = 375
     static let cardInner: CGFloat = narrowPhone - 32 - 28
-    /// The living line's text column: bubble padding 12 x 2, the sparkle 14 and the gap 8.
+    /// The width / size the (retired, unshown) About text was checked against; StoryGuard's About kind still uses them.
     static let lineWidth: CGFloat = cardInner - 24 - 14 - 8
     static let lineSize: CGFloat = 15
     /// A friend note's text column: the two heads (72) and the gap (10) are beside it.
@@ -31,25 +30,6 @@ struct StoryMark: View {
             else { Color.clear.accessibilityHidden(true) }
         }
         .frame(width: 14, height: 18)
-    }
-}
-
-struct StoryLivingBubble: View {
-    var text: String
-    var byModel = false
-    var tint: Color
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            StoryMark(byModel: byModel && !text.isEmpty)
-            Text(text.isEmpty ? " " : text).font(SK.font(StoryLayout.lineSize, .semibold)).foregroundStyle(SK.ink).lineLimit(2, reservesSpace: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(text.isEmpty ? Color.clear : tint.opacity(0.3)))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(text.isEmpty ? Color.clear : tint.opacity(0.5), lineWidth: 1.5))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(text.isEmpty ? "" : "Lately: \(text)" + (byModel ? ". Written on this iPhone" : ""))
-        .accessibilityHidden(text.isEmpty)
     }
 }
 

@@ -203,7 +203,7 @@ final class StoryModelTests: XCTestCase {
         let before = d.data(forKey: StoryBook.defaultsKey)
         _ = await StoryAppState.$devDump.withValue(true) { await StoryChain([w, TemplateWriter(memory: StoryMemory())]).about(facts()) }
         XCTAssertEqual(d.data(forKey: StoryBook.defaultsKey), before)
-        XCTAssertEqual(book.rewritesLeft(facts()), StoryBook.rewritesPerDay)
+        XCTAssertEqual(book.rewritesLeft(facts(), facts().housemates[0]), StoryBook.rewritesPerDay)
     }
 
     func testTheSwitch() {
@@ -321,47 +321,43 @@ final class StoryModelTests: XCTestCase {
     func testWriteAnotherIsLimitedToThreeADay() async {
         let day = Box(200)
         let b = book(day)
-        _ = b.aboutLine(facts())
+        let h = facts().housemates[0]
+        _ = b.noteLine(facts(), with: h)
         for i in 1...3 {
-            XCTAssertEqual(b.rewritesLeft(facts()), 4 - i)
-            let r = await b.writeAnother(facts())
+            XCTAssertEqual(b.rewritesLeft(facts(), h), 4 - i)
+            let r = await b.writeAnother(facts(), with: h)
             if case .written = r {} else { XCTFail("rewrite \(i): \(r)") }
         }
-        let r4 = await b.writeAnother(facts()); XCTAssertEqual(r4, .limit)
+        let r4 = await b.writeAnother(facts(), with: h); XCTAssertEqual(r4, .limit)
         day.v = 201
-        XCTAssertEqual(b.rewritesLeft(facts()), 3)
-        let r5 = await b.writeAnother(facts()); if case .written = r5 {} else { XCTFail("a new day: \(r5)") }
-        // notes have their own count
-        let h = facts().housemates[0]
         XCTAssertEqual(b.rewritesLeft(facts(), h), 3)
-        let n = await b.writeAnother(facts(), with: h); if case .written = n {} else { XCTFail("\(n)") }
+        let r5 = await b.writeAnother(facts(), with: h); if case .written = r5 {} else { XCTFail("a new day: \(r5)") }
     }
 
     func testWriteAnotherNeverHandsBackTheSameText() async {
         let b = book(Box(300))
-        let first = b.aboutLine(facts())!.text
-        if case .written(let l) = await b.writeAnother(facts()) { XCTAssertNotEqual(l.text, first) } else { XCTFail() }
+        let h = facts().housemates[0]
+        let first = b.noteLine(facts(), with: h)!.text
+        if case .written(let l) = await b.writeAnother(facts(), with: h) { XCTAssertNotEqual(l.text, first) } else { XCTFail() }
     }
 
     func testDontShowThisOneNeverReturns() async {
         let day = Box(400)
-        let model = Fake(name: "model", aboutText: "{A} is a {PERS} type.", noteText: "{A} and {B} are close friends.", keys: ["personality"])
+        let model = Fake(name: "model", aboutText: nil, noteText: "{A} and {B} are close friends.", keys: ["personality"])
         let b = book(day)
+        let h = facts().housemates[0]
         b.chain = StoryChain([model, TemplateWriter(memory: b.memory)])
         var filed: [String] = []
         b.feedback = { filed.append($0) }
-        _ = b.aboutLine(facts()); day.v = 401
+        _ = b.noteLine(facts(), with: h); day.v = 401
         _ = await b.refresh(facts())                      // the model's turn
-        XCTAssertTrue(b.aboutLine(facts())!.byModel)
-        let old = b.saved.about["1"]!.template
-        let l = b.dontShow(facts())!
-        XCTAssertFalse(l.byModel); XCTAssertNotEqual(b.saved.about["1"]!.template, old)
+        XCTAssertTrue(b.noteLine(facts(), with: h)!.byModel)
+        let old = b.saved.notes["1>2"]!.template
+        let l = b.dontShow(facts(), with: h)!
+        XCTAssertFalse(l.byModel); XCTAssertNotEqual(b.saved.notes["1>2"]!.template, old)
         XCTAssertEqual(filed, [old])                      // the feedback was filed for the model's text
         // the model answers with the same text again: it is refused, the pre-written one answers
-        day.v = 410
-        _ = await b.refresh(facts(trophies: 3))
-        XCTAssertNotEqual(b.saved.about["1"]!.template, old)
-        let again = await b.chain.about(facts())
+        let again = await b.chain.friendship(facts(), with: h)
         XCTAssertNotEqual(again?.template, old)
         XCTAssertEqual(again?.attempts.first?.verdict, "hidden-by-player")
         // and it survives a relaunch
