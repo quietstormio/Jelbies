@@ -333,9 +333,12 @@ extension GameCare {
                 crowdOpen(m)          // (the walk runs past the screen's side: the entrance and the exit lie off screen)
                 if g.phase == .arriving, !m.replan {          // (he appears off screen at the entrance, the bell rings once for the group)
                     rehome(m.actor, at: door)
-                    b.restTimer = 0.2; b.reserved = false; b.mealFaceYaw = nil
+                    b.restTimer = 0; b.reserved = false; b.mealFaceYaw = nil
                     if i == 0 { crowdBell(g, entering: true); g.belled = true }
                 }
+                // round 4 (found with the stall log): a body that has sat or been parked can be left in a rest the brain will not walk out of ("idle, script none, restTimer 2-3 s" with a goTo asked and ignored,
+                // until an abort and a fresh ask). So every walk starts the way the re-ask did: abort, no commanded idle, then the goTo.
+                b.abortAll(m.actor.sim, m.actor.skinner); b.commandedIdle = nil; b.restTimer = 0
                 m.state = .walking; m.stuck = 0; m.lastPos = g.phase == .arriving && !m.replan ? door : pos; m.prevPos = m.lastPos; m.replan = false
                 m.startedAt = cs.clock; m.slowT = 0; m.slowCounted = false; m.spawn = m.lastPos; m.nudges = 0
                 if g.phase == .leaving { b.reserved = false; b.mealFaceYaw = nil }
@@ -345,11 +348,11 @@ extension GameCare {
                 for (j, o) in g.members.enumerated() where j < i && o.state == .walking {
                     if simd_distance(Self.floorPos(o.actor.brain!, o.actor.sim), pos) < 1.15 { hold = true }
                 }
-                // a visible stop mid-route: speed under 0.15 u/s for 0.3 s, not at the start (0.6 s) and not within 0.8 u of the end of the path
+                // a visible stop mid-route: speed under 0.15 u/s for 0.3 s, not at the start (1.5 s: a turn on the spot before the first step is not a stop) and not within 0.8 u of the end of the path
                 let speed = dt > 0 ? simd_distance(pos, m.prevPos) / dt : 1
                 m.prevPos = pos
                 let lastPt = m.path.last ?? pos
-                if speed < 0.15, cs.clock - m.startedAt > 0.6, simd_distance(pos, lastPt) > 0.8 {
+                if speed < 0.15, cs.clock - m.startedAt > 1.5, simd_distance(pos, lastPt) > 0.8 {
                     m.slowT += dt
                     if m.slowT > 0.3, !m.slowCounted {
                         m.slowCounted = true; cs.hesitations += 1
