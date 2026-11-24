@@ -370,7 +370,7 @@ extension GameCare {
         #endif
         b.requestNow(.come(to: p + Self.settleOffset))          // (show-line-r1: a walker's body settles 0.15 further back (z) than the point it is sent to, measured at every seat: the walk is sent that much forward so the body RESTS on the seat)
     }
-    static let settleOffset = SIMD2<Float>(0, 0.15)
+    static var settleOffset: SIMD2<Float> { ProcessInfo.processInfo.environment["SHOW_SETTLE_OFF"] == "1" ? .zero : SIMD2<Float>(0, 0.15) }          // (env switch for the proof only)
     /// On its side the near seat (-1.65, 0) stands 1.3 from the straight line between the gate and the left back seat: that walk bends through this point (0.3, -0.3) so it never brushes the one who sits there.
     private func seatWaypoint(_ seat: SIMD2<Float>) -> SIMD2<Float>? {
         GameCamera.aspect > 1 && seat.x < -0.5 && seat.y < Self.backRow ? SIMD2(0.3, -0.3) : nil
