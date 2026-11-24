@@ -18,7 +18,7 @@ extension BlobBrain {
     /// The steps: (z, y) he hops to, then the platform.
     static var slideSteps: [SIMD2<Float>] { (legacyOff["SlideNoSteps"] == true ? slideStepsOld : slideSteps0).map { $0 * DecorKind.slide.scale } }
     private static let slideStepsOld: [SIMD2<Float>] = [SIMD2(-1.28, 0.22), SIMD2(-1.04, 0.44), SIMD2(-0.4, 0.66)]
-    private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.52, 0.22), SIMD2(-1.32, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the first two hops stand 0.18 further back (was -1.28, -1.04; further and the feet hang off the step edges at -1.75 / -1.45): his belly is 1.1 wide, the steps 0.3 deep, so on the exported spots it sank into the next riser)
+    private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.28, 0.22), SIMD2(-1.04, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the exported spots again. Moving the first two hops 0.24 back (to -1.52 / -1.32) fixed the belly in the next riser but turned ParkSlideRoundTests.testWalkRoundWithFriendsRarelyDrops red: drops 20 %, stand-stills; bisected in round 3. -SlideNoSteps 0 is gone, the old spots are the default)
     nonisolated(unsafe) static var legacyOff: [String: Bool] = {          // (simulator bisect switches: -SlideNoCoast / -SlideNoLift / -SlideNoSteps 1)
         #if targetEnvironment(simulator)
         var d: [String: Bool] = [:]; for k in ["SlideNoCoast", "SlideNoLift", "SlideNoSteps"] { d[k] = UserDefaults.standard.integer(forKey: k) != 0 }; return d
