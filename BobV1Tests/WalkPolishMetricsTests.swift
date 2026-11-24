@@ -64,7 +64,7 @@ final class WalkPolishMetricsTests: XCTestCase {
     static var level: Int { BlobBrain.walkPolish }
 
     func testGaitNumbers() {
-        defer { BlobBrain.walkPolish = BlobBrain.walkPolishDefault }
+        let savedLevel = BlobBrain.walkPolish; defer { BlobBrain.walkPolish = savedLevel }
         let env = ProcessInfo.processInfo.environment
         if let v = env["WP_LEAN"], let d = Float(v) { BlobBrain.walkLean = d * .pi / 180 }
         if let v = env["WP_DIP"], let d = Float(v) { BlobBrain.walkLandDip = d }

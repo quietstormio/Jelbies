@@ -29,6 +29,7 @@ final class WalkGoldenTests: XCTestCase {
     }
 
     func testTheLockedWalkIsUnchangedByTheMoonwalkHook() {
+        let savedLevel = BlobBrain.walkPolish; BlobBrain.walkPolish = 0; defer { BlobBrain.walkPolish = savedLevel }          // (walk-polish-r1: this golden IS the lock; the polished walk differs by design, `-WalkPolish 0` = this walk)
         let walk = Self.digest(seconds: 4)
         if Self.goldenWalk.isEmpty {
             MotionLog.write("GOLDEN walk " + "[" + walk.map { String(format: "%.3f", $0) }.joined(separator: ", ") + "]")
