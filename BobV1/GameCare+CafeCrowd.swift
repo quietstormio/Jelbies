@@ -253,7 +253,7 @@ extension GameCare {
     private func cafeCrowdLeave(_ id: Int, landscape: Bool) {
         guard let g = cafeBook.crowd.live[id] else { return }
         g.phase = .leaving
-        let door = g.table.door
+        let door = Self.crowdEntry(z: g.table.door.y)
         g.members.sort { simd_distance(g.table.stands[$0.index], door) < simd_distance(g.table.stands[$1.index], door) }          // (the one nearer the door first)
         for m in g.members { m.state = .waiting; m.path = []; m.held = false; m.replan = false; m.replans = 0; m.guards = 0; m.reqWp = nil }
         g.belled = false
@@ -296,7 +296,9 @@ extension GameCare {
 
     private func tickCrowdGroup(_ g: CafeLiveGroup, dt: Float, landscape: Bool) {
         let book = cafeBook, cs = book.crowd
-        let door = g.table.door
+        // the entrance is worked out NOW: the café camera is still settling when the tables are made (the visible width at that moment was narrower than a minute later, which put the
+        // "off screen" entrance on screen in the logs of round 4)
+        let door = Self.crowdEntry(z: g.table.door.y)
         // each member in turn
         for (i, m) in g.members.enumerated() {
             guard let b = m.actor.brain else { continue }
