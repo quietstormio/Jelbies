@@ -33,7 +33,7 @@ final class BumpLabTests: XCTestCase {
     enum Scene: String, CaseIterable { case homeHappy = "home happy 3", homeGrumpy = "home grumpy 3", guest = "home guest 4", park = "park 5" }
 
     /// The centre distance at which two plain standing / walking bodies' skins meet in the real app (fewer-bumps-r1 bh1-3: touches at 1.08-1.23, mean 1.14).
-    static let touchD: Float = 1.15
+    static let touchD: Float = Float(ProcessInfo.processInfo.environment["SCOREBOARD_TOUCH"] ?? "") ?? 1.23          // (the app's touches happen at 1.08-1.23 centre distance: the upper end, so a lab body that comes as close as an app touch counts)
 
     struct Score {
         var mins: Float = 0
