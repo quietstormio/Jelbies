@@ -597,7 +597,7 @@ final class SoccerSession {
             guard let lg = SoccerState.shared.lastGoal else { return }
             if lg.scorer < 0 { log("a ball rolled in by itself: no cheer"); return }          // (nobody kicked it: nothing to cheer)
             goals += 1; goalAt = clock; goalReported = false
-            AudioHub.shared.play(.volleyPoint); AudioHub.shared.play(.cheerSmall, volume: 0.6)          // (the volleyball's point sound + a small cheer: no new audio)
+            AudioHub.shared.play(.volleyPoint)          // (the volleyball's point sound + a small cheer: no new audio)
             Haptic.impact(.medium)
             goalCheerers = ms.filter { $0.steerID != lg.scorer }.map { $0.steerID }
             for m in ms where m.steerID != lg.scorer { m.mix.order = SessOrder(kind: .cheer) }
