@@ -129,7 +129,7 @@ extension GameCare {
         }
         var x = max(door.x, 2.5)
         while x < 12, crowdBodyVisible(SIMD2(x, door.y)) { x += 0.1 }
-        return SIMD2(x + 1.0, door.y)
+        return SIMD2(min(x + 1.0, 4.3), door.y)          // (the room's own side wall stops a walk at x 4.3: a goTo past it is clamped back, the walker stalled there. 4.3 is already off the frame at the café's depths)
     }
     /// The way in, from the entrance toward the room (a unit vector): west from the right edge in portrait, away from the camera in landscape.
     static func crowdInward() -> SIMD2<Float> { GameCamera.aspect >= 1 ? SIMD2(0, -1) : SIMD2(-1, 0) }
