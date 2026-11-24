@@ -75,4 +75,30 @@ final class MoveCrowdTests: XCTestCase {
         }
         MotionLog.write("MOVECROWD meetings:\n" + lines.joined(separator: "\n"))
     }
+
+    /// A requested walk (goTo) whose leg passes a STANDING body inside its margin: the 6 s patience must run out (it was reset every 3 s by the stall re-plan: the walker stood for good).
+    func standOff(on: Bool) -> (arrived: Bool, longest: Float) {
+        room()
+        MoveCrowd.on = on
+        let l = SocialTests.Lab(n: 3, positions: [SIMD2(-2.2, 1.0), SIMD2(0.0, 1.25), SIMD2(2.6, -3.0)], quiet: true, seed: 5)
+        Self.keep.append(l)
+        let a = l.rigs[0].brain
+        a.requestNow(.goTo(SIMD2(2.2, 1.0)))
+        var still: Float = 0, longest: Float = 0, last = a.position, arrived = false
+        for _ in 0..<(60 * 20) {
+            l.tick(watching: false)
+            if simd_distance(a.position, last) < 0.0005 { still += 1.0 / 60; longest = max(longest, still) } else { still = 0 }
+            last = a.position
+            if a.job == nil, simd_distance(a.position, SIMD2(2.2, 1.0)) < 0.6 { arrived = true; break }
+        }
+        MoveCrowd.on = was
+        return (arrived, longest)
+    }
+
+    func testRequestedWalkPastAStanderEnds() {
+        let off = standOff(on: false), on = standOff(on: true)
+        MotionLog.write("MOVECROWD stand-off: off arrived \(off.arrived) longest still \(off.longest) s | on arrived \(on.arrived) longest still \(on.longest) s")
+        XCTAssertTrue(on.arrived, "the requested walk arrives within 20 s")
+        XCTAssertLessThan(on.longest, 8, "no stand longer than the 6 s patience + a step")
+    }
 }
