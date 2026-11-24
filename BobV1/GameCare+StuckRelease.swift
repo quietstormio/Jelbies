@@ -2,7 +2,7 @@
 //  GameCare+StuckRelease.swift
 //  no-stuck-r1 (the owner, 2026-11-24: "Make sure nothing ... can ever get stuck"). The general release guard: the come-here-freeze safety net (`focusNetTick`, GameCare+FocusRelease.swift)
 //  generalised from "a body the close-up took" to ANY Jelmiko. When nothing in the game holds anybody (no close-up or call, no trip or outing, no meal / tray / group serving, no bath,
-//  no welcome, no Play, no Show stage, no bedtime walk), a Jelmiko whose life is still switched off, or who is still `commanded` with nothing to do, is let go after `stuckReleaseAfter` s.
+//  no welcome (a newcomer's or the welcome home after a trip), no Play, no Show stage, no bedtime walk), a Jelmiko whose life is still switched off, or who is still `commanded` with nothing to do, is let go after `stuckReleaseAfter` s.
 //  Each release logs `[stuck] released id=... was=...` so it is counted as a bug (the dev soak's stuck detector counts these too), never hidden.
 //  Only a body that has been free before (autonomy on at some point) is given its life back. Never touches a sleeper, a pair / group moment (`social`), a reserved body, a commanded idle or a race / volley body. `-StuckRelease 0` (dev builds; also `-FreezeFix 0`) = off, for baselines.
 //
@@ -23,7 +23,7 @@ extension GameCare {
     /// Nothing in the game may legitimately hold a Jelmiko's life off right now.
     var nothingHolds: Bool {
         focus.phase == .roaming && !tripActive && !raceBusy && !outing.running && newcomerWelcome == nil && !bath.active && !trayOut && !groupActive
-            && !isPreview && !show.onStage && !bedtimeWalking && !play.active && !callRunning && queued.isEmpty
+            && !isPreview && !show.onStage && !bedtimeWalking && !play.active && !callRunning && queued.isEmpty && raceBook.returner == nil
     }
 
     /// Once per fixed step (Jelly 0's care tick).

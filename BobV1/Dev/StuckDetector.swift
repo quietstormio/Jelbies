@@ -33,7 +33,7 @@ final class StuckDetector {
     // limits (game seconds)
     static let autonomyOffAfter: Float = 8, motionlessAfter: Float = 45, commandedAfter: Float = 15, reservedAfter: Float = 30, callLostAfter: Float = 6
     static let feedTapAfter: Float = 90, comeTapAfter: Float = 6, mealLockAfter: Float = 240, approachAfter: Float = 40, leavingAfter: Float = 12, cancelPillAfter: Float = 150
-    static let bathAfter: Float = 420, tripAfter: Float = 1500, welcomeAfter: Float = 180, outingAfter: Float = 120, socialAfter: Float = 240, audioAfter: Float = 25
+    static let bathAfter: Float = 420, tripAfter: Float = 1500, welcomeAfter: Float = 180, outingAfter: Float = 120, socialAfter: Float = 240, audioAfter: Float = 25, modalAfter: Float = 120
 
     private var acc: Float = 0
     private(set) var simTime: Float = 0
@@ -107,10 +107,10 @@ final class StuckDetector {
         let trip = c.tripActive || c.raceBusy
         let outing = c.outing.running
         let welcome = c.newcomerWelcome != nil
-        let homeQuiet = !trip && !outing && !welcome && !c.bath.active && !c.trayOut && !c.groupActive && !c.isPreview && !c.show.onStage && c.focus.phase == .roaming && !c.bedtimeWalking
-        func line(_ b: BlobBrain) -> String {
+        let homeQuiet = !trip && !outing && !welcome && !c.bath.active && !c.trayOut && !c.groupActive && !c.isPreview && !c.show.onStage && c.focus.phase == .roaming && !c.bedtimeWalking && c.raceBook.returner == nil
+        func line(_ b: BlobBrain, _ id: Int = -1) -> String {
             var tgt = "-"; if case .walk(let t, _) = b.script { tgt = String(format: "%.2f,%.2f", t.x, t.y) }
-            return "scr=\(b.scriptKindName) tgt=\(tgt) stall=\(String(format: "%.1f", b.steerStall)) job=\(b.job.map { "\($0)" } ?? "-") pend=\(b.pending == nil ? 0 : 1) cmd=\(b.commanded ? 1 : 0) res=\(b.reserved ? 1 : 0) auto=\(b.autonomy ? 1 : 0) idle=\(b.idleState.kind?.rawValue ?? "-") act=\(b.activity) sleep=\(b.isSleeping ? 1 : 0) soc=\(b.social == nil ? 0 : 1) pos=\(String(format: "%.2f,%.2f", b.position.x, b.position.y))"
+            return "scr=\(b.scriptKindName) tgt=\(tgt) stall=\(String(format: "%.1f", b.steerStall)) job=\(b.job.map { "\($0)" } ?? "-") pend=\(b.pending == nil ? 0 : 1) cmd=\(b.commanded ? 1 : 0) res=\(b.reserved ? 1 : 0) auto=\(b.autonomy ? 1 : 0) idle=\(b.idleState.kind?.rawValue ?? "-") act=\(b.activity) sleep=\(b.isSleeping ? 1 : 0) soc=\(b.social == nil ? 0 : 1) pos=\(String(format: "%.2f,%.2f", b.position.x, b.position.y)) repicks=\(b.stuckRepicks) route=\(b.route.count) wedge=\(c.focusKeepOutFor(id)?.contains(b.position, radius: b.footprint) == true ? 1 : 0)"
         }
         let game = "ph=\(c.focus.phase) ids=\(c.focusGroup.ids) trip=\(trip ? 1 : 0) tray=\(c.trayOut ? 1 : 0) group=\(c.groupActive ? 1 : 0) bath=\(c.bath.active ? 1 : 0) play=\(c.play.active ? 1 : 0) call=\(c.callRunning ? 1 : 0) queued=\(c.queued.count)"
 
@@ -121,16 +121,16 @@ final class StuckDetector {
             let guest = id >= c.jellies.count          // (a visiting friend: his walk in / out runs with autonomy off; only `motionless` applies)
             if b.autonomy { everFree.insert(ObjectIdentifier(b)) }
             if homeQuiet, !guest, !b.autonomy, everFree.contains(ObjectIdentifier(b)), !b.isSleeping, b.social == nil, !b.reserved, b.commandedIdle == nil, !b.race.active, !b.volley.active {
-                out.append(Finding(kind: "autonomy-off", who: id, limit: Self.autonomyOffAfter, detail: "\(line(b)) | \(game)"))
+                out.append(Finding(kind: "autonomy-off", who: id, limit: Self.autonomyOffAfter, detail: "\(line(b, id)) | \(game)"))
             }
             if b.commanded, b.job == nil, b.pending == nil, b.scriptIsNone, b.commandedIdle == nil, !trip {
-                out.append(Finding(kind: "commanded-orphan", who: id, limit: Self.commandedAfter, detail: "\(line(b)) | \(game)"))
+                out.append(Finding(kind: "commanded-orphan", who: id, limit: Self.commandedAfter, detail: "\(line(b, id)) | \(game)"))
             }
             if b.reserved, homeQuiet, !guest, b.social == nil, !c.play.active {
-                out.append(Finding(kind: "reserved-orphan", who: id, limit: Self.reservedAfter, detail: "\(line(b)) | \(game)"))
+                out.append(Finding(kind: "reserved-orphan", who: id, limit: Self.reservedAfter, detail: "\(line(b, id)) | \(game)"))
             }
             if let s = b.social, s.t > Self.socialAfter {
-                out.append(Finding(kind: "social", who: id, limit: 0, detail: "age=\(Int(s.t)) \(line(b))"))
+                out.append(Finding(kind: "social", who: id, limit: 0, detail: "age=\(Int(s.t)) \(line(b, id))"))
             }
             // motionless: the same spot AND the same doing, outside the allow-list
             let sig = "\(b.scriptKindName)|\(b.idleState.kind?.rawValue ?? "-")|\(b.activity)|\(b.job == nil ? 0 : 1)"
@@ -138,7 +138,7 @@ final class StuckDetector {
                 || [IdleKind.sit, .slump, .sleep, .sway, .decorSit, .window].contains(where: { $0 == b.idleState.kind }) || b.isPerched || c.isPreview
             if let s = still[id], simd_distance(s.p, b.position) < 0.05, s.sig == sig {
                 still[id] = (s.p, sig, s.t + step)
-                if !allowed { out.append(Finding(kind: "motionless", who: id, limit: Self.motionlessAfter, detail: "\(line(b)) | \(game)")) }
+                if !allowed { out.append(Finding(kind: "motionless", who: id, limit: Self.motionlessAfter, detail: "\(line(b, id)) | \(game)")) }
             } else { still[id] = (b.position, sig, 0) }
         }
         // the Come walk's flag with nobody walking it
@@ -167,6 +167,11 @@ final class StuckDetector {
         if c.tripActive { out.append(Finding(kind: "trip", who: -1, limit: Self.tripAfter, detail: "race=\(c.race.active ? 1 : 0) show=\(c.show.active ? 1 : 0) cafe=\(c.cafe.active ? 1 : 0) park=\(c.park.active ? 1 : 0) groom=\(c.groom.active ? 1 : 0) volley=\(c.volley.active ? 1 : 0)")) }
         if welcome { out.append(Finding(kind: "welcome", who: -1, limit: Self.welcomeAfter, detail: game)) }
         if outing { out.append(Finding(kind: "outing", who: -1, limit: Self.outingAfter, detail: game)) }
+        // a picker / card waiting on the player for far longer than anybody would leave it (the monkey always closes them): it no longer answers
+        if c.park.picking { out.append(Finding(kind: "modal", who: -1, limit: Self.modalAfter, detail: "park picker")) }
+        if c.groom.picking { out.append(Finding(kind: "modal", who: -2, limit: Self.modalAfter, detail: "groom picker")) }
+        if c.cafe.menuOpen { out.append(Finding(kind: "modal", who: -3, limit: Self.modalAfter * 1.5, detail: "cafe menu")) }
+        if c.soapPrompt != nil { out.append(Finding(kind: "modal", who: -4, limit: Self.modalAfter, detail: "soap card")) }
         let m = AudioHub.shared.stuckMusicProbe
         if m.wanted, !m.playing { out.append(Finding(kind: "audio-silent", who: -1, limit: Self.audioAfter, detail: m.why)) }
         return out

@@ -24,7 +24,7 @@ enum MonkeySoak {
     static let menu: [(String, Int)] = [
         ("comecancel", 12), ("welcomeplayfeed", 6), ("feed", 8), ("water", 8), ("feedone", 4), ("drinkone", 4), ("come", 4), ("comeall", 3), ("cuddle", 6),
         ("wash", 4), ("play", 8), ("menu", 6), ("picker", 4), ("roster", 2), ("book", 2), ("town", 5), ("park", 3), ("cafe", 3), ("groom", 2), ("show", 2),
-        ("race", 2), ("volley", 2), ("music", 3), ("rotate", 3), ("idle", 10), ("cancel", 3), ("release", 3),
+        ("race", 2), ("volley", 2), ("music", 3), ("rotate", 3), ("idle", 10), ("quiet", 3), ("cancel", 3), ("release", 3),
     ]
 
     static func run(care: GameCare, ui: Bindings) async {
@@ -77,7 +77,7 @@ enum MonkeySoak {
     /// The button the action presses is greyed out now (HUDMenu.enabled, the same rule the HUD draws with): a player could not press it.
     static func illegal(_ a: String, care: GameCare) -> String? {
         let item: HUDItem?
-        let anyTime: Set<String> = ["release", "cancel", "idle", "music", "rotate"]
+        let anyTime: Set<String> = ["release", "cancel", "idle", "quiet", "music", "rotate", "feed", "water"]          // (Feed / Water in a close-up: the voice / widget path, `order()` ends the close-up first)
         if !anyTime.contains(a), care.focus.isActive { return "close-up: the care menu and Town are hidden" }
         switch a {
         case "feed", "feedone", "welcomeplayfeed": item = .feed
@@ -93,14 +93,35 @@ enum MonkeySoak {
         return HUDMenu.enabled(item, .group, care: care) ? nil : "\(item) greyed out"
     }
 
+    static func out(_ a: String, _ r: String) { NSLog("[monkey] out act=%@ %@ sim=%.0f", a, r, StuckDetector.shared.simTime) }
+
+    /// Waits while `on()` (at most `cap` s), and like a player on a trip now and then switches the music off and on or turns the phone.
+    static func tripWait(_ cap: Double, g: inout LCG, sleep: (Double) async -> Void, on: () -> Bool) async {
+        var t = 0.0
+        while on() && t < cap {
+            await sleep(1); t += 1
+            if Int(t) % 7 == 0, g.next(4) == 0 {
+                if g.next(2) == 0 { AudioHub.shared.settings.musicOn = false; NSLog("[monkey] in-trip music off"); await sleep(1 + 4 * g.unit()); AudioHub.shared.settings.musicOn = true; NSLog("[monkey] in-trip music on") }
+                else { rotate(&g); NSLog("[monkey] in-trip rotate") }
+            }
+        }
+    }
+    static func rotate(_ g: inout LCG) {
+        let masks: [UIInterfaceOrientationMask] = [.portrait, .landscapeLeft, .landscapeRight]
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene { scene.requestGeometryUpdate(.iOS(interfaceOrientations: masks[g.next(masks.count)])) { _ in } }
+    }
+
     private static func someJelly(_ care: GameCare, _ g: inout LCG) -> Int { g.next(max(care.jellies.count, 1)) }
     private static func hungry(_ care: GameCare) { for j in care.jellies { care.needs(for: j.id).set(.hunger, 0.15); care.needs(for: j.id).set(.thirst, 0.15) } }
 
     static func act(_ a: String, arg: Int?, care: GameCare, ui: Bindings, g: inout LCG, sleep: (Double) async -> Void) async {
         let j = arg ?? someJelly(care, &g)
         switch a {
-        case "feed": hungry(care); care.feed()
-        case "water": hungry(care); care.water()
+        case "feed", "water":
+            hungry(care); if a == "feed" { care.feed() } else { care.water() }
+            var ate = false
+            for _ in 0..<40 { await sleep(1); if care.raceBook.actors.contains(where: { $0.brain?.activity == .eating || $0.brain?.activity == .drinking }) { ate = true; break }; if !care.trayOut { break } }
+            out(a, "ate=\(ate ? 1 : 0) trayOut=\(care.trayOut ? 1 : 0)")
         case "feedone": hungry(care); care.feed(jelly: j)
         case "drinkone": hungry(care); care.drink(jelly: j)
         case "come": care.comeHere(jelly: j)
@@ -110,10 +131,12 @@ enum MonkeySoak {
         case "comecancel":
             if g.next(2) == 0 { care.comeHereEveryone() } else { care.comeHere(jelly: j) }
             await sleep(0.5 + 5.5 * g.unit())
+            out(a, "phase=\(care.focus.phase)")
             if g.next(3) == 0 { withAnimation(CareMenu.spring) { care.release() } } else { care.cancelGroupAction() }
         case "cuddle":
             care.comeHere(jelly: j)
             for _ in 0..<120 where !care.focus.isFocused { await sleep(0.1) }
+            out(a, "focused=\(care.focus.isFocused ? 1 : 0)")
             await sleep(2 + 8 * g.unit())
             withAnimation(CareMenu.spring) { care.release() }
         case "welcomeplayfeed":          // the night-meal path: a welcome home, Play, then Feed / Water
@@ -157,7 +180,10 @@ enum MonkeySoak {
             care.requestPark()
             await sleep(1)
             if care.park.picking { care.startPark() }
-            await sleep(20 + 60 * g.unit())
+            await sleep(2)
+            out(a, "entered=\(care.park.active ? 1 : 0)")
+            if care.park.picking { care.park.cancelPicker() }
+            await tripWait(20 + 60 * g.unit(), g: &g, sleep: sleep) { care.park.active }
             if care.park.active { care.park.goHome() }
             for _ in 0..<600 where care.park.active { await sleep(0.2) }
         case "cafe":
@@ -169,7 +195,8 @@ enum MonkeySoak {
                 let menu: [CafeTreatID] = [.swirl, .juice, .latte, .cocoa, .pancakes]
                 _ = care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: care.cafeDinerIDs.map { ($0, care.cafeCanEat($0) ? menu[g.next(menu.count)] : .juice) })))
             }
-            await sleep(30 + 60 * g.unit())
+            out(a, "entered=\(care.cafe.active ? 1 : 0)")
+            await tripWait(30 + 60 * g.unit(), g: &g, sleep: sleep) { care.cafe.active }
             if care.cafe.active { care.cafe.goHome() }
             for _ in 0..<600 where care.cafe.active { await sleep(0.2) }
         case "groom":
@@ -177,28 +204,32 @@ enum MonkeySoak {
             care.requestGroom()
             await sleep(1)
             care.startGroom(.quick)
-            for _ in 0..<900 where care.groom.active { await sleep(0.2) }
+            await sleep(1); out(a, "entered=\(care.groom.active ? 1 : 0)")
+            if care.groom.picking { care.groom.closePicker() }
+            await tripWait(180, g: &g, sleep: sleep) { care.groom.active }
         case "show":
             care.show.auto = true; care.show.autoHomeAfter = 3
             care.startShow(jelly: j)
-            for _ in 0..<1800 where care.show.active { await sleep(0.2) }
+            await sleep(2); out(a, "entered=\(care.show.active ? 1 : 0)")
+            await tripWait(360, g: &g, sleep: sleep) { care.show.active }
         case "race":
             care.race.autoRate = 4; care.race.autoReturnAfter = 7
             care.startRace(jelly: j)
-            for _ in 0..<1500 where care.race.active { await sleep(0.2) }
+            await sleep(2); out(a, "entered=\(care.race.active ? 1 : 0)")
+            await tripWait(300, g: &g, sleep: sleep) { care.race.active }
         case "volley":
             care.startVolley(jelly: j, mode: .match(.sandcastle))
-            await sleep(25 + 40 * g.unit())
+            await sleep(2); out(a, "entered=\(care.volley.active ? 1 : 0)")
+            await tripWait(25 + 40 * g.unit(), g: &g, sleep: sleep) { care.volley.active }
             if care.volley.active { care.volley.goHome() }
             for _ in 0..<600 where care.volley.active { await sleep(0.2) }
         case "music":
             AudioHub.shared.settings.musicOn.toggle()
             await sleep(2 + 6 * g.unit())
             if !AudioHub.shared.settings.musicOn || g.next(2) == 0 { AudioHub.shared.settings.musicOn = true }
-        case "rotate":
-            let masks: [UIInterfaceOrientationMask] = [.portrait, .landscapeLeft, .landscapeRight]
-            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene { scene.requestGeometryUpdate(.iOS(interfaceOrientations: masks[g.next(masks.count)])) { _ in } }
+        case "rotate": rotate(&g)
         case "idle": await sleep(5 + 25 * g.unit())
+        case "quiet": await sleep(120 + 120 * g.unit())          // (the room left alone: longer than any stuck limit)
         default: NSLog("[monkey] unknown step %@", a)
         }
     }
