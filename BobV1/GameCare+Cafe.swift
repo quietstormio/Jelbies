@@ -247,7 +247,7 @@ extension GameCare {
                 var st = book.origin + pl.rel
                 st.y += GameCare.eatCloser
                 book.stands[a.id] = st
-                book.chatYaw[a.id] = DiningLayout.ends && order[k] != 0 ? pl.yaw : nil          // (cafe-straw-r1: the two ends keep facing each other across the table, also in the lounge)
+                book.chatYaw[a.id] = (DiningLayout.ends && order[k] != 0) || n < 3 ? pl.yaw : nil          // (cafe-straw-r1: the two ends keep facing each other across the table, also in the lounge)
                 rehome(a, at: st)
                 guard let brain = a.brain else { continue }
                 brain.autonomy = false; brain.idleBlocked = true; brain.restTimer = 0.4

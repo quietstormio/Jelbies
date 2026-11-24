@@ -61,7 +61,8 @@ final class CafeBusyTests: XCTestCase {
         for seed in 1...30 as ClosedRange<UInt64> {
             let r = run(seed: seed, seconds: 900)
             gaps += zip(r.enters.dropFirst(), r.enters).map { $0.0 - $1.0 }
-            XCTAssertTrue((15...30).contains(r.enters.first!.t + 0.02) || r.enters.first!.t <= 30.1, "seed \(seed): the first entrance comes 15-30 s in")
+            XCTAssertGreaterThanOrEqual(r.enters.first!.t + 0.02, 15, "seed \(seed): the first entrance comes 15 s in at the soonest (later when a seated group is leaving: one walks at a time)")
+            XCTAssertLessThanOrEqual(r.enters.first!.t, 50, "seed \(seed)")
             for l in r.leaves { let e = r.enters.first { $0.g.id == l.id }; if let e { XCTAssertGreaterThanOrEqual(l.t - e.t, 40 + 6 - 0.1, "stays at least 40 s once seated") } }
         }
         XCTAssertGreaterThanOrEqual(gaps.min()!, 20 - 0.05)
@@ -88,7 +89,7 @@ final class CafeBusyTests: XCTestCase {
         var t: Float = 0
         while t < 200 {
             t += 1.0 / 60
-            for e in c.tick(dt: 1.0 / 60) { switch e { case .enter: XCTFail("a full café takes nobody in"); case .leave(let id): c.gone(id) } }
+            for e in c.tick(dt: 1.0 / 60) { switch e { case .enter(let g): c.seated(g.id); case .leave(let id): c.gone(id) } }          // (the one table is taken again as soon as it is free)
             XCTAssertLessThanOrEqual(c.groups.count, 1)
         }
     }
@@ -113,6 +114,7 @@ final class CafeBusyTests: XCTestCase {
             let landscape = aspect >= 1
             GameCamera.aspect = aspect
             RoomLayout.apply(RoomCatalog.cafe)
+            _ = GameCamera.refreshRoam(aspect: aspect)
             DiningLayout.ends = true; DiningLayout.sideX = 1.3; DiningLayout.reachFood = true; DiningLayout.endsYaw = DiningLayout.cafeEndsYaw
             let layout = DiningLayout.make(n: 3)
             for (i, c) in CafeTables.playerTables(landscape: landscape).enumerated() {
@@ -179,6 +181,7 @@ final class CafeBusyTests: XCTestCase {
             let menu: [CafeTreatID] = [.swirl, .cocoa, .pancakes]
             XCTAssertNil(c.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: c.cafeDinerIDs.enumerated().map { ($0.element, menu[$0.offset % 3]) }))))
             var turns = 0, moves = 0, acts = 0, steps = 0
+            var kinds: [String: Int] = [:]
             var turning: [Int: Bool] = [:], moving: [Int: Bool] = [:], acting: [Int: Bool] = [:]
             var lounged: Float = 0
             var settled = Set<Int>()
@@ -190,18 +193,18 @@ final class CafeBusyTests: XCTestCase {
                     steps += 1
                     let yawErr = abs(GameCare.wrapAngle(b.yaw + b.twist + b.chat.twist - s.yaw))
                     let off = simd_distance(GameCare.floorPos(b, s.sim), s.stand)
-                    var busy = false
+                    var busy = false, why = ""
                     let giggling = b.idleState.kind == .giggle || b.commandedIdle == .giggle          // (the talk's own giggle runs as a planted idle script: allowed)
-                    if case .none = b.script {} else if !giggling { busy = true }
-                    if !(b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace) { busy = true }
-                    if let k = b.idleState.kind, k != .giggle { busy = true }
-                    if let k = b.commandedIdle, k != .giggle { busy = true }
-                    if yawErr > 0.3 { if turning[s.id] != true { turns += 1 }; turning[s.id] = true } else if yawErr < 0.15 { turning[s.id] = false }
+                    if case .none = b.script {} else if !giggling { busy = true; why = "script:\(b.script)".prefix(30).description }
+                    if !(b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace) { busy = true; if why.isEmpty { why = "act:\(b.activity)" } }
+                    if let k = b.idleState.kind, k != .giggle { busy = true; if why.isEmpty { why = "idle:\(k.rawValue)" } }
+                    if let k = b.commandedIdle, k != .giggle { busy = true; if why.isEmpty { why = "cmd:\(k.rawValue)" } }
+                    if yawErr > 0.3 { if turning[s.id] != true { turns += 1; kinds["turn@" + why, default: 0] += 1 }; turning[s.id] = true } else if yawErr < 0.15 { turning[s.id] = false }
                     if off > 0.2 { if moving[s.id] != true { moves += 1 }; moving[s.id] = true } else if off < 0.1 { moving[s.id] = false }
-                    if busy { if acting[s.id] != true { acts += 1 }; acting[s.id] = true } else { acting[s.id] = false }
+                    if busy { if acting[s.id] != true { acts += 1; kinds[why, default: 0] += 1 }; acting[s.id] = true } else { acting[s.id] = false }
                 }
             })
-            print("[cafebusy-test] calm \(count): steps \(steps) turns \(turns) moves \(moves) acts \(acts) chat corrections \(c.cafeBook.chat.corrections)")
+            print("[cafebusy-test] calm \(count): steps \(steps) turns \(turns) moves \(moves) acts \(acts) chat corrections \(c.cafeBook.chat.corrections) kinds \(kinds)")
             XCTAssertGreaterThan(steps, 60 * 25 * count / 2, "the finished diners were watched")
             XCTAssertEqual(turns, 0, "\(count): no turning after the treat")
             XCTAssertEqual(moves, 0, "\(count): no moving after the treat")
