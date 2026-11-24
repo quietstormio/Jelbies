@@ -1145,6 +1145,19 @@ struct GameScreen: View {
             withAnimation(CareMenu.spring) { sel.cancel() }
         }
         #endif
+        // capture aid (night-meal-r1): -FeedAfterHome <s>: once the Show / race welcome home has begun, wait <s>, then Feed, and Water 45 s later (the owner's sequence); logs `[nightmeal]` lines
+        if d.integer(forKey: "FeedAfterHome") != 0 {
+            for _ in 0..<2400 where care.raceBook.returner == nil { await sleep(0.5) }
+            await sleep(Double(d.integer(forKey: "FeedAfterHome")))
+            for (name, act) in [("feed", { care.store.grant("berries"); care.feed("berries") }), ("water", { care.water() })] as [(String, () -> Void)] {
+                NSLog("[nightmeal] %@ tap: callRunning=%d trayOut=%d group=%d", name, care.callRunning ? 1 : 0, care.trayOut ? 1 : 0, care.groupActive ? 1 : 0)
+                act()
+                for i in 0..<40 { await sleep(1); if care.dining.isPresent { NSLog("[nightmeal] %@ tray out after %d s", name, i + 1); break }; if i == 39 { NSLog("[nightmeal] %@ NO TRAY after 40 s callRunning=%d group=%d", name, care.callRunning ? 1 : 0, care.groupActive ? 1 : 0) } }
+                for _ in 0..<150 where care.trayOut { await sleep(1) }
+                NSLog("[nightmeal] %@ over trayOut=%d", name, care.trayOut ? 1 : 0)
+                await sleep(5)
+            }
+        }
         if d.integer(forKey: "GameScript") != 0 {
             await sleep(16)
             await choose { care.feed() }

@@ -13,7 +13,7 @@ extension GameCare {
     /// A Come call whose walk nobody is walking any more (no job, nothing pending on Jelly 0's brain) is stale after this many seconds of the meal's clock.
     static let staleCallAfter: Float = 6
     /// Dev / test switch: off = the earlier behaviour (a stale lock stays until a relaunch). Tests turn it off to show the bug.
-    nonisolated(unsafe) static var unstickOn = true
+    nonisolated(unsafe) static var unstickOn = !((DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealUnstickOff") == 1) || ProcessInfo.processInfo.environment["MEAL_UNSTICK_OFF"] != nil)          // (`-MealUnstickOff 1`, dev builds: the earlier behaviour)
     /// No real meal (the walk to the tray, the sitting, the second sitting, the poof) lasts this long: past it the lock is a leftover.
     static let staleMealAfter: Float = 240
 
