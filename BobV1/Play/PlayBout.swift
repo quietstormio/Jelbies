@@ -13,12 +13,12 @@ import simd
 
 nonisolated enum BoutMath {
     /// The most touches in one bout; after them the last header goes to the player. One header in this many is aimed out of reach (the ball comes down).
-    nonisolated(unsafe) static var touchCap = 8
+    nonisolated(unsafe) static var touchCap = 7
     nonisolated(unsafe) static var missEvery: Float = 4.5
     /// The first this many touches of a bout are never aimed out of reach.
     nonisolated(unsafe) static var safeTouches = 2
     /// A spot nobody else stands nearer than this to (bodies keep apart).
-    static let keepAway: Float = 1.75
+    static let keepAway: Float = 2.0
     /// A ball never comes down further out sideways than this (a wide landscape floor: a ball against a side wall is not reachable from behind).
     static let sideLimit: Float = 2.5
 
@@ -104,6 +104,7 @@ extension PlayToss {
         let wasPlanned = bout.planned
         if wasPlanned { bout.planned = false; bout.on = true; setOwn(.bout); NSLog("[bout] begin clock=%.3f throw=%d", clock, throwSerial) }
         let id = j.id
+        ball.ignoreAllBut = nil          // (the receiver has struck it)
         bout.touches += 1; bout.touched[id, default: 0] += 1
         noteRecallStrike()
         if bout.toPlayer || bout.touches >= BoutMath.touchCap {
@@ -131,6 +132,20 @@ extension PlayToss {
             let H = miss ? r + 0.02 : rj.sim.restCentroid.y + BobShape.H * 0.5 + BlobBrain.tossCrownRise + r * 0.9
             T = miss ? 0.95 : 1.05 + 0.12 * rand() + 0.2 * min(run, 1.4)
             vel = BoutMath.launch(from: from, to: spot, y: H, T: T)
+            // the arc clears every OTHER body near its line by at least 0.5 above his crown (a longer, higher flight until it does), so nothing looks like a ball passing through a body
+            for _ in 0..<14 {
+                let vh = SIMD2(vel.x, vel.z), sp2 = max(simd_dot(vh, vh), 1e-4)
+                var clears = true
+                for o in others where o.id != rid {
+                    let rel = o.pos - SIMD2(from.x, from.z), t = simd_dot(rel, vh) / sp2
+                    guard t > 0.02, t < T else { continue }
+                    guard simd_length(rel - vh * t) < TossTuning.bodyRadius + r + 0.1 else { continue }
+                    let crown = max(o.headTop, o.sim.restCentroid.y + BobShape.H * 0.5)
+                    if from.y + vel.y * t - 0.5 * g * t * t < crown + r + 0.5 { clears = false; break }
+                }
+                if clears || T >= 1.8 { break }
+                T += 0.05; vel = BoutMath.launch(from: from, to: spot, y: H, T: T)
+            }
             let vEnd = vel.y - g * T
             let tf = H > r + 0.05 ? (vEnd + (vEnd * vEnd + 2 * g * (H - r)).squareRoot()) / g : 0
             let land = spot + SIMD2(vel.x, vel.z) * tf
@@ -140,6 +155,7 @@ extension PlayToss {
         ball.vel = vel
         ball.pos.y = from.y
         ball.ignoring = id; ball.ignoreT = miss ? T + 0.1 : 0.45          // (a ball aimed out of reach comes down near him: he does not head his own ball again)
+        ball.ignoreAllBut = rid          // (from now until he strikes it, or it touches the floor, the ball ignores every body but its receiver)
         bout.lastToucher = id; bout.lookAt = j.pos
         bout.receiver = rid; bout.aim = spot; bout.aimMode = miss ? "miss" : "keep"
         returnAim = nil; passTo = nil
@@ -221,24 +237,27 @@ extension PlayToss {
     /// The bout's ball came down on the floor: it is over. A small "oops" from the one who missed, no cheer, no point; the nearest sends the ball back to the player as always.
     func boutFloor() {
         guard bout.on else { boutAbort("floor-before-first-strike"); return }
-        // the ball's own bounce carries it to the hand: horizontal speed toward the catch zone (about 1.5 s of low bounces and a roll); lifted over anybody in its way
+        // the ball's own bounce carries it to the hand: no body can strike or deflect it (`ignoreAll`) and it is pushed along the floor until it is caught (`boutHomingTick`), so nobody fetches it and it cannot stop short
         let hand = handWorld(), here = SIMD2(ball.pos.x, ball.pos.z), to = SIMD2(hand.x * 0.5, catchZ() + 0.6) - here, d = simd_length(to)
+        ball.ignoreAllBut = nil; ball.ignoreAll = true
         if d > 0.3 {
-            let v = min(d * 1.2, 7)
+            let v = min(d * 1.2, 6)
             ball.vel.x = to.x / d * v; ball.vel.z = to.y / d * v
-            var lifted = ball.vel; boutLift(&lifted, from: ball.pos, by: -1)
-            if lifted.y > ball.vel.y { ball.vel.y = min(lifted.y, 4.2); ball.vel.x *= 0.85; ball.vel.z *= 0.85 }          // (a body in the way: a higher first bounce, a little slower, so it still comes down at the hand and not past the front wall)
-            bout.homing = true; bout.homeStart = clock; returnAim = SIMD2(hand.x * 0.5, catchZ() + 0.6)
         } else { ball.vel.x = 0; ball.vel.z = 0 }
+        bout.homing = true; bout.homeStart = clock; returnAim = SIMD2(hand.x * 0.5, catchZ() + 0.6)
         NSLog("[bout] homing clock=%.3f from=(%.2f,%.2f) d=%.2f", clock, here.x, here.y, d)
         boutFinish("floor", oops: true)
     }
 
-    /// A homing ball is given up (and falls back to the ordinary loose-ball path) if it has not reached the hand in 4 s.
-    func boutHomingTick() {
+    /// Every tick while the dropped ball is not yet in the catch zone: if its speed toward the catch point has dropped under what it needs to arrive within 1.5 s, a gentle push along the floor toward it (a roll that keeps rolling, never a jump; capped).
+    func boutHomingTick(dt: Float) {
         guard bout.homing else { return }
-        if phase != .flying && phase != .loose { bout.homing = false; return }
-        if clock - bout.homeStart > 4.0 { bout.homing = false; NSLog("[bout] homing gave up clock=%.3f", clock) }
+        if phase != .flying && phase != .loose { bout.homing = false; ball.ignoreAll = false; return }
+        if clock - bout.homeStart > 12 { bout.homing = false; ball.ignoreAll = false; NSLog("[bout] homing gave up clock=%.3f", clock); return }
+        let hand = handWorld(), here = SIMD2(ball.pos.x, ball.pos.z), to = SIMD2(hand.x * 0.5, catchZ() + 0.6) - here, d = simd_length(to)
+        guard d > 0.05 else { return }
+        let dir = to / d, v = SIMD2(ball.vel.x, ball.vel.z), toward = simd_dot(v, dir), need = d / 1.5
+        if toward < need, simd_length(v) < 6 { let add = min(need - toward, 7 * dt); ball.vel.x += dir.x * add; ball.vel.z += dir.y * add }
     }
 
     func boutFinish(_ reason: String, oops: Bool) {
@@ -247,6 +266,7 @@ extension PlayToss {
         bout.on = false; bout.planned = false; bout.receiver = nil; bout.toPlayer = false; bout.endedAt = clock
         setOwn(.none); pendingPasses = 0
         for j in jellies where !j.free { j.brain.tossFaceYaw = nil }
+        for j in jellies where !j.free && !j.brain.tossBusy && Self.canHop(j.brain) && j.brain.idleState.kind == nil { if let h = home[j.id], simd_distance(j.pos, h) > 0.5 { j.brain.requestNow(.goTo(h)); homeT[j.id] = clock } }          // (everybody walks back to the line at once: the next throw finds them at home)
     }
 
     /// Drops the bout without a result (Done, a new throw, the view turned, the ball went where no bout is).

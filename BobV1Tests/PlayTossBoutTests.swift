@@ -18,7 +18,7 @@ extension PlayTossTests {
         runTrio(t, p, seconds: 3) { false }
         return (t, p)
     }
-    func endBoutTest() { PlayTuning.boutRoll = 0.6; BoutMath.touchCap = 8; BoutMath.missEvery = 4.5; BoutMath.safeTouches = 2 }
+    func endBoutTest() { PlayTuning.boutRoll = 0.6; BoutMath.touchCap = 7; BoutMath.missEvery = 4.5; BoutMath.safeTouches = 2 }
 
     func testOnlyTheBeachBallWithTwoOrMoreStartsABout() {
         defer { endBoutTest() }
@@ -119,5 +119,23 @@ extension PlayTossTests {
             if pressed { done += 1; XCTAssertLessThanOrEqual(p.headers - headersAtPress, 1, "seed \(seed): the very next touch goes to the player"); XCTAssertFalse(p.bout.on) }
         }
         XCTAssertGreaterThan(done, 0)
+    }
+
+    /// A bout header ignores every body but its receiver; the dropped ball ignores all of them (the same field names a soccer-net branch uses for a returning ball).
+    func testABoutBallIgnoresEveryBodyButItsReceiverAndTheDroppedBallAllOfThem() {
+        var w = TossWorld(); w.bodies = [TossBody(id: 1, pos: SIMD2(0, 0)), TossBody(id: 2, pos: SIMD2(0, 3))]
+        func run(_ b: TossBall) -> [TossEvent] {
+            var b = b; var ev: [TossEvent] = []
+            for _ in 0..<120 { ev += b.step(1.0 / 60, in: w) }
+            return ev
+        }
+        var base = TossBall(pos: SIMD3(0, 0.5, 5), radius: 0.27); base.vel = SIMD3(0, 0, -4)          // a low ball rolling through both bodies
+        XCTAssertTrue(run(base).contains { if case .bodyHit = $0 { return true }; return false }, "an ordinary ball hits a body")
+        var only = base; only.ignoreAllBut = 2
+        let evOnly = run(only)
+        XCTAssertFalse(evOnly.contains { if case .bodyHit(let id, _) = $0 { return id == 1 }; return false }, "it ignores everybody but body 2")
+        XCTAssertTrue(evOnly.contains { if case .bodyHit(let id, _) = $0 { return id == 2 }; return false }, "but the receiver can touch it")
+        var all = base; all.ignoreAll = true
+        XCTAssertFalse(run(all).contains { if case .bodyHit = $0 { return true }; if case .headHit = $0 { return true }; return false }, "the dropped ball passes through every body")
     }
 }

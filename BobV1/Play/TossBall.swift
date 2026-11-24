@@ -69,6 +69,9 @@ nonisolated struct TossBall: Sendable {
     /// The Jelbie whose head the ball is on (a header in progress): the ball is not tested against him until it has left.
     var ignoring: Int?
     var ignoreT: Float = 0
+    /// beach-volley-r1: a returning ball that no body can strike or deflect (the dropped ball of a bout, on its way to the hand) / a ball only `ignoreAllBut` can touch (a bout header on its way to the one it is meant for).
+    var ignoreAll = false
+    var ignoreAllBut: Int?
 
     init(pos: SIMD3<Float>, radius: Float) { self.pos = pos; self.radius = radius }
 
@@ -144,7 +147,7 @@ nonisolated struct TossBall: Sendable {
             }
         }
         // the Jelbies
-        for b in w.bodies where b.id != ignoring {
+        for b in w.bodies where b.id != ignoring && !ignoreAll && (ignoreAllBut == nil || b.id == ignoreAllBut) {
             let d = SIMD2(pos.x - b.pos.x, pos.z - b.pos.y)
             let dist = simd_length(d)
             let reach = TossTuning.bodyRadius + r

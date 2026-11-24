@@ -392,7 +392,7 @@ final class PlayToss {
         setOwn(.none); passPlan = nil; recallAt = nil; pendingPasses = rollChain()
         if planned { pendingPasses = 0; bout = BoutState(); bout.planned = true; bout.startedAt = clock }          // (beach-volley-r1)
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playchain] throw=%d planned=%d foot=%d", throwSerial + 1, pendingPasses, foot ? 1 : 0) }
-        ball.pos = start; ball.vel = v; ball.floorBounces = 0; ball.ignoring = nil
+        ball.pos = start; ball.vel = v; ball.floorBounces = 0; ball.ignoring = nil; ball.ignoreAll = false; ball.ignoreAllBut = nil          // (beach-volley-r1)
         phase = .flying
         rally = 0; nudges = 0; looseT = 0; flightT = 0; leftHand = false; touched = false; bumper = nil; passTo = nil; headers = 0; rescues = 0; passes = 0
         throwSerial += 1
@@ -525,7 +525,7 @@ final class PlayToss {
             }
         }
         if bout.on, ball.onFloor { boutFloor(); if !bout.homing, phase == .flying { phase = .loose; looseT = 0 } }
-        boutHomingTick()          // (beach-volley-r1: a soft landing ends it too)
+        boutHomingTick(dt: dt)          // (beach-volley-r1: a soft landing ends it too)
         if !bout.homing, ball.resting || (ball.onFloor && phase == .flying) { if phase == .flying { phase = .loose; looseT = 0 } }
         if kickHeightT == nil, ball.pos.y <= ball.radius + Self.kickHeightAbove + 0.02, ball.vel.y <= 0.3, ball.ignoring == nil { kickHeightT = clock }
         if passPlan != nil { preparePassReceiver() }
@@ -708,6 +708,7 @@ final class PlayToss {
 
     private func intercepts(dt: Float, before: SIMD3<Float>) {
         guard ball.ignoring == nil || ball.ignoreT < 0.2 else { return }
+        guard !ball.ignoreAll, ball.ignoreAllBut == nil else { return }          // (beach-volley-r1: a ball only one Jelmiko may touch is that one's alone; a returning ball nobody)
         if footFlight, !PlayTuning.ballReturnOld, footIntercepts() { return }
         var best: (j: PlayJelly, t: Float, xz: SIMD2<Float>, d: Float)?
         for j in jellies {
@@ -1222,7 +1223,7 @@ final class PlayToss {
     }
 
     private func caught() {
-        boutAbort("caught")          // (beach-volley-r1)
+        boutAbort("caught"); bout.homing = false; ball.ignoreAll = false; ball.ignoreAllBut = nil          // (beach-volley-r1)
         catchFrom = ball.pos; catchT = 0
         phase = .catching
         shownRally = rally
