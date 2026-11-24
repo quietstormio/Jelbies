@@ -158,6 +158,7 @@ extension BlobBrain {
         var ranked = toyPeers.filter { $0.toyFree }
         ranked.append(self)
         ranked.sort { simd_distance($0.position, p) < simd_distance($1.position, p) }
+        ranked = BondPairing.friendsFirst(ranked, at: uid)          // (best-friend-r1: whose best friend is already there goes first)
         let limit = Self.toyTakesMany(kind) ? ranked.count : ToyTuning.noticeNearest
         guard let i = ranked.firstIndex(where: { $0 === self }), i < limit else { return false }
         return true
@@ -187,7 +188,7 @@ extension BlobBrain {
     private func toyTryPass(_ sim: SoftBody) -> Bool {
         guard socialBook.enabled, rand() < 0.75 else { return false }
         let friends = toyPeers.filter { $0.socialFree && $0.reactFree && $0.react.pending == nil }.sorted { simd_distance($0.position, position) < simd_distance($1.position, position) }
-        for o in friends where socialStart(.pass, with: o, sim) { return true }
+        for o in BondPairing.bestFirst(friends, chooser: self) where socialStart(.pass, with: o, sim) { return true }
         return false
     }
 

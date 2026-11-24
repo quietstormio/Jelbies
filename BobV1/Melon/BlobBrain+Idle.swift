@@ -1097,7 +1097,8 @@ extension BlobBrain {
             let v = f * Self.scootHop + right * (idleState.hop % 2 == 0 ? 0.12 : -0.12)
             step = simd_length(v); u = v / step
         }
-        let rv = (idleState.kind == .tossHeader && tossFaceYaw != nil) ? SIMD3(here.x + u.x * step, 0, here.y + u.y * step) : resolve(SIMD3(here.x + u.x * step, 0, here.y + u.y * step), footprint)          // (the 1 cm turning hop is not pushed about by the collision resolve: its direction IS the heading)
+        if (idleState.kind == .joy || idleState.kind == .bounce), let f = cheerFaceYaw { u = SIMD2(sinf(f), cosf(f)); step = 0.012 }          // (play-net-r2: the play net's cheer hops turn toward the player in the air, as the header's does; nil = as before)
+        let rv = ((idleState.kind == .tossHeader && tossFaceYaw != nil) || ((idleState.kind == .joy || idleState.kind == .bounce) && cheerFaceYaw != nil)) ? SIMD3(here.x + u.x * step, 0, here.y + u.y * step) : resolve(SIMD3(here.x + u.x * step, 0, here.y + u.y * step), footprint)          // (the 1 cm turning hop is not pushed about by the collision resolve: its direction IS the heading)
         gait.facingYaw = idleState.kind == .startle ? yaw : (idleState.kind == .joy && winCheer) ? idleState.baseYaw : atan2f(u.x, u.y)          // (the win bounces on the spot facing the way he stood: a zero-length hop has no direction of its own)
         gait.home = here
         poseW = 0; poseOn = false

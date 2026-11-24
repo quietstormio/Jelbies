@@ -454,13 +454,14 @@ final class StoreBook {
     }
     /// Owned and not in the room.
     func unplaced(_ id: String) -> Int { max(count(id) - placedCount(id), 0) }
-    func canPlace(_ item: StoreItem) -> Bool {
-        guard let k = item.decor, unplaced(item.id) > 0, roomUnitsUsed + k.spec.units <= StoreTuning.roomCapacity else { return false }
+    func canPlace(_ item: StoreItem, dev: Bool = false) -> Bool {
+        guard let k = item.decor, dev || !k.isPlayOnly, unplaced(item.id) > 0, roomUnitsUsed + k.spec.units <= StoreTuning.roomCapacity else { return false }
         return DecorPlacement.findSpot(k, among: placedDecor) != nil
     }
     /// Why a piece cannot be placed (nil = it can).
     func placeBlocker(_ item: StoreItem) -> String? {
         guard let k = item.decor else { return "Not decor" }
+        if k.isPlayOnly { return "It comes out when you play" }
         if unplaced(item.id) == 0 { return "All of them are in the room" }
         if roomUnitsUsed + k.spec.units > StoreTuning.roomCapacity { return "The room is full. Put something away first." }
         if DecorPlacement.findSpot(k, among: placedDecor) == nil { return "No free floor for it. Move something." }
@@ -469,8 +470,8 @@ final class StoreBook {
 
     /// Puts one of `id` on the floor at the free spot. nil = cannot.
     @discardableResult
-    func place(_ id: String) -> PlacedDecor? {
-        guard let item = StoreCatalog.item(id), canPlace(item), let k = item.decor, let at = DecorPlacement.findSpot(k, among: placedDecor) else { return nil }
+    func place(_ id: String, dev: Bool = false) -> PlacedDecor? {          // (`dev`: the capture aids and tests may place the play-only soccer net; the player's routes never do)
+        guard let item = StoreCatalog.item(id), canPlace(item, dev: dev), let k = item.decor, let at = DecorPlacement.findSpot(k, among: placedDecor) else { return nil }
         let uid = (saved.nextDecorUID ?? 1)
         saved.nextDecorUID = uid + 1
         let p = PlacedDecor(uid: uid, kind: k, x: at.x, z: at.y)
@@ -571,5 +572,8 @@ extension StoreBook.Saved {
         earsChecked = c.value(.earsChecked, earsChecked)
         wallPictures = c.value(.wallPictures, wallPictures)
         showHome = c.value(.showHome, showHome); showHomeAt = c.value(.showHomeAt, showHomeAt)
+        // a play-only piece (the soccer net) is never in a room: one placed by an older save is put away (still owned, nothing else touched)
+        if let l = placedAt, l.contains(where: { $0.kind.isPlayOnly }) { placedAt = l.filter { !$0.kind.isPlayOnly } }
+        if let st = stash, st.values.contains(where: { $0.contains { $0.kind.isPlayOnly } }) { stash = st.mapValues { $0.filter { !$0.kind.isPlayOnly } } }
     }
 }

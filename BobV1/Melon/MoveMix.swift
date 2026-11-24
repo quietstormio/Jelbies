@@ -117,6 +117,15 @@ struct MixBook {
     var passWhy = ""
     var soccerNudgeT: Float = -99, soccerStuck = 0
     var soccerNudgeBall = SIMD2<Float>.zero
+    /// soccer-room-r1 (Melon/SoccerSession.swift): a director's order to this body, whether he is a member of a session, and the directed kick for the next stand-spot pick.
+    var sess = false
+    var order = SessOrder()
+    var sessKick: SessKick?
+    /// The next stand-spot pick shoots at a goal (when one is placed) / dribbles to this spot; where a waiting member looks (nil = the ball).
+    var sessShoot = false
+    var sessFetch = false          // (a session's fetch of a ball nobody can stand behind: the stand is the soccer one, no camera clamp)
+    var sessDribbleTo: SIMD2<Float>?
+    var sessFace: SIMD2<Float>?
     var windowUntil: Float = -1
     /// A run covers the first `runShare` of a leg; the rest is walked at the normal blend (afterRun = the real goal), so a run never ends in a stop.
     var afterRun: SIMD2<Float>?
@@ -218,6 +227,7 @@ extension BlobBrain {
                     nearest = min(nearest, simd_distance(o.position, cand))
                     if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
                 }
+                if pass == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
                 if mixLegThroughSolid(here, cand) { continue }
                 var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) - mixBoardConflict(from: here, to: cand, speed: roomNominalWalk)
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
@@ -228,6 +238,7 @@ extension BlobBrain {
                 if mates.contains(where: { now - $0.mix.strollDirAt < 8 && $0.mix.strollThird == th }) { score -= MoveMix.strollThirdBonus }
                 if best == nil || score > best!.1 { best = (cand, score) }
             }
+            if best != nil { partDone() }
             if let b = best { roamVisits[roamKeyMix(b.0), default: 0] += 1; return b.0 }
         }
         return nil

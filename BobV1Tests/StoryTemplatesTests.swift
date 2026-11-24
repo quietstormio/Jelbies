@@ -143,9 +143,6 @@ final class StoryTemplatesTests: XCTestCase {
         f.personality = "sleepy"; f.daysTracked = 30                              // the type is already on the card; "knows the room well" is gone
         XCTAssertNil(StoryTemplates.about(f, used: [], seed: 1))
         for p in StoryTemplates.aboutBank { XCTAssertFalse(p.text.contains("knows the room")) }
-        let b = StoryBook(defaults: UserDefaults(suiteName: "story.empty.\(UUID().uuidString)")!)
-        b.chain = StoryChain([TemplateWriter(memory: b.memory)])
-        XCTAssertNil(b.aboutLine(f))                                              // the slot keeps its box and stays empty
     }
 
     func testRudeNamesStillGetAGuardedText() {

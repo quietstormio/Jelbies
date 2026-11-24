@@ -201,6 +201,25 @@ nonisolated enum SceneRender {
     }
 }
 
+// MARK: - resuming a song
+
+/// Where a once-only song (the Jelly Show's dance songs) picks up when its engine is rebuilt mid-song. The song "keeps running" on the wall clock while the
+/// engine is down (or the phone is silenced), so a rebuild lands where the song has got to, never back at frame 0 (the dance's prompts are on the song's own beats).
+nonisolated enum SongResume {
+    /// The frame to start at after `elapsed` seconds of song, or nil when the song is over (less than `tail` seconds left).
+    static func startFrame(elapsed: Double, lengthFrames: Int, sampleRate: Double, tail: Double = 0.5) -> Int? {
+        if elapsed < 0.05 { return 0 }
+        let f = Int(elapsed * sampleRate)
+        return f >= lengthFrames - Int(tail * sampleRate) ? nil : f
+    }
+}
+
+/// A scene voice whose engine would not start (the session was still held by someone else) tries again a few times, quickly, before it gives up.
+nonisolated enum EngineStartRetry {
+    static let maxAttempts = 8, delay = 0.25
+    static func shouldRetry(attempt: Int) -> Bool { attempt < maxAttempts }
+}
+
 // MARK: - the engine
 
 /// Plays scene tracks: intro (once) then the loop buffer (forever). Each play fades in; a stop fades out and frees the buffers.
@@ -215,6 +234,10 @@ final class SceneMusicEngine {
         var ready = false
         var started = false
         var cancelled = false
+        var attempts = 0
+        /// Song seconds already gone when this voice was asked for (a rebuild mid-song) and the song second its first frame is (set when it starts).
+        var offset = 0.0
+        var startSeconds = 0.0
         let born = CACurrentMediaTime()
         init(track: SceneTrack) { self.track = track }
     }
@@ -223,6 +246,10 @@ final class SceneMusicEngine {
     private var voices: [Voice] = []
     private var level: Float = 1
     private var configObserver: NSObjectProtocol?
+    /// The once-only song that is playing: the wall-clock time its frame 0 would have been (a rebuild carries on from `now - origin`).
+    private var songOrigin: (track: SceneTrack, host: Double)?
+    /// Always on (a handful of lines per track change, none per frame): the phone's console shows what the engine was asked and what it did.
+    private func nlog(_ s: String) { NSLog("[audio] %@", s) }
 
     /// `-AudioLog 1`: why a scene voice did not start, how long it took, and what dropped / replayed it (the Jelly Show's dance song fails silently otherwise).
     private func alog(_ s: @autoclosure () -> String) { if AudioHub.audioLog { NSLog("[audio] %@", s()) } }
@@ -241,13 +268,19 @@ final class SceneMusicEngine {
     func isPlaying(_ t: SceneTrack) -> Bool { voices.contains { $0.track == t && !$0.stopping && $0.ready && $0.node.isPlaying } }
 
     /// Starts `t` (fading in over `fade` s) and fades every other voice out. Decoding happens off the main thread; the voice starts when it is ready.
-    func play(_ t: SceneTrack, fade: Double) {
+    func play(_ t: SceneTrack, fade: Double, resumeAt: Double? = nil) {
+        // a once-only song asked for again while it is still running (the hub found it lost) carries on where it has got to
+        var offset = resumeAt ?? 0
+        if resumeAt == nil, t.playsOnce, let o = songOrigin, o.track == t { offset = CACurrentMediaTime() - o.host }
+        if songOrigin?.track != t { songOrigin = nil }
+        nlog("scene ask \(t.rawValue) fade=\(String(format: "%.2f", fade)) resumeAt=\(String(format: "%.2f", offset)) engineRunning=\(engine.isRunning) voices=\(voices.count)")
         for v in voices where !v.stopping { v.stopping = true; v.fader.ramp(to: 0, over: fade) }
         // Each decoded track is a whole-loop PCM buffer (tens of MB). Rapid scene hopping used to stack one per hop while the old ones faded: keep the
         // newest fading voice plus the new one, free the older ones now.
         let fading = voices.filter { $0.stopping }
         if fading.count > 1 { for v in fading.dropLast() { drop(v) } }
         let v = Voice(track: t)
+        v.offset = offset
         v.fadeIn = fade
         v.fader.snap(0); v.fader.ramp(to: 1, over: fade)
         voices.append(v)
@@ -259,16 +292,36 @@ final class SceneMusicEngine {
     }
 
     private func finishLoading(_ v: Voice, _ r: SceneRender.Result?) {
-        guard let r, !v.cancelled, voices.contains(where: { $0 === v }) else {
-            alog("scene voice \(v.track.rawValue) NOT started: \(r == nil ? "decode failed" : "cancelled") (after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms)")
+        guard var r, !v.cancelled, voices.contains(where: { $0 === v }) else {
+            nlog("scene voice \(v.track.rawValue) NOT started: \(r == nil ? "decode failed" : "cancelled") (after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms)")
             drop(v); return
+        }
+        // a rebuild mid-song: the song has been running since it was asked for, so start at its elapsed frame (nil = it is over)
+        if v.track.playsOnce, v.offset > 0 {
+            let elapsed = v.offset + (CACurrentMediaTime() - v.born)
+            guard let f = SongResume.startFrame(elapsed: elapsed, lengthFrames: Int(r.loop.frameLength), sampleRate: r.format.sampleRate),
+                  let tail = Self.tail(of: r.loop, from: f) else {
+                nlog("scene voice \(v.track.rawValue) not restarted: the song is over (elapsed \(String(format: "%.1f", elapsed)) s)")
+                songOrigin = nil; drop(v); return
+            }
+            r.loop = tail; v.startSeconds = Double(f) / r.format.sampleRate
         }
         engine.connect(v.node, to: engine.mainMixerNode, format: r.format)
         if !engine.isRunning {
             engine.prepare()
             do { try engine.start() } catch {
-                alog("scene voice \(v.track.rawValue) NOT started: engine start failed \(error)")
-                drop(v); return
+                // the session can still be held by another app / mid route change: try again in a moment (keeps the decoded buffers), never drop the song at once
+                nlog("scene voice \(v.track.rawValue) engine start failed (attempt \(v.attempts + 1)): \(error)")
+                if EngineStartRetry.shouldRetry(attempt: v.attempts) {
+                    v.attempts += 1
+                    let keep = r
+                    Task { @MainActor [weak self, weak v] in
+                        try? await Task.sleep(for: .seconds(EngineStartRetry.delay))
+                        guard let self, let v else { return }
+                        self.finishLoading(v, keep)
+                    }
+                } else { drop(v) }
+                return
             }
         }
         if let i = r.intro { v.node.scheduleBuffer(i, completionHandler: nil) }
@@ -277,10 +330,24 @@ final class SceneMusicEngine {
         v.node.volume = v.stopping ? v.fader.level * level * v.track.gain : 0
         v.node.play()
         v.ready = true; v.started = true
-        alog("scene voice \(v.track.rawValue) started after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms")
+        if v.track.playsOnce { songOrigin = (v.track, CACurrentMediaTime() - v.startSeconds) }
+        nlog("scene voice \(v.track.rawValue) started after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms: engineRunning=\(engine.isRunning) playing=\(v.node.isPlaying) nodeVolume=\(String(format: "%.2f", v.node.volume)) masterLevel=\(String(format: "%.2f", level)) fromSong=\(String(format: "%.1f", v.startSeconds)) s")
+    }
+
+    /// The buffer from `frame` to its end (a copy), nil when nothing is left or the copy cannot be made.
+    private static func tail(of b: AVAudioPCMBuffer, from frame: Int) -> AVAudioPCMBuffer? {
+        if frame == 0 { return b }
+        let n = Int(b.frameLength) - frame
+        guard n > 0, let out = AVAudioPCMBuffer(pcmFormat: b.format, frameCapacity: AVAudioFrameCount(n)),
+              let src = b.floatChannelData, let dst = out.floatChannelData else { return nil }
+        for c in 0..<Int(b.format.channelCount) { dst[c].update(from: src[c] + frame, count: n) }
+        out.frameLength = AVAudioFrameCount(n)
+        return out
     }
 
     func stopAll(fade: Double) {
+        nlog("scene stopAll fade=\(String(format: "%.2f", fade)) voices=\(voices.map(\.track.rawValue))")
+        songOrigin = nil
         for v in voices where !v.stopping { v.stopping = true; v.fader.ramp(to: 0, over: fade) }
     }
 
@@ -328,11 +395,14 @@ final class SceneMusicEngine {
     func restartAfterConfigChange() {
         guard let t = current else { return }
         MicTrace.record("sceneRestart", t.rawValue)
-        alog("scene engine config change: replaying \(t.rawValue) from 0")
+        // a once-only song carries on where it has got to (wall clock since its first frame); a loop restarts (its position does not matter)
+        var resume: Double?
+        if t.playsOnce, let o = songOrigin, o.track == t { resume = max(CACurrentMediaTime() - o.host, 0.0001) }
+        nlog("scene engine config change / rebuild: \(t.rawValue) engineRunning=\(engine.isRunning) resumeAt=\(resume.map { String(format: "%.2f", $0) } ?? "0")")
         let fade = 0.3
         for v in voices { v.cancelled = true; if v.node.engine != nil { v.node.stop(); engine.detach(v.node) } }
         voices.removeAll()
-        play(t, fade: fade)
+        play(t, fade: fade, resumeAt: resume)
     }
 
     /// Seconds of SONG time of the newest playing track, as heard (output latency taken off): the file's own clock for a track that plays from its
@@ -343,7 +413,7 @@ final class SceneMusicEngine {
         // the player's own sample position at the last render, plus the time since that render (the reading is up to one IO buffer old; capped, never negative), minus the route's output latency (Bluetooth)
         var stale = 0.0
         if nt.isHostTimeValid { stale = min(max(AVAudioTime.seconds(forHostTime: mach_absolute_time()) - AVAudioTime.seconds(forHostTime: nt.hostTime), 0), 0.05) }
-        let played = Double(pt.sampleTime) / pt.sampleRate + stale - AVAudioSession.sharedInstance().outputLatency
+        let played = v.startSeconds + Double(pt.sampleTime) / pt.sampleRate + stale - AVAudioSession.sharedInstance().outputLatency
         return played
     }
 

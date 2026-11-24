@@ -176,7 +176,8 @@ struct JelbieActionShot: View {
     /// The Studio's card shows a spinner while its first picture loads; Dress up never does (it opens on the lobby's cached picture and keeps the old one while a new one is drawn).
     var spinner = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var frames: [UIImage?] = [nil, nil, nil]
+    /// The last picture drawn, and for WHOM: it may stand in while a new one of the SAME Jelmiko is drawn (a tapped item never flashes a spinner), never for another one.
+    @State private var shown: (who: Int, image: UIImage)?
     @State private var breathe = false        // a slow render-server driven autoreversing swell
     private func key(_ pose: Int) -> HeadPortraitKey { HeadPortraitKey(jelly: who, colour: nil, wear: nil, pose: pose) }
 
@@ -190,7 +191,7 @@ struct JelbieActionShot: View {
                 ActionPodium(width: discW, topH: discH, rim: rimH).position(x: x, y: floorY + rimH / 2)
                 Ellipse().fill(RadialGradient(colors: [.black.opacity(0.42), .black.opacity(0)], center: .center, startRadius: 0, endRadius: discW * 0.26))
                     .frame(width: discW * 0.58, height: discH * 0.62).position(x: x, y: floorY)
-                if let img = frames[0] ?? HeadPortraitCache.shared.cached(key(0), care: care) {
+                if let img = HeadPortraitCache.shared.cached(key(0), care: care) ?? (shown?.who == who ? shown?.image : nil) {
                     Image(uiImage: img).resizable().scaledToFit().frame(width: S, height: S)
                         .scaleEffect(x: 1 + 0.008 * (breathe && !reduceMotion ? 1 : 0), y: 1 + 0.014 * (breathe && !reduceMotion ? 1 : 0), anchor: UnitPoint(x: 0.5, y: img.feetFraction ?? HeadPortraitKey.actionFloorFraction))
                         .position(x: x, y: floorY + discH * 0.08 - S * (img.feetFraction ?? HeadPortraitKey.actionFloorFraction) + S / 2)
@@ -207,22 +208,22 @@ struct JelbieActionShot: View {
         }
     }
 
+    /// Draws the picture for `who` in what he wears now unless the cache already has it (the cache is per wardrobe state and per Jelmiko). `shown` is replaced by every new picture, so
+    /// a worn item or another contestant always ends up on the stage (show-stage-r1: the old picture used to stay for good once there was one).
     private func load() async {
         let t0 = CACurrentMediaTime()
-        if let hit = HeadPortraitCache.shared.cached(key(0), care: care) { frames[0] = hit }          // (the picture already there stays until the new one lands: a tapped item never flashes a spinner)
-        for pose in [0] {
-            if frames[pose] != nil { continue }
-            // a render that finds no stage / drawable yet (nil) is asked again, a few times, so the picture never stays on its spinner
-            var got: UIImage?
-            for attempt in 0..<4 where got == nil {
-                if Task.isCancelled { return }
-                if attempt > 0 { try? await Task.sleep(nanoseconds: 400_000_000) }
-                got = await HeadPortraitCache.shared.image(key(pose), care: care)
-            }
-            guard let img = got else { return }
-            frames[pose] = img
-            if pose == 0 { NSLog("[portrait] action shot %d drawn after %.0f ms", who, (CACurrentMediaTime() - t0) * 1000) }
+        let me = who
+        if let hit = HeadPortraitCache.shared.cached(key(0), care: care) { shown = (me, hit); return }
+        // a render that finds no stage / drawable yet (nil) is asked again, a few times, so the picture never stays on its spinner
+        var got: UIImage?
+        for attempt in 0..<4 where got == nil {
+            if Task.isCancelled { return }
+            if attempt > 0 { try? await Task.sleep(nanoseconds: 400_000_000) }
+            got = await HeadPortraitCache.shared.image(key(0), care: care)
         }
+        guard let img = got, !Task.isCancelled else { return }
+        shown = (me, img)
+        NSLog("[portrait] action shot %d drawn after %.0f ms", me, (CACurrentMediaTime() - t0) * 1000)
     }
 }
 

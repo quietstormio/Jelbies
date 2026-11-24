@@ -40,35 +40,21 @@ final class StoryBookTests: XCTestCase {
 
     func testFirstViewWritesAtOnceAndIsNeverEmpty() {
         let b = book(suite(), day: Box(100))
-        let l = b.aboutLine(facts())
-        XCTAssertNotNil(l); XCTAssertFalse(l!.text.isEmpty); XCTAssertFalse(l!.byModel)
-        XCTAssertEqual(b.aboutLine(facts())?.text, l?.text)          // the saved one is shown again, not rewritten
         let n = b.noteLine(facts(), with: facts().housemates[0])
-        XCTAssertNotNil(n)
+        XCTAssertNotNil(n); XCTAssertFalse(n!.text.isEmpty); XCTAssertFalse(n!.byModel)
+        XCTAssertEqual(b.noteLine(facts(), with: facts().housemates[0])?.text, n?.text)          // the saved one is shown again, not rewritten
     }
 
-    func testARenameShowsTheNewName() {
+    func testARenameShowsTheNewNameInANote() {
         let b = book(suite(), day: Box(100))
-        let first = b.aboutLine(facts(name: "Berry"))!.text
-        let second = b.aboutLine(facts(name: "Rosie"))!.text
+        let first = b.noteLine(facts(name: "Berry"), with: facts().housemates[0])!.text
+        let second = b.noteLine(facts(name: "Rosie"), with: facts().housemates[0])!.text
         XCTAssertEqual(first.replacingOccurrences(of: "Berry", with: "Rosie"), second)
-        XCTAssertFalse(b.saved.about["1"]!.template.contains("Berry"))          // the placeholders are what is saved
+        XCTAssertFalse(b.saved.notes["1>2"]!.template.contains("Berry"))          // the placeholders are what is saved
     }
 
     // MARK: the schedule
 
-    func testAboutScheduleRules() {
-        let e = StoryEntry(template: "{A} is happy.", fingerprint: "x", day: 100)
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 100))          // never twice in a day
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "y", today: 100))          // not even when something changed
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 101))          // too young and nothing new
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 102))
-        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "x", today: 103))           // 3 days old
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 103, rotate: false))          // ...but never just for its age while a Profile is open
-        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "y", today: 101))           // a day old but something notable changed
-        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "x", today: 100, news: true))          // a new event may replace it the same day
-        XCTAssertTrue(StoryBook.aboutDue(nil, fingerprint: "x", today: 100))
-    }
     func testNoteScheduleRules() {
         let e = StoryEntry(template: "They are pals.", fingerprint: "x", day: 100)
         XCTAssertFalse(StoryBook.noteDue(e, fingerprint: "y", today: 100))
@@ -78,38 +64,44 @@ final class StoryBookTests: XCTestCase {
         XCTAssertFalse(StoryBook.noteDue(e, fingerprint: "x", today: 107, rotate: false))
     }
 
-    func testFingerprintIgnoresMoodButSeesATrophy() {
-        var a = facts(), b = facts()
-        b.mood = "hungry"; b.togetherShare = 0.9; b.minutesSeen = 999
-        XCTAssertEqual(StoryFingerprint.about(a), StoryFingerprint.about(b))
-        a = facts(trophies: 0); b = facts(trophies: 1)
-        XCTAssertNotEqual(StoryFingerprint.about(a), StoryFingerprint.about(b))
-        var c = facts(); c.favouriteActivity = "sway"
-        XCTAssertNotEqual(StoryFingerprint.about(facts()), StoryFingerprint.about(c))
-        var d = facts(); d.relationshipLevel = "Best friends"
-        XCTAssertNotEqual(StoryFingerprint.about(facts()), StoryFingerprint.about(d))
-        var e = facts(); e.mostPlayedWithID = 3
-        XCTAssertNotEqual(StoryFingerprint.about(facts()), StoryFingerprint.about(e))
-    }
-
     func testRefreshFollowsTheClockAndTheGate() async {
         let day = Box(100)
         let b = book(suite(), day: day)
-        _ = b.aboutLine(facts()); _ = b.noteLine(facts(), with: facts().housemates[0])
-        let before = b.saved.about["1"]!.template
+        _ = b.noteLine(facts(), with: facts().housemates[0])
+        let before = b.saved.notes["1>2"]!.template
+        var changed = facts(); changed.housemates[0].topEmote = "cuddle"
         var done = await b.refresh(facts()); XCTAssertEqual(done, [])                                  // same day
         day.v = 101; done = await b.refresh(facts()); XCTAssertEqual(done, [])                         // a day later, nothing new
-        done = await b.refresh(facts(trophies: 1)); XCTAssertTrue(done.contains("about"))              // a new trophy
-        XCTAssertEqual(b.saved.about["1"]!.day, 101)
-        XCTAssertNotEqual(b.saved.about["1"]!.template, before)
+        done = await b.refresh(changed); XCTAssertTrue(done.contains("note:1>2"))                      // the facts of the pair changed
+        XCTAssertEqual(b.saved.notes["1>2"]!.day, 101)
+        XCTAssertNotEqual(b.saved.notes["1>2"]!.template, before)
+        changed.housemates[0].topEmote = "dance"
         day.v = 102; b.busy = { true }
-        done = await b.refresh(facts(trophies: 2)); XCTAssertEqual(done, [], "never during a meal, a Show, a race or a match")
+        done = await b.refresh(changed); XCTAssertEqual(done, [], "never during a meal, a Show, a race or a match")
         b.busy = { false }; b.lowPower = { true }
-        done = await b.refresh(facts(trophies: 2)); XCTAssertEqual(done, [], "not in Low Power Mode")
+        done = await b.refresh(changed); XCTAssertEqual(done, [], "not in Low Power Mode")
         b.lowPower = { false }
-        done = await b.refresh(facts(trophies: 2)); XCTAssertTrue(done.contains("about"))
-        b.force = true; day.v = 102
-        done = await b.refresh(facts(trophies: 2)); XCTAssertTrue(done.contains("about"), "-StoryForce ignores the schedule")
+        done = await b.refresh(changed); XCTAssertTrue(done.contains("note:1>2"))
+        b.force = true
+        done = await b.refresh(changed); XCTAssertTrue(done.contains("note:1>2"), "-StoryForce ignores the schedule")
+    }
+
+    /// The owner removed the living line from the Profile: nothing asks for it or writes it, whatever the writers would say.
+    func testRefreshNeverRequestsOrWritesTheRemovedLivingLine() async {
+        final class Counter: @unchecked Sendable { var about = 0 }
+        struct Counting: StoryWriter {
+            let c: Counter
+            var name: String { "model" }
+            func about(facts: StoryFacts) async -> StoryAnswer? { c.about += 1; return StoryAnswer("{A} is a {PERS} type.", keys: ["personality"]) }
+            func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> StoryAnswer? { StoryAnswer("{A} and {B} are close friends.", keys: ["together"]) }
+        }
+        let c = Counter(), day = Box(100)
+        let b = book(suite(), day: day)
+        b.chain = StoryChain([Counting(c: c), TemplateWriter(memory: b.memory)])
+        for d in 100...110 { day.v = d; b.force = d % 2 == 0; _ = await b.refresh(facts(trophies: d - 100), rotate: true) }
+        XCTAssertEqual(c.about, 0, "the About line is never requested")
+        XCTAssertTrue(b.saved.about.isEmpty, "and nothing is saved under it")
+        XCTAssertFalse(b.saved.notes.isEmpty, "the housemate notes are still written")
     }
 
     // MARK: the chain
@@ -149,14 +141,14 @@ final class StoryBookTests: XCTestCase {
     func testAChainWithAModelStoresWhoWroteIt() async {
         let day = Box(100)
         let b = book(suite(), day: day)
-        b.chain = StoryChain([Fake(name: "model", aboutText: "{A} is a {PERS} type.", noteText: "{A} and {B} are close friends.", keys: ["personality"]), TemplateWriter(memory: b.memory)])
-        _ = b.aboutLine(facts())                        // the first view is pre-written
-        XCTAssertEqual(b.saved.about["1"]!.writer, "template")
+        b.chain = StoryChain([Fake(name: "model", aboutText: nil, noteText: "{A} and {B} are close friends.", keys: ["personality"]), TemplateWriter(memory: b.memory)])
+        _ = b.noteLine(facts(), with: facts().housemates[0])                        // the first view is pre-written
+        XCTAssertEqual(b.saved.notes["1>2"]!.writer, "template")
         day.v = 101
         let done = await b.refresh(facts())             // the next day the model's turn comes (a pre-written one waits for it)
-        XCTAssertTrue(done.contains("about"))
-        XCTAssertTrue(b.aboutLine(facts())!.byModel)
-        XCTAssertEqual(b.aboutLine(facts())!.text, "Berry is a sleepy type.")
+        XCTAssertTrue(done.contains("note:1>2"))
+        XCTAssertTrue(b.noteLine(facts(), with: facts().housemates[0])!.byModel)
+        XCTAssertEqual(b.noteLine(facts(), with: facts().housemates[0])!.text, "Berry and Latte are close friends.")
     }
 
     // MARK: a line that is on screen does not change by itself
@@ -168,36 +160,29 @@ final class StoryBookTests: XCTestCase {
         func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> StoryAnswer? { nil }
     }
 
-    func testTheSameSheetOpenedFiftyTimesGivesTheSameSentence() async {
+    func testTheSameSheetOpenedFiftyTimesGivesTheSameNote() async {
         let day = Box(500)
         let b = book(StoryBookTests.suiteFor(self), day: day)
         b.chain = StoryChain([Silent(), TemplateWriter(memory: b.memory)])
-        let news = StoryEvent(kind: "bubbles", day: 500)
-        var f = facts(); f.today = 500; f.news = news; f.events = [news]
-        let first = b.aboutLine(f)!.text
+        let f = facts()
         let note = b.noteLine(f, with: f.housemates[0])!.text
         for i in 0..<50 {
             _ = await b.refresh(f, rotate: i == 0)                // the Profile's loop: only the first ask may rotate
-            XCTAssertEqual(b.aboutLine(f)!.text, first, "open \(i)")
             XCTAssertEqual(b.noteLine(f, with: f.housemates[0])!.text, note, "open \(i)")
-            // the facts are rebuilt every few seconds: the news item must not change under the same day
-            var g = facts(); g.today = 500; g.news = b.newsAvailable(news) ? news : nil; g.events = [news]
-            XCTAssertEqual(b.aboutLine(g)!.text, first)
         }
-        XCTAssertTrue(first.contains("bubbles"))
     }
 
-    func testAModelLineReplacesAPreWrittenOneOnceAndThenStaysPut() async {
+    func testAModelNoteReplacesAPreWrittenOneOnceAndThenStaysPut() async {
         let day = Box(600)
         let b = book(StoryBookTests.suiteFor(self), day: day)
-        b.chain = StoryChain([Fake(name: "model", aboutText: "{A} is a {PERS} type.", noteText: "They play together a lot.", keys: ["personality"]), TemplateWriter(memory: b.memory)])
-        let f = facts()
-        let pre = b.aboutLine(f)!
-        XCTAssertFalse(pre.byModel)                              // the pre-written line is what shows first: the model never delays or blocks it
+        b.chain = StoryChain([Fake(name: "model", aboutText: nil, noteText: "{A} and {B} are close friends.", keys: ["personality"]), TemplateWriter(memory: b.memory)])
+        let f = facts(), h = f.housemates[0]
+        let pre = b.noteLine(f, with: h)!
+        XCTAssertFalse(pre.byModel)                              // the pre-written note is what shows first: the model never delays or blocks it
         _ = await b.refresh(f, rotate: false)
-        let after = b.aboutLine(f)!
-        XCTAssertTrue(after.byModel); XCTAssertEqual(after.text, "Berry is a sleepy type.")
-        for _ in 0..<20 { _ = await b.refresh(f, rotate: false); XCTAssertEqual(b.aboutLine(f)!.text, after.text) }
+        let after = b.noteLine(f, with: h)!
+        XCTAssertTrue(after.byModel); XCTAssertEqual(after.text, "Berry and Latte are close friends.")
+        for _ in 0..<20 { _ = await b.refresh(f, rotate: false); XCTAssertEqual(b.noteLine(f, with: h)!.text, after.text) }
     }
 
     static func suiteFor(_ t: XCTestCase) -> UserDefaults { let n = "story.book.\(UUID().uuidString)"; let d = UserDefaults(suiteName: n)!; d.removePersistentDomain(forName: n); return d }
@@ -207,14 +192,13 @@ final class StoryBookTests: XCTestCase {
     func testSaveLoadAndOldSave() {
         let d = suite()
         let b = book(d, day: Box(100))
-        let t = b.aboutLine(facts())!.text
-        _ = b.noteLine(facts(), with: facts().housemates[0])
+        let t = b.noteLine(facts(), with: facts().housemates[0])!.text
         let b2 = book(d, day: Box(100))
-        XCTAssertEqual(b2.aboutLine(facts())!.text, t)               // loaded, not rewritten
+        XCTAssertEqual(b2.noteLine(facts(), with: facts().housemates[0])!.text, t)               // loaded, not rewritten
         XCTAssertEqual(b2.saved.salt, b.saved.salt)
         // an old save (nothing under the key) loads empty
         let fresh = StoryBook(defaults: suite())
-        XCTAssertTrue(fresh.saved.about.isEmpty && fresh.saved.notes.isEmpty)
+        XCTAssertTrue(fresh.saved.notes.isEmpty)
         // the pattern memory survives a relaunch
         XCTAssertFalse(b2.memory.snapshot().used.isEmpty)
     }
@@ -222,13 +206,15 @@ final class StoryBookTests: XCTestCase {
     func testPurgeOnLetGoRemovesTheBlurbAndEveryNoteNamingIt() {
         let d = suite()
         let b = book(d, day: Box(100))
-        _ = b.aboutLine(facts(id: 1)); _ = b.aboutLine(facts(id: 2, name: "Latte"))
         var f1 = facts(id: 1); f1.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: 700)]
         var f2 = facts(id: 2, name: "Latte"); f2.housemates = [.init(id: 1, name: "Berry", kindName: "Blush", playShare: 0.8, togetherSeconds: 700)]
         var f3 = facts(id: 3, name: "Pip"); f3.housemates = [.init(id: 1, name: "Berry", kindName: "Blush", playShare: 0.8, togetherSeconds: 700), .init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: 700)]
         _ = b.noteLine(f1, with: f1.housemates[0]); _ = b.noteLine(f2, with: f2.housemates[0])
         _ = b.noteLine(f3, with: f3.housemates[0]); _ = b.noteLine(f3, with: f3.housemates[1])
         XCTAssertEqual(b.saved.notes.count, 4)
+        var old = StoryBook.load(d)          // an older save still holds About blurbs: the purge removes them too
+        old.about = ["1": StoryEntry(template: "{A} is happy.", fingerprint: "x", day: 100), "2": StoryEntry(template: "{A} is happy.", fingerprint: "x", day: 100)]
+        d.set(try? JSONEncoder().encode(old), forKey: StoryBook.defaultsKey)
         StoryBook.purge(2, d)
         b.defaults = d; b.reload()
         XCTAssertNil(b.saved.about["2"]); XCTAssertNotNil(b.saved.about["1"])

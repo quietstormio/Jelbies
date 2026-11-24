@@ -41,14 +41,18 @@ enum PlayToyRegistry {
         entries.append(t)
     }
     /// The toys the picker shows: only the ones the player owns.
-    static func offered(book: StoreBook) -> [PlayToy] { registerBuiltIns(); return entries.filter { $0.isOwned(book) } }
+    /// (`park`: the park's strip, which never shows the soccer net, play-net-r1.)
+    static func offered(book: StoreBook, park: Bool = false) -> [PlayToy] { registerBuiltIns(); return entries.filter { $0.isOwned(book) && !(park && $0.toyID == SoccerNetToy.id) } }
     static func toy(_ id: String) -> PlayToy? { registerBuiltIns(); return entries.first { $0.toyID == id } }
     private static var registered = false
     /// The registrations (idempotent; called on first use).
     static func registerBuiltIns() {
         guard !registered else { return }
         registered = true
-        for k in BallToy.kinds { register(BallToy(kind: k)) }
+        for k in BallToy.kinds {
+            register(BallToy(kind: k))
+            if k == .soccerball { register(SoccerNetToy()) }          // (play-net-r1: "Soccer net" directly after "Soccer ball")
+        }
         register(BubbleWand.shared)
     }
 }
@@ -65,5 +69,20 @@ final class BallToy: PlayToy {
     var price: Int { StoreCatalog.item(storeID)?.price ?? 30 }
     var storeID: String { kind.storeID }
     func activate(care: GameCare) { care.beginPlay(ball: kind) }
+    func deactivate() {}
+}
+
+/// play-net-r1: the soccer ball WITH the net (owner 2026-11-23: "put the net in the toy selector ... they can play with or without net"). Offered only to a player who owns the soccer ball AND the Shop's soccer net (owner 2026-11-23; the item is `decor-minigoal`, never placed in a room; nothing is bought, saved or placed by the card). Its picture is the Mini goal's store art. The home room only: the park's strip leaves it out.
+@MainActor
+final class SoccerNetToy: PlayToy {
+    static let id = "ball-soccernet"
+    var toyID: String { Self.id }
+    var title: String { "Soccer net" }
+    var symbol: String { StoreCatalog.item(storeID)?.symbol ?? "sportscourt.fill" }
+    var price: Int { StoreCatalog.item(storeID)?.price ?? 70 }
+    /// The picture (the Mini goal's store item); the ownership test is the soccer ball's, below.
+    var storeID: String { DecorKind.minigoal.storeID }
+    func isOwned(_ book: StoreBook) -> Bool { book.count(DecorKind.soccerball.storeID) > 0 && book.count(storeID) > 0 }
+    func activate(care: GameCare) { care.beginPlay(ball: .soccerball, net: true) }
     func deactivate() {}
 }

@@ -1,9 +1,8 @@
 //
 //  StoryBook.swift
-//  The cache and the schedule. One saved About blurb per Jelmiko and one friendship note per (Jelmiko, housemate), each with the facts fingerprint and the day it was written.
+//  The cache and the schedule. One friendship note per (Jelmiko, housemate), each with the facts fingerprint and the day it was written.
 //  Rules: the saved text is shown at once (never an empty spot, never a spinner; a first view writes a pre-written one on the spot, synchronously);
-//  a new blurb at most once a day, only when it is >= 3 days old OR something notable changed (a new trophy, a new favourite thing, a new most-played-with housemate, a new relationship
-//  level, the "just moved in" state ending); a note at most once a day when its facts changed or it is a week old. Writing is async and off the main thread at low priority, never during a
+//  a note at most once a day when its facts changed or it is a week old. Writing is async and off the main thread at low priority, never during a
 //  meal / Show / race / match and not in Low Power Mode. The saved text keeps its placeholders; the names are put in at display (a rename never leaves a stale name).
 //
 
@@ -40,10 +39,6 @@ nonisolated struct StorySaved: Codable, Equatable, Sendable {
 
 nonisolated enum StoryFingerprint {
     private static func hex(_ parts: [String]) -> String { String(StoryTemplates.fnv(parts), radix: 16) }
-    /// Only the coarse notable facts (never mood or percentages): trophy count, favourite thing, most played with, relationship level, newcomer, personality, favourite food.
-    static func about(_ f: StoryFacts) -> String {
-        hex(["a", String(f.trophies.total), f.favouriteActivity ?? "-", f.mostPlayedWithID.map(String.init) ?? "-", f.relationshipLevel ?? "-", f.newcomer ? "new" : "old", f.personality ?? "-", f.favouriteFood ?? "-", f.news?.id ?? "-"])
-    }
     /// A fingerprint of a text (placeholders in), for "Don't show this one" and the feedback lookup.
     static func text(_ template: String) -> String { hex(["t", template]) }
     static func note(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> String {
@@ -77,7 +72,7 @@ nonisolated final class StoryHiddenSet: @unchecked Sendable {
 final class StoryBook {
     static let shared = StoryBook()
     static let defaultsKey = "StoryBook.v1"
-    static let aboutMinAgeDays = 3, noteMinAgeDays = 7
+    static let noteMinAgeDays = 7
 
     private(set) var saved: StorySaved
     let memory: StoryMemory
@@ -139,42 +134,14 @@ final class StoryBook {
         #endif
     }
 
-    // MARK: news (one item is used for at most a day)
+    // MARK: news
 
     /// True while a news item may still be used: never used, or first used today.
     func newsAvailable(_ e: StoryEvent) -> Bool { let u = saved.news?[e.id]; return u == nil || u == today() }
-    private func noteNewsUse(_ f: StoryFacts, keys: [String]) {
-        guard let n = f.news, keys.contains(n.factKey) else { return }
-        var m = saved.news ?? [:]
-        if m[n.id] == nil { m[n.id] = today() }
-        m = m.filter { today() - $0.value <= 3 }
-        saved.news = m
-    }
-    /// News is pending when there is a fresh item and the saved line does not already say it.
-    private func newsPending(_ f: StoryFacts, _ e: StoryEntry?) -> Bool {
-        guard let n = f.news, StoryFill.facts(f).contains(n.factKey) else { return false }
-        return !(e?.keys ?? []).contains(n.factKey)
-    }
 
     // MARK: showing (synchronous, never empty)
 
     struct Line: Equatable { var text: String; var byModel: Bool }
-
-    /// The text to show now. A saved blurb is shown as it is (names put in); none yet: a pre-written one is written on the spot and saved.
-    func aboutLine(_ f: StoryFacts) -> Line? {
-        let key = String(f.id)
-        let values = StoryFill.values(f), offered = Set(values.keys)
-        if let e = saved.about[key], !hidden.contains(StoryFingerprint.text(e.template)), !newsPending(f, e) {
-            let fin = StoryFill.apply(e.template, values)
-            // a saved line is shown only while the sheet still backs every fact it states (a rename, a changed favourite): otherwise a true one is written on the spot
-            if StoryGuard.check(template: e.template, final: fin, kind: .about, offered: offered, shown: f.shownParagraph, values: values, keys: e.keys, available: e.keys == nil ? nil : StoryFill.facts(f)).passed { return Line(text: fin, byModel: e.byModel) }
-        }
-        guard let t = TemplateWriter(memory: memory).writeAbout(f) else { return nil }
-        saved.about[key] = StoryEntry(template: t.template, fingerprint: StoryFingerprint.about(f), day: today(), writer: "template", keys: t.keys)
-        noteNewsUse(f, keys: t.keys)
-        persist()
-        return Line(text: StoryFill.apply(t.template, values), byModel: false)
-    }
 
     /// The opening words of the notes ABOVE this one on the same Profile: two notes on one page never start with the same word (the row order decides, so the first row never moves for the second).
     private func earlierOpenings(_ f: StoryFacts, before h: StoryFacts.Housemate) -> Set<String> {
@@ -205,14 +172,6 @@ final class StoryBook {
 
     // MARK: the schedule
 
-    /// When a new About line is due. `rotate` false = the Profile is open: only a new event (`news`) or a changed notable fact may change the line, never just its age.
-    nonisolated static func aboutDue(_ e: StoryEntry?, fingerprint: String, today: Int, news: Bool = false, rotate: Bool = true) -> Bool {
-        guard let e else { return true }
-        if news { return true }                                                   // fresh news may replace the line the same day
-        if e.day >= today { return false }                                        // at most once a day
-        if e.fingerprint != fingerprint { return true }                           // something notable changed
-        return rotate && today - e.day >= aboutMinAgeDays                         // old enough (never while a Profile is open)
-    }
     nonisolated static func noteDue(_ e: StoryEntry?, fingerprint: String, today: Int, rotate: Bool = true) -> Bool {
         guard let e else { return true }
         if e.day >= today { return false }
@@ -225,8 +184,8 @@ final class StoryBook {
     var mayWriteNow: Bool { !busy() && !lowPower() }
     func syncGate() { gateBox.busy = busy(); gateBox.lowPower = lowPower() }
 
-    /// Asks the chain for new text where the schedule says so. Never blocks the main thread (the chain runs off it) and never touches what is on screen until it has an answer.
-    /// While a Profile is open (`rotate: false`) a line changes only when a new event arrives or a notable fact changed; the model's turn replaces a PRE-WRITTEN line only with a model line that passed
+    /// Asks the chain for new housemate notes where the schedule says so. Never blocks the main thread (the chain runs off it) and never touches what is on screen until it has an answer.
+    /// While a Profile is open (`rotate: false`) a note changes only when its facts changed; the model's turn replaces a PRE-WRITTEN note only with a model line that passed
     /// the guard, once per text per day. A model that gives no answer changes nothing.
     @discardableResult
     func refresh(_ f: StoryFacts, rotate: Bool = true) async -> [String] {
@@ -234,28 +193,8 @@ final class StoryBook {
         syncGate()
         var done: [String] = []
         let day = today()
-        let fp = StoryFingerprint.about(f), key = String(f.id)
         let chain = self.chain
         let modelOnly = StoryChain(chain.writers.filter { $0.name != "template" && $0.isUsable }); var mo = modelOnly; mo.hidden = hidden
-        // 1. the model's turn on a pre-written line
-        if hasModel, let e = saved.about[key], !e.byModel, !inFlight.contains("a" + key) {
-            let tag = "\(day)|\(StoryFingerprint.text(e.template))"
-            if (saved.modelTried ?? [:])[key] != tag {
-                var t = saved.modelTried ?? [:]; t[key] = tag; saved.modelTried = t
-                inFlight.insert("a" + key); defer { inFlight.remove("a" + key) }
-                let m = mo
-                let r = await Task.detached(priority: .utility) { await m.about(f) }.value
-                // (the line may have been rewritten while we waited: only replace the very text we asked about)
-                if let r, saved.about[key]?.template == e.template { saved.about[key] = StoryEntry(template: r.template, fingerprint: fp, day: day, writer: r.writer, keys: r.keys); noteNewsUse(f, keys: r.keys); done.append("about"); persist() }
-                else { persist() }
-            }
-        }
-        // 2. an ordinary rewrite: no line yet, a notable fact changed, or (not while open) it is old enough
-        if force || (Self.aboutDue(saved.about[key], fingerprint: fp, today: day, rotate: rotate) && !inFlight.contains("a" + key)) {
-            inFlight.insert("a" + key); defer { inFlight.remove("a" + key) }
-            let r = await Task.detached(priority: .utility) { await chain.about(f) }.value
-            if let r { saved.about[key] = StoryEntry(template: r.template, fingerprint: fp, day: day, writer: r.writer, keys: r.keys); noteNewsUse(f, keys: r.keys); done.append("about"); persist() }
-        }
         for h in f.housemates {
             let nk = "\(f.id)>\(h.id)", nfp = StoryFingerprint.note(f, h)
             if hasModel, let e = saved.notes[nk], !e.byModel, !inFlight.contains("n" + nk) {
@@ -281,28 +220,27 @@ final class StoryBook {
 
     enum Another: Equatable { case written(Line), limit, nothing }
 
-    private func rewriteKey(_ f: StoryFacts, _ h: StoryFacts.Housemate?) -> String { h.map { "n\(f.id)>\($0.id)" } ?? "a\(f.id)" }
-    func rewritesLeft(_ f: StoryFacts, _ h: StoryFacts.Housemate? = nil) -> Int {
+    private func rewriteKey(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> String { "n\(f.id)>\(h.id)" }
+    func rewritesLeft(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> Int {
         let r = saved.rewrites?[rewriteKey(f, h)] ?? []
         return r.count == 2 && r[0] == today() ? max(0, Self.rewritesPerDay - r[1]) : Self.rewritesPerDay
     }
 
     /// "Write another": asks the chain again (at most 3 a day per text; the once-a-day schedule does not apply). The old text is never the answer.
-    func writeAnother(_ f: StoryFacts, with h: StoryFacts.Housemate? = nil) async -> Another {
+    func writeAnother(_ f: StoryFacts, with h: StoryFacts.Housemate) async -> Another {
         guard rewritesLeft(f, h) > 0 else { return .limit }
         syncGate()
         let day = today(), k = rewriteKey(f, h)
-        let oldKey = h == nil ? saved.about[String(f.id)] : saved.notes["\(f.id)>\(h!.id)"]
+        let oldKey = saved.notes["\(f.id)>\(h.id)"]
         var rw = saved.rewrites ?? [:]
         let used = (rw[k]?.first == day ? rw[k]![1] : 0) + 1
         rw[k] = [day, used]; saved.rewrites = rw
         let chain = self.chain
         for _ in 0..<3 {
-            let r: StoryResult? = await Task.detached(priority: .userInitiated) { h == nil ? await chain.about(f) : await chain.friendship(f, with: h!) }.value
+            let r: StoryResult? = await Task.detached(priority: .userInitiated) { await chain.friendship(f, with: h) }.value
             guard let r else { break }
             if r.template == oldKey?.template { continue }
-            if let h { saved.notes["\(f.id)>\(h.id)"] = StoryEntry(template: r.template, fingerprint: StoryFingerprint.note(f, h), day: day, writer: r.writer, keys: r.keys) }
-            else { saved.about[String(f.id)] = StoryEntry(template: r.template, fingerprint: StoryFingerprint.about(f), day: day, writer: r.writer, keys: r.keys) }
+            saved.notes["\(f.id)>\(h.id)"] = StoryEntry(template: r.template, fingerprint: StoryFingerprint.note(f, h), day: day, writer: r.writer, keys: r.keys)
             persist()
             return .written(Line(text: r.final, byModel: r.writer == "model"))
         }
@@ -312,8 +250,8 @@ final class StoryBook {
 
     /// "Don't show this one": the text is replaced at once by a pre-written one, its fingerprint is remembered so no writer can bring it back, and the model's feedback is filed.
     @discardableResult
-    func dontShow(_ f: StoryFacts, with h: StoryFacts.Housemate? = nil) -> Line? {
-        let old = h == nil ? saved.about[String(f.id)] : saved.notes["\(f.id)>\(h!.id)"]
+    func dontShow(_ f: StoryFacts, with h: StoryFacts.Housemate) -> Line? {
+        let old = saved.notes["\(f.id)>\(h.id)"]
         if let old {
             hidden.insert(StoryFingerprint.text(old.template))
             if old.byModel { feedback(old.template) }
@@ -321,10 +259,9 @@ final class StoryBook {
         let pre = TemplateWriter(memory: memory)
         var line: Line?
         for _ in 0..<6 {
-            guard let ans = h == nil ? pre.writeAbout(f) : pre.writeNote(f, h!), !hidden.contains(StoryFingerprint.text(ans.template)), ans.template != old?.template else { continue }
+            guard let ans = pre.writeNote(f, h), !hidden.contains(StoryFingerprint.text(ans.template)), ans.template != old?.template else { continue }
             let t = ans.template
-            if let h { saved.notes["\(f.id)>\(h.id)"] = StoryEntry(template: t, fingerprint: StoryFingerprint.note(f, h), day: today(), writer: "template", keys: ans.keys); line = Line(text: StoryFill.apply(t, StoryFill.values(f, with: h)), byModel: false) }
-            else { saved.about[String(f.id)] = StoryEntry(template: t, fingerprint: StoryFingerprint.about(f), day: today(), writer: "template", keys: ans.keys); line = Line(text: StoryFill.apply(t, StoryFill.values(f)), byModel: false) }
+            saved.notes["\(f.id)>\(h.id)"] = StoryEntry(template: t, fingerprint: StoryFingerprint.note(f, h), day: today(), writer: "template", keys: ans.keys); line = Line(text: StoryFill.apply(t, StoryFill.values(f, with: h)), byModel: false)
             break
         }
         persist()
