@@ -22,8 +22,6 @@ struct VolleyChrome: View {
     @AppStorage("volley.hint.doubleTap") private var doubleTapHintSeen = false
     @State private var aimShown: SIMD2<Float>?
     @State private var padH: CGFloat = 0
-    /// iPad: the 1.45x scale does not change layout size, so cap the card's layout height at (screen height minus the top bar band) / 1.45.
-    private var padCardMaxH: CGFloat { padH > 0 ? max(200, (padH - 150) / 1.45) : .infinity }
     @State private var fxText = ""
     @State private var fxTone = 0
     @State private var fxY: CGFloat = 0
@@ -37,7 +35,7 @@ struct VolleyChrome: View {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
-                    if volley.showsCard { PadResultsCardFit(maxH: padCardMaxH) { VolleyResultsCard(volley: volley) { volley.goHome() } }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(.scale(scale: 0.85).combined(with: .opacity)) }
+                    if volley.showsCard { VolleyResultsCard(volley: volley, maxHeight: ResultCardMetrics.maxHeight(screenH: padH)) { volley.goHome() }.resultCardSlot().transition(.scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if volley.phase == .playing, !volley.hasResults { controls }
                 }
@@ -361,56 +359,34 @@ struct HoldButton: View {
 
 struct VolleyResultsCard: View {
     let volley: VolleyFlow
+    /// The tallest the card may be (the chrome measures the screen); taller content scrolls inside it with "Back home" kept in view.
+    var maxHeight: CGFloat = .infinity
     let home: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
     private var tight: Bool { vsc == .compact }
 
-    private func chip(_ text: String, _ symbol: String, _ id: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .black))
-            Text(text).playFont(14, .heavy)
-        }.foregroundStyle(CareMenu.brown).padding(.horizontal, 12).padding(.vertical, 5)
-            .background(Capsule().fill(Color(red: 0.98, green: 0.80, blue: 0.35))).accessibilityElement(children: .combine).accessibilityIdentifier(id)
-    }
+    private var hasSecondary: Bool { volley.pointsEarned > 0 || !volley.awards.isEmpty || volley.unlockedNow != nil }
 
     var body: some View {
         let s = volley.sim
-        VStack(spacing: tight ? 6 : 12) {
-            Group {
-                Text(s?.humanTeamWon == true ? "You won!" : "Good game!").playFont(tight ? 24 : 32, .heavy).foregroundStyle(CareMenu.brown)
-                Text("\(s?.score[0] ?? 0)  :  \(s?.score[1] ?? 0)").playFont(30, .heavy).monospacedDigit().foregroundStyle(CareMenu.brown)
-                HStack(spacing: 8) {
-                    JellyCoinIcon(size: 22)
-                    Text("+\(volley.earned.coinText) JellyCoins").lineLimit(1).minimumScaleFactor(0.8).playFont(20, .bold).foregroundStyle(CareMenu.brown)
+        let a = s?.score[0] ?? 0, b = s?.score[1] ?? 0
+        ResultCardFrame(buttonColor: SK.pink, homeID: "volley-home", maxHeight: maxHeight, hasSecondary: hasSecondary, home: home) {
+            Text(s?.humanTeamWon == true ? "You won!" : "Good game!").playFont(tight ? 26 : 32, .heavy).foregroundStyle(CareMenu.brown)
+                .resultText("title").accessibilityAddTraits(.isHeader)
+            Text("\(a)  :  \(b)").playFont(30, .heavy).monospacedDigit().foregroundStyle(CareMenu.brown)
+                .resultText("score").accessibilityLabel("Score \(a) to \(b)")
+            ResultCoinsLine(coinText: volley.earned.coinText)
+            if volley.assistFactor < 1 { Text("Auto play pays half").playFont(14, .medium).foregroundStyle(CareMenu.brown.opacity(0.85)).resultText("assist") }
+        } secondary: {
+            VStack(spacing: 8) {
+                if volley.pointsEarned > 0 { ResultPointsRow(title: "Jelly Volleyball points  +\(volley.pointsEarned)", detail: "\(volley.playerName) now has \(volley.pointsAfter) to spend", id: "volley-points") }
+                if volley.awards.newRibbon { ResultRewardRow(symbol: "rosette", text: "New ribbon!", id: "volley-new-ribbon", probe: "ribbon") }
+                if let t = volley.awards.trophies.first {
+                    ResultRewardRow(symbol: "trophy.fill", text: volley.awards.trophies.count > 1 ? "New trophy! \(t.title) +\(volley.awards.trophies.count - 1)" : "New trophy! \(t.title)", id: "volley-trophy", probe: "trophy")
                 }
-                if volley.pointsEarned > 0 {
-                    HStack(spacing: 8) {
-                        Image(systemName: "star.fill").font(.system(size: 16, weight: .black)).foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.35))
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("Jelly Volleyball points  +\(volley.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
-                            Text("\(volley.playerName) now has \(volley.pointsAfter) to spend").playFont(13, .medium).foregroundStyle(CareMenu.brown.opacity(0.85))
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("volley-points")
-                }
-                if volley.assistFactor < 1 { Text("Auto play pays half").playFont(14, .medium).foregroundStyle(CareMenu.brown.opacity(0.85)) }
-                if !volley.awards.isEmpty {
-                    HStack(spacing: 8) {
-                        if volley.awards.newRibbon { chip("New ribbon!", "rosette", "volley-new-ribbon") }
-                        if let t = volley.awards.trophies.first { chip(volley.awards.trophies.count > 1 ? "New trophy! \(t.title) +\(volley.awards.trophies.count - 1)" : "New trophy! \(t.title)", "trophy.fill", "volley-trophy") }
-                    }
-                }
-                if let t = volley.unlockedNow { Text("\(t.title) unlocked!").playFont(15, .heavy).foregroundStyle(SK.pink).accessibilityIdentifier("volley-unlocked") }
             }
-            Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); home() } label: {
-                Text("Back home").playFont(20, .bold).foregroundStyle(.white).padding(.horizontal, 30).padding(.vertical, tight ? 8 : 12)
-                    .background(Capsule().fill(SK.pink).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))
-            }.buttonStyle(.plain).accessibilityIdentifier("volley-home")
+            if let t = volley.unlockedNow { Text("\(t.title) unlocked!").playFont(15, .heavy).foregroundStyle(SK.pink).resultText("unlocked").accessibilityIdentifier("volley-unlocked") }
         }
-        .padding(.horizontal, 22).padding(.vertical, tight ? 10 : 20)
-        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 6, y: 3))
-        .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
         .accessibilityElement(children: .contain).accessibilityIdentifier("volley-card")
     }
 

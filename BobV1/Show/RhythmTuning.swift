@@ -30,15 +30,7 @@ nonisolated enum CourseTier: String, CaseIterable, Codable, Sendable {
     /// The class a racer is in on this course.
     var className: String { switch self { case .puddle: return "Starter"; case .ripple: return "Rookie"; case .splash: return "Pro"; case .wave: return "Champion"; case .tsunami: return "Legend" } }
     /// What the course is like, for the Track panel.
-    var blurb: String {
-        switch self {
-        case .puddle: return "The straight. Tap left, right, left, right."
-        case .ripple: return "Two gentle curves. Ease off a little in the bends."
-        case .splash: return "S-bends, soft bumps and three low hurdles. Tap Jump just before each bar."
-        case .wave: return "Tight turns, two hairpins and six hurdles. Slow down for the corners, jump the bars."
-        case .tsunami: return "Hairpins and runs of hurdles, back to back. The big one."
-        }
-    }
+    var blurb: String { RaceHelp.blurb(self) }
     var index: Int { CourseTier.allCases.firstIndex(of: self) ?? 0 }
     /// The course below this one (nil for the Puddle).
     var below: CourseTier? { index > 0 ? CourseTier.allCases[index - 1] : nil }

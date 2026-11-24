@@ -108,7 +108,7 @@ enum HUDMenu {
         guard !enabled(i, mode, care: care) else { return nil }
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
         switch i {
-        case .feed, .drink: return care.trayOut ? "Food is already out" : care.tripActive ? "Not while racing" : "Not while cleaning"
+        case .feed, .drink: return care.trayOut ? "Food is already out" : care.tripActive ? care.tripMealLine : "Not while cleaning"
         case .clean:
             if care.bath.active { return "Already cleaning" }
             if care.trayOut { return "Not while food is out" }

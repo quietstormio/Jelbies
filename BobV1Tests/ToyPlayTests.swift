@@ -18,7 +18,8 @@ final class ToyPlayTests: XCTestCase {
     override func tearDown() { DecorField.shared.clear(); ToyTuning.settle = 5; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
     private func room() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
 
-    static let interactive: [DecorKind] = DecorKind.allCases.filter { $0.activeInteraction != nil }
+    // (toy-audit-r1: the Park's hopscotch court is a painted floor game with no piece animation and is not sold for home: it has its own tests, HopscotchTests)
+    static let interactive: [DecorKind] = DecorKind.allCases.filter { $0.activeInteraction != nil && $0 != .hopscotch }
 
     // MARK: stand spots
 

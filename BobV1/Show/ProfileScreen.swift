@@ -359,7 +359,7 @@ struct ProfileScreen: View {
             .task {          // capture aid (dev arguments only): `-ProfileScroll 1` scrolls the trophies card into view
                 guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileScroll") != 0 else { return }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
-                withAnimation { proxy.scrollTo(UserDefaults.standard.integer(forKey: "ProfileScroll") == 2 ? "profile-who" : "profile-trophies", anchor: .bottom) }          // `-ProfileScroll 2` scrolls the top card's bottom into view (landscape captures)
+                withAnimation { proxy.scrollTo(["profile-trophies", "profile-trophies", "profile-who", "profile-favs"][min(3, max(0, UserDefaults.standard.integer(forKey: "ProfileScroll")))], anchor: .bottom) }          // `-ProfileScroll 2` scrolls the top card's bottom into view (landscape captures)
             }
             }
             ShowCTA(title: "See today's Jelly Show", id: "condition-show", height: compact ? 54 : 56) { show() }
@@ -582,6 +582,7 @@ struct ProfileScreen: View {
                 .accessibilityElement(children: .combine).accessibilityIdentifier("profile-fav-perk")
             }
         }
+        .id("profile-favs")
     }
 
     // MARK: 4. trophies

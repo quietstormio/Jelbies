@@ -110,8 +110,7 @@ final class ThreeJellyTests: XCTestCase {
         // the others start fresh, not from Bob's data
         for id in 1...2 {
             let j = JellyProfile(id: id, name: JellyRoster.names[id], persists: true, defaults: d, now: { t })
-            XCTAssertEqual(j.needs.level(NeedKind(rawValue: id)!), NeedsTuning.seedHunger, accuracy: 1e-5, "Jelly \(id) seeds like a first launch (Pip thirsty, Moss wants love)")
-            XCTAssertEqual(j.needs.level(.hunger), id == 1 ? NeedsTuning.seedOthers : NeedsTuning.seedOthers, accuracy: 1e-5)
+            for k in NeedKind.allCases { XCTAssertEqual(j.needs.level(k), 1, accuracy: 1e-5, "Jelly \(id) arrives full (owner 11-24)") }
             XCTAssertEqual(j.grime.dirt, 0)
             XCTAssertEqual(j.training.progress(.sit), 0)
         }

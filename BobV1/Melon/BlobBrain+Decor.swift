@@ -30,6 +30,7 @@ extension BlobBrain {
         if uid >= 0 {
             HopscotchLine.shared.remove(uid, steerID)
             if let sf = DecorField.shared.foot(uid), sf.kind == .kickscooter { scooterParked(sf) }          // (cut short mid-ride: the scooter is parked again)
+            if EmoteSpot.logOn { NSLog("[toyend] t=%.1f id=%d uid=%d", variety.now, steerID, uid) }          // (toy-audit-r1 log)
             DecorField.shared.leave(uid, by: steerID)
             DecorField.shared.toyPlayed(uid)          // (his turn is over: the piece's pull starts to recover)
             toy.lastUID = uid
@@ -400,10 +401,12 @@ extension BlobBrain {
             idleState.seat = seat; idleState.seatShift = .zero; idleState.cuddle = 0
             idleState.slideStage = roundSlide ? -slideLeg : 0; idleState.slideS = 0; idleState.slideStep = 0          // (-1 = round to the gate, -2 = the last step to the climb spot)
             idleState.soccer = kind == .soccerKick ? soccerPlan : SoccerIdle()
-            idleState.reps = kind == .decorKick && f.kind.rolls ? 1 + (rand() < 0.5 ? 1 : 0) : 0
+            idleState.reps = kind == .decorKick && f.kind.rolls && idleMood != .grumpy ? 1 + (rand() < 0.5 ? 1 : 0) : 0          // (a grumpy go is one kick, not a run of them)
             if f.kind.hopSit { field.take(f.uid, seat: seat, by: steerID) } else { field.use(f.uid, by: steerID) }
             if f.kind == .playtunnel { tunnelCommit(f, stand: stand) }
             if f.kind == .hopscotch { hopscotchCommit(f) }
+            if BlobBrain.audienceOn, BlobBrain.audienceKinds.contains(f.kind) { field.toys.shows[f.uid] = (steerID, field.toys.clock) }          // (toy-audit-r1: a housemate may come and watch / dance)
+            if EmoteSpot.logOn { NSLog("[toyuse] t=%.1f id=%d uid=%d kind=%@ move=%@", variety.now, steerID, f.uid, f.kind.rawValue, "\(kind)") }          // (toy-audit-r1 log)
             script = .walk(target: stand, then: .none); activity = .walking
             return true
         }
@@ -522,7 +525,7 @@ extension BlobBrain {
             // become the happy bounce, on the mat
             idleState.kind = .bounce
             idleState.target = position
-            idleState.reps = 4 + Int(rand() * 3)
+            idleState.reps = idleMood == .grumpy ? 2 : 4 + Int(rand() * 3)          // (a grumpy go: fewer bounces)
             idleState.hop = 0; idleState.landT = 0
             script = .idle; activity = .playing
             idleState.phase = 1; idleState.phaseT = 0
@@ -629,7 +632,7 @@ extension IdleTable {
         switch m {
         case .happy: table = [(.decorSit, 2.0), (.decorBoop, 1.6), (.decorKick, 2.4), (.decorHop, 2.2), (.decorPeek, 1.3), (.decorSlide, 2.2), (.decorHopscotch, 2.4), (.soccerKick, 2.6)]
         case .okay: table = [(.decorSit, 3.0), (.decorBoop, 1.4), (.decorKick, 1.0), (.decorHop, 0.8), (.decorPeek, 1.2), (.decorSlide, 0.8), (.decorHopscotch, 1.2), (.soccerKick, 1.1)]
-        case .grumpy: table = [(.decorSit, 1.6), (.decorBoop, 0.5)]
+        case .grumpy: table = [(.decorSit, 1.6), (.decorBoop, 0.5)]          // (toy-audit-r1: no kick / hop rows for a grumpy one here: they play through the direct pick only, ToyTuning.grumpyShare, so the boop toys are not displaced)
         }
         // a stuck soccer ball (20 s against a wall / under furniture) wants rescuing: the soccer pick dominates until it is out
         return table.filter { offers.contains($0.0) }.map { (kind: $0.0, weight: $0.0 == .soccerKick && SoccerState.shared.anyStuck ? BlobBrain.soccerRescueWeight : $0.1) }

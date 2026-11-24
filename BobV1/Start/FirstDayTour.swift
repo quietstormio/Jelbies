@@ -68,6 +68,16 @@ final class FirstDayTour {
         (run ? [.arrive] : []) + [.welcome, .jellyCoins] + coachTargets.map { .coach($0) }
     }
 
+    /// Only the welcome and the JellyCoins steps are captions; the run-in has none and a coach step is a card on its control.
+    static func showsCaption(_ step: FirstDayStep) -> Bool {
+        switch step { case .welcome, .jellyCoins: return true; case .arrive, .coach: return false }
+    }
+    /// A coach step whose control is not on screen has nothing to point at: it is skipped.
+    static func skipsStep(_ step: FirstDayStep, holeMissing: Bool) -> Bool {
+        if case .coach = step { return holeMissing }
+        return false
+    }
+
     private(set) var steps: [FirstDayStep] = []
     private(set) var index = 0
     /// Armed by StartFlow; the room takes it when it appears (`roomReady`).
@@ -200,7 +210,7 @@ struct FirstDayTourOverlay: View {
                 dim(size: size, hole: hole)
                 Color.clear.contentShape(Rectangle()).onTapGesture { tour.next() }.accessibilityHidden(true)
                 coachCard(step, size: size, hole: hole)
-            } else if step != .arrive {
+            } else if FirstDayTour.showsCaption(step) {          // (a coach step whose control is missing draws nothing and is skipped below: never the JellyCoins caption)
                 Color.clear.contentShape(Rectangle()).onTapGesture { tour.next() }.accessibilityHidden(true)
                 captionCard(step, size: size)
             }
@@ -215,7 +225,10 @@ struct FirstDayTourOverlay: View {
             }
         }
         .onChange(of: hole == nil) { _, missing in          // a control that is not on screen has nothing to point at: on to the next
-            if missing, case .coach = step { tour.next() }
+            if FirstDayTour.skipsStep(step, holeMissing: missing) { tour.next() }
+        }
+        .onChange(of: tour.serial, initial: true) {          // (the change above does not fire when the step before had no hole either, e.g. a caption)
+            if FirstDayTour.skipsStep(step, holeMissing: hole == nil) { tour.next() }
         }
     }
 

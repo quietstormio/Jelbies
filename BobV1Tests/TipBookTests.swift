@@ -34,6 +34,23 @@ final class TipBookTests: XCTestCase {
         XCTAssertNil(b.current); XCTAssertTrue(b.queue.isEmpty)
     }
 
+    func testGotItTapIsConsumedByTheCardAndItsSpotForAMoment() {
+        let (b, _, done) = make(); defer { done() }
+        b.screenOpened("town"); b.request("town"); b.tick()
+        b.cardFrame = CGRect(x: 20, y: 600, width: 340, height: 143)
+        let onCard = CGPoint(x: 100, y: 700), outside = CGPoint(x: 100, y: 300)
+        XCTAssertTrue(b.swallows(onCard), "the card takes the touch")
+        XCTAssertFalse(b.swallows(outside), "elsewhere falls through")
+        b.dismiss()
+        XCTAssertNil(b.current)
+        XCTAssertTrue(b.swallows(onCard), "right after Got it the spot eats the touch: the control under the card never gets it")
+        XCTAssertFalse(b.swallows(outside))
+        t0 += TipBook.consumeGrace + 0.1
+        XCTAssertFalse(b.swallows(onCard), "after the grace the screen is live again")
+        let w = TipWindow(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        XCTAssertNil(w.hitTest(outside, with: nil))
+    }
+
     func testAFreshBookKeepsTheFlagAcrossRelaunch() {
         let (b, d, done) = make(); defer { done() }
         b.screenOpened("shop"); b.request("shop"); b.tick()

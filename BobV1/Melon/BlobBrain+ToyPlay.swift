@@ -41,6 +41,14 @@ struct ToyBrain {
     var burstHandled = 0
     var chaseSpot: SIMD2<Float>?
     var chaseUntil: Float = 0
+    /// toy-audit-r1 audience (drum dance, top watch, hoop cheer, mat queue): the piece, who plays, 0 none / 1 walking / 2 there, the spot, deadline, next move, cool-down, shows handled, state flags.
+    var audUID = -1, audBy = -1, audStage = 0
+    var audSpot = SIMD2<Float>.zero
+    var audUntil: Float = 0, audNext: Float = 0, audCool: Float = 0, audPoll: Float = 0
+    var audShown: [Int: Float] = [:]
+    var audReacted = false, audTurn = false
+    var audBeat: Float = 0
+    var shared = 0, joined = 0
     /// Counters (tests / the report).
     var noticed = 0, queued = 0, tookTurn = 0, gaveUp = 0, chased = 0
 }
@@ -121,6 +129,8 @@ extension BlobBrain {
             } else if scriptIsNone, toy.chaseUntil - clock > 0.5 { requestNow(.goTo(spot)) }
             return
         }
+        // 2a. toy-audit-r1: a housemate watches / dances / cheers at a toy someone else is playing
+        if toyAudienceTick(sim, f, clock) { return }
         // 2b. moved on from the queue before his deadline: back in line once he is free
         if toy.retryUID >= 0 {
             if clock > toy.retryUntil || f.foot(toy.retryUID) == nil { toy.retryUID = -1 }
@@ -130,7 +140,7 @@ extension BlobBrain {
         if toy.waitUID >= 0 { toyWaitTick(sim, f, clock) }
     }
 
-    private func toyClear() { toy.noticeUID = -1; toy.waitUID = -1; toy.chaseSpot = nil; toy.retryUID = -1 }
+    private func toyClear() { toy.noticeUID = -1; toy.waitUID = -1; toy.chaseSpot = nil; toy.retryUID = -1; toy.audUID = -1; toy.audStage = 0 }
 
     private func toyShouldNotice(_ n: ToyNews) -> Bool {
         let f = DecorField.shared
@@ -274,5 +284,191 @@ extension BlobBrain {
             requestNow(.goTo(q))
             return
         }
+    }
+}
+
+// MARK: the audience (toy-audit-r1)
+//  Shared play from existing motions only (the walk, look, bounce, skip-hop, joy, giggle, startle):
+//    drum        while one drums, a free housemate walks to a spot 1.6...2.2 from the drummer and dances (bounce / skip-hop / joy) until the drumming stops (about half the times one is free)
+//    spinning top  up to two free housemates stand 1.6...2.2 from it (never within 1.3 of each other), watch it and giggle / startle when it falls
+//    hoop        a watcher stands 1.6...2.2 from the shooter and cheers (the joy bounce) after the shot; half the time he then takes the next turn
+//    bouncy mat  the next one waits 1.4...1.8 beside the mat, bobs while the first bounces and gets on when the first gets off
+//  Only a free housemate (`toyFree`, not owned by a touch / a meal / a command): a sleeping, eating or busy one is never pulled in. Spots keep 1.3 from every body and
+//  the walk there keeps 1.3 from every standing body. With nobody else at home nothing here runs.
+
+extension BlobBrain {
+    /// The audience switch: OFF by default (shared play was built but not delivered as visible moments, toy-audit-r1); dev `-ToyAudience 1` (tests: ToyAuditTests TOYAUDIENCE=1) turns it on for later work.
+    nonisolated(unsafe) static var audienceOn: Bool = (DevArgs.enabled && UserDefaults.standard.integer(forKey: "ToyAudience") == 1)
+    static let audienceKinds: Set<DecorKind> = [.drum, .spintop, .hoop, .bouncymat]
+    static func audienceChance(_ k: DecorKind) -> Float { switch k { case .drum: return 0.4; case .spintop: return 0.45; case .hoop: return 0.4; default: return 0.2 } }
+    static func audienceLimit(_ k: DecorKind) -> Int { k == .spintop ? 2 : 1 }
+
+    /// `toyFree` without the mood clause: a grumpy one may watch too (the audience rolls at half the chance and keeps to looks: no dance, no cheer, no bounce).
+    private var toyFreeAnyMood: Bool { anticsEnabled && !decorLocked && reactFree && scriptIsNone && idleState.kind == nil && !race.active && idleNight < 0.6 }
+    private var audienceEligible: Bool { toyFreeAnyMood && toyFreeForQueueA && toy.waitUID < 0 && toy.noticeUID < 0 && toy.retryUID < 0 && toy.chaseSpot == nil && pending == nil }
+    private var toyFreeForQueueA: Bool { attached && !held && !commanded && social == nil && job == nil && !decorLocked && !race.active && commandedIdle == nil }
+
+    /// true = the audience owns this tick.
+    func toyAudienceTick(_ sim: SoftBody, _ f: DecorField, _ clock: Float) -> Bool {
+        if toy.audUID >= 0 { return toyAudienceRun(sim, f, clock) }
+        guard Self.audienceOn else { return false }
+        guard clock >= toy.audCool, clock >= toy.audPoll, !f.toys.shows.isEmpty else { return false }
+        toy.audPoll = clock + 0.4
+        guard audienceEligible else { return false }
+        for uid in f.toys.shows.keys.sorted() {
+            guard let show = f.toys.shows[uid], show.by != steerID, clock - show.t < 2.5, (toy.audShown[uid] ?? -1) < show.t else { continue }
+            guard let foot = f.foot(uid), Self.audienceKinds.contains(foot.kind), let user = toyPeers.first(where: { $0.steerID == show.by }), user.idleState.decorUID == uid else { continue }
+            toy.audShown[uid] = show.t
+            let c = f.position(foot)
+            if simd_distance(position, c) > 7 { continue }
+            var ranked = toyPeers.filter { $0.audienceEligible && $0.toy.audCool <= clock && $0.steerID != show.by }
+            ranked.append(self)
+            ranked.sort { simd_distance($0.position, c) < simd_distance($1.position, c) }
+            let taken = toyPeers.filter { $0.toy.audUID == uid }.count
+            guard let i = ranked.firstIndex(where: { $0 === self }), i + taken < Self.audienceLimit(foot.kind) else { continue }
+            guard rand() < Self.audienceChance(foot.kind) * (idleMood == .grumpy ? (ToyTuning.grumpyPlay ? 0.5 : 0) : 1) else { continue }
+            // he stays where he is until the player has ARRIVED at the toy (stage 3): then the spot is chosen against where everybody really stands and he walks there (stage 1): two walkers never cross on the way in
+            toy.joined += 1; toy.audUID = uid; toy.audBy = show.by; toy.audStage = 3; toy.audUntil = clock + 14
+            toy.audNext = clock; toy.audReacted = false; toy.audTurn = false
+            idleState.cooldown = max(idleState.cooldown, 5)
+            if EmoteSpot.logOn { NSLog("[toyshare] t=%.1f id=%d joins %@ uid=%d by=%d", variety.now, steerID, foot.kind.rawValue, uid, show.by) }
+            return true
+        }
+        return false
+    }
+
+    private func toyAudienceEnd(_ clock: Float, cool: Float = 40) {
+        toy.audUID = -1; toy.audStage = 0; toy.audCool = clock + cool
+        // (watching counts as his toy moment: no other toy pick at once, and a short breather before the next idle: toys are not used more overall)
+        toy.lastDirect = max(toy.lastDirect, variety.now); idleState.cooldown = max(idleState.cooldown, rand(3, 6))
+    }
+
+    private func toyAudienceRun(_ sim: SoftBody, _ f: DecorField, _ clock: Float) -> Bool {
+        guard let foot = f.foot(toy.audUID), toyFreeForQueueA, clock < toy.audUntil else { toyAudienceEnd(clock, cool: 20); return false }
+        let uid = foot.uid
+        let user = toyPeers.first { $0.steerID == toy.audBy }
+        let playing = f.occupant[uid] == toy.audBy
+        let arrived = user.map { !$0.idleState.decorGo && $0.idleState.decorUID == uid } ?? false
+        if toy.audStage == 3 {
+            guard arrived else { return true }
+            guard let user, let spot = toyAudienceSpot(foot, user: user) else { toyAudienceEnd(clock, cool: 20); return false }
+            toy.audSpot = spot; toy.audStage = 1
+            if foot.kind == .drum { user.idleState.hold += 3 }          // (the drummer keeps the beat going for his audience: +3 s once)
+            else if foot.kind == .hoop { user.idleState.hold += 2 }
+            requestNow(.goTo(spot))
+            return true
+        }
+        if toy.audStage == 1 {
+            if scriptIsNone, pending == nil {
+                if simd_distance(position, toy.audSpot) < 0.6 { toy.audStage = 2; toy.audNext = clock + 0.3 }
+                else if clock < toy.audUntil - 4 { requestNow(.goTo(toy.audSpot)) }
+                else { toyAudienceEnd(clock, cool: 20); return false }
+            }
+            if foot.kind != .spintop, !playing, clock - (f.toys.shows[uid]?.t ?? clock) > 1.0 { toyAudienceEnd(clock, cool: 20); return false }
+            return true
+        }
+        // standing at the spot
+        guard toyFreeAnyMood, pending == nil, scriptIsNone else { return true }
+        let grump = idleMood == .grumpy
+        let c = f.position(foot)
+        switch foot.kind {
+        case .drum:
+            guard playing else { toyAudienceEnd(clock, cool: 45); return false }
+            guard arrived else { return true }
+            // the drummer keeps the beat going a little longer for his audience (once, +3 s on his own hold) and thumps it every 0.8 s: the same thump + sound as his own
+            if !toy.audReacted { toy.audReacted = true; toy.audBeat = clock + 0.4 }
+            if let user, clock >= toy.audBeat, user.idleState.kind == .decorBoop, user.idleState.decorBooped {
+                toy.audBeat = clock + 0.8
+                user.jellyKick = max(user.jellyKick, 1.2)
+                f.kick(uid, 0.8)
+                AudioHub.shared.play(.boop, jelly: user.steerID, x: user.px, volume: 0.8, rate: Float(0.5 + 0.08 * Double(Int(rand() * 4))))
+            }
+            guard clock >= toy.audNext else { return true }
+            toy.audNext = clock + 0.5
+            if !grump { face(.excited, hold: 1.4) }
+            let moves: [IdleKind] = [.bounce, .skipHop, .joy, .bounce]
+            if grump { _ = beginLook(at: c, hold: 1.6, resume: nil, face: .curious, kind: .watch) }
+            else if idleStart(moves[toy.shared % moves.count], sim) { toy.shared += 1 } else { _ = beginLook(at: c, hold: 1.2, resume: nil, face: .excited, kind: .watch) }
+        case .spintop:
+            let a = f.anim[uid]
+            if toy.audReacted { toyAudienceEnd(clock, cool: 45); return false }
+            if let a, a.fallT >= 0, a.fallT < 1.2 {
+                toy.audReacted = true; toy.shared += 1
+                if !grump { face(.excited, hold: 1.4) }
+                if !idleStart(grump || rand() >= 0.65 ? .startle : .giggle, sim) { _ = beginLook(at: c, hold: 1.0, resume: nil, face: .excited, kind: .watch) }
+            } else if clock >= toy.audNext {
+                toy.audNext = clock + rand(1.6, 2.6)
+                _ = beginLook(at: c, hold: rand(1.2, 1.8), resume: nil, face: .curious, kind: .watch)
+            } else if clock > (f.toys.shows[uid]?.t ?? clock) + 10 { toyAudienceEnd(clock, cool: 30); return false }
+        case .hoop:
+            if toy.audReacted {
+                toyAudienceEnd(clock, cool: 45)
+                if toy.audTurn, rand() < 0.5 { toyGo(uid, sim) }
+                return false
+            }
+            guard playing else { toyAudienceEnd(clock, cool: 30); return false }
+            if user?.idleState.decorBooped == true {
+                toy.audReacted = true; toy.audTurn = true; toy.shared += 1
+                if grump { _ = beginLook(at: c, hold: 1.4, resume: nil, face: .curious, kind: .watch) } else { face(.excited, hold: 1.4); _ = idleStart(.joy, sim) }
+            } else if clock >= toy.audNext {
+                toy.audNext = clock + rand(1.4, 2.2)
+                _ = beginLook(at: c, hold: rand(1.0, 1.6), resume: nil, face: .hopeful, kind: .watch)
+            }
+        default:          // bouncy mat: bob while the first bounces, take the turn as he gets off
+            if !playing {
+                // the first one is off the mat's pad AND out of the waiter's way before the next steps on (never two bodies on one spot)
+                if let user, simd_distance(user.position, c) < 2.4 || simd_distance(user.position, position) < 1.6 { return true }          // (the first is well off the mat: bodies never closer than 1.2 on the way on)
+                toyAudienceEnd(clock, cool: 60)
+                toy.shared += 1
+                if rand() < 0.5 { toyGo(uid, sim) }          // (half the time he takes the turn: the mat is not used more overall)
+                return false
+            }
+            if clock >= toy.audNext, arrived {
+                toy.audNext = clock + rand(1.6, 2.4)
+                if grump { _ = beginLook(at: c, hold: 1.4, resume: nil, face: .curious, kind: .watch) } else { face(.excited, hold: 1.2); _ = idleStart(.bounce, sim) }
+            }
+        }
+        return true
+    }
+
+    /// A spot for a watcher: round the player (drum, hoop) or the piece (top, mat), 1.6...2.2 (the mat: 1.4...1.8 from its edge), 1.3 from every body, the walk 1.3 clear of every standing body.
+    func toyAudienceSpot(_ foot: DecorFoot, user: BlobBrain) -> SIMD2<Float>? {
+        let f = DecorField.shared
+        let c = f.position(foot)
+        let aroundUser = foot.kind == .drum || foot.kind == .hoop
+        let centre = aroundUser ? user.idleState.target : c
+        let userSpot = user.idleState.target
+        var bodies: [SIMD2<Float>] = [userSpot]
+        for o in toyPeers { bodies.append(o.position); if o.toy.audUID >= 0 { bodies.append(o.toy.audSpot) } }
+        let base = simd_length(position - centre) > 1e-3 ? simd_normalize(position - centre) : SIMD2<Float>(0, 1)
+        let a0 = atan2f(base.x, base.y)
+        for k in 0..<18 {
+            let off = Float((k + 1) / 2) * 0.35 * (k % 2 == 0 ? 1 : -1)
+            let a = a0 + off
+            let u = SIMD2(sinf(a), cosf(a))
+            let r: Float = foot.kind == .bouncymat ? 0 : 1.6 + 0.3 * Float(k % 3)
+            var p = centre + u * r
+            if foot.kind == .bouncymat { var t: Float = 0.3; while t < 6, foot.distance(c + u * t) < 1.4 { t += 0.05 }; p = c + u * t }
+            let q = fixed(p)
+            guard simd_distance(p, q) < 0.08, peerFree(q) else { continue }
+            if foot.kind != .bouncymat, foot.distance(q) < 0.9 { continue }
+            if bodies.contains(where: { simd_distance($0, q) < 1.3 }) || simd_distance(userSpot, q) < 1.6 { continue }
+            if f.feet.contains(where: { $0.uid != foot.uid && $0.spec.solid && $0.distance(q) < footprint * $0.spec.reach + 0.1 }) { continue }
+            // the walk keeps as far from every standing body as it already is, and at least 1.3 where it can
+            var clear = true
+            for o in toyPeers {
+                let d = Self.segDist(o.position, position, q)
+                if d < min(1.3, simd_distance(position, o.position)) - 0.05 { clear = false; break }
+            }
+            guard clear, reachable(position, q) else { continue }
+            return q
+        }
+        return nil
+    }
+    static func segDist(_ p: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+        let ab = b - a, l2 = simd_dot(ab, ab)
+        if l2 < 1e-6 { return simd_distance(p, a) }
+        let t = min(1, max(0, simd_dot(p - a, ab) / l2))
+        return simd_distance(p, a + ab * t)
     }
 }

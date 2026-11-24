@@ -93,6 +93,9 @@ nonisolated enum NeedsTuning {
     /// First launch ever: hunger is seeded wanting, the rest comfortably full.
     static let seedHunger: Float = 0.2
     static let seedOthers: Float = 0.85
+    /// A Jelmiko that comes home NEW (the first gift, a Spring adoption, a first arrival from Camp's list) or comes back from Camp arrives with every need at the top:
+    /// the Profile reads Full / Quenched / Content, no need bubble, no "needs you" dot. Needs then fall at the normal rate from that moment.
+    static let seedArrival: Float = 1
     /// Seconds between automatic saves while playing.
     static let saveEvery: Float = 15
     static let defaultsKey = "BlobNeeds.v1"

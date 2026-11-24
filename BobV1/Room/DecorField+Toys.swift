@@ -28,6 +28,9 @@ enum ToyTuning {
     static let directChance: Float = 0.40
     /// Least seconds between two of his toy sessions' starts (so toy play is mixed with roaming, socials and rest).
     static let directGap: Float = 20
+    /// toy-audit-r1: a grumpy Jelmiko plays with the kick / hop toys at this share of a happy one's rate (a shorter go: no run of kicks, fewer bounces).
+    nonisolated(unsafe) static var grumpyPlay: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ToyGrumpy") != nil && UserDefaults.standard.integer(forKey: "ToyGrumpy") == 0)          // (dev: -ToyGrumpy 0 = the old never)
+    static var grumpyShare: Float { grumpyPlay ? 0.12 : 0 }          // (toy-audit-r1: the direct pick chance of a grumpy Jelmiko = this x the happy chance; the ONLY way he reaches the kick / hop toys; measured in the takes, see the hand-back)
     /// Founding set-up (launch, room switches) is not news.
     nonisolated(unsafe) static var settle: TimeInterval = 5
 }
@@ -47,6 +50,8 @@ struct ToyBook {
     var burstUID = -1, burstBy = -1
     var burstT: Float = -99
     var burstPos = SIMD2<Float>.zero
+    /// toy-audit-r1: the last go at a toy others may watch (drum, top, hoop, mat): who started it and when (BlobBrain+ToyPlay.swift, the audience).
+    var shows: [Int: (by: Int, t: Float)] = [:]
 }
 
 extension DecorField {

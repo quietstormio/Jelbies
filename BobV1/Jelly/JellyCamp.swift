@@ -140,7 +140,8 @@ nonisolated enum JellyCamp {
     @MainActor static func restamp(_ id: Int, now: Date, _ d: UserDefaults = .standard) {
         let t = now.timeIntervalSince1970
         let needsKey = JellyKeys.needs(id)
-        if var n = d.dictionary(forKey: needsKey) { n["time"] = t; n["asleep"] = false; d.set(n, forKey: needsKey) }
+        // Coming home from Camp: it was looked after there, so it arrives with every need full (the stay is not time away either: the clock restarts now).
+        if var n = d.dictionary(forKey: needsKey) { n["time"] = t; n["asleep"] = false; n["levels"] = [Double](repeating: Double(NeedsTuning.seedArrival), count: 3); d.set(n, forKey: needsKey) }
         let grimeKey = JellyKeys.grime(id)
         if let data = d.data(forKey: grimeKey), var g = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
             g["at"] = t
