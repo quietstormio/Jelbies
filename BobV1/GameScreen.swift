@@ -657,7 +657,7 @@ struct GameScreen: View {
             if atXZ.count == 2 { await sleep(15) }
             for k in kinds where !care.store.placedDecor.contains(where: { $0.kind == k }) {
                 care.store.grant(k.storeID)
-                if let p = care.store.place(k.storeID), k == .soccerball, atXZ.count == 2 { care.store.move(p.uid, to: SIMD2(atXZ[0], atXZ[1])) }
+                if let p = care.store.place(k.storeID, dev: true), k == .soccerball, atXZ.count == 2 { care.store.move(p.uid, to: SIMD2(atXZ[0], atXZ[1])) }
             }
             care.syncDecor()
             NSLog("[placesoccer] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
@@ -667,8 +667,8 @@ struct GameScreen: View {
             for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
             await sleep(2.5)
             let mode = d.integer(forKey: "PlayDemo")
-            if mode != 3 { for k in [DecorKind.ball, .soccerball, .beachball] { care.store.grant(k.storeID) }; if mode == 2 { care.store.grant("toy-bubbleWand") } }
-            if mode >= 2, mode <= 3 {
+            if mode != 3 { for k in (mode == 5 ? [DecorKind.ball, .soccerball] : [DecorKind.ball, .soccerball, .beachball]) { care.store.grant(k.storeID) }; if mode == 2 { care.store.grant("toy-bubbleWand") } }          // (-PlayDemo 5: only the bouncy and soccer balls, so the picker shows the Soccer net card without scrolling)
+            if mode >= 2, mode <= 3 || mode == 5 {
                 withAnimation(CareMenu.spring) { open.wrappedValue = true; picker.wrappedValue = .toy }
             } else {
                 func ballKind(_ k: String?) -> DecorKind? { switch k ?? "" { case "soccer": return .soccerball; case "beach": return .beachball; case "ball": return .ball; default: return nil } }
@@ -678,9 +678,24 @@ struct GameScreen: View {
                 for (gi, kind) in games.enumerated() {
                 if gi > 0 { await sleep(3) }
                 NSLog("[playtoss] demo game %d %@", gi, "\(kind)")
-                care.beginPlay(ball: kind)
+                care.beginPlay(ball: kind, net: gi == 0 && d.integer(forKey: "PlayDemoNet") != 0)          // (-PlayDemoNet 1: with the soccer net)
                 for _ in 0..<100 where care.play.camBlend < 0.95 { await sleep(0.1) }
                 await sleep(1.5)
+                #if targetEnvironment(simulator)
+                if d.integer(forKey: "PlayNetShots") != 0 || d.string(forKey: "PlayNetOnly") != nil {
+                    let enc = JSONEncoder(); enc.outputFormatting = .sortedKeys
+                    let decorJSON = { String(decoding: (try? enc.encode(care.store.placedDecor)) ?? Data(), as: UTF8.self) }
+                    NSLog("[playnet] store decor before Done: %@", decorJSON())
+                    NSLog("[playnet] field minigoals during Play: %@", DecorField.shared.kinds(.minigoal).map { "uid\($0.uid)@\($0.centre.x),\($0.centre.y)" }.joined(separator: " "))
+                    await care.play.runNetShots(runs: max(d.integer(forKey: "PlayNetShots"), 1), only: d.string(forKey: "PlayNetOnly"))
+                    if d.integer(forKey: "PlayDemoEnd") != 0 {
+                        await sleep(3); care.endPlay(); await sleep(0.3)
+                        NSLog("[playnet] store decor after Done: %@", decorJSON())
+                        await sleep(1.7)
+                        NSLog("[playnet] after Done: net pieces %d, minigoals: %@", DecorField.shared.feet.filter { $0.uid == PlayNetTuning.uid }.count, DecorField.shared.kinds(.minigoal).map { "uid\($0.uid)@\($0.centre.x),\($0.centre.y)" }.joined(separator: " "))
+                    }
+                }          // (capture aid: the play net's fixed shots, Play/PlayNetShots.swift)
+                #endif
                 if mode == 1 {
                     let speed = d.double(forKey: "PlayDemoSpeed") > 0 ? d.double(forKey: "PlayDemoSpeed") : 1.8
                     for round in 0..<max(d.integer(forKey: "PlayDemoRounds"), 1) where care.play.active {
@@ -1210,6 +1225,8 @@ struct GameScreen: View {
         let d = UserDefaults.standard
         // capture aid: -GrantTrick <rawValue> buys that Shop trick for everyone (the Tricks row shows it unlocked, the rest locked)
         if let g = d.string(forKey: "GrantTrick"), let t = VoiceTrick(rawValue: g) { model.care.store.grantTrickToEveryone(t) }
+        // capture aid: -GrantSoccerNet 1 owns the Soccer net (as if bought in the Shop; it is never placeable)
+        if d.integer(forKey: "GrantSoccerNet") != 0, model.care.store.count(DecorKind.minigoal.storeID) < 1 { model.care.store.grant(DecorKind.minigoal.storeID) }
         // capture aid: -ShowSeedGoods 1 makes a cared-for Jelbie for the Jelly Show: fed to the day's theme, bathed, Sway half learned, the three trick pages
         // bought and every trick learned, the wardrobe owned and dressed to the theme
         if d.integer(forKey: "ShowSeedGoods") != 0 {

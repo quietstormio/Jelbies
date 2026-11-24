@@ -764,6 +764,7 @@ struct BagSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
                 if let w = item.wear { Text(wearStatus(w)).font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("bag-wear-status-\(item.id)") }
+                else if item.kind == .decor, item.decor?.isPlayOnly == true { Text("x\(book.count(item.id))").font(SK.font(13, .heavy)).foregroundStyle(SK.muted) }          // (the soccer net: owned, comes out in Play, nothing to place)
                 else if item.kind == .decor {
                     let placed = book.placedCount(item.id)
                     Text("x\(book.count(item.id))" + (placed > 0 ? " \u{00B7} \(placed) in the room" : "") + " \u{00B7} \(item.roomUnits) spot\(item.roomUnits == 1 ? "" : "s")").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
@@ -813,6 +814,8 @@ struct BagSheet: View {
             }
         case .supply:
             pink("Use", item, enabled: care.canClean(jelly: who)) { close(); care.useSupply(item.id, on: who) }
+        case .decor where item.decor?.isPlayOnly == true:
+            EmptyView()
         case .decor:
             VStack(spacing: 6) {
                 pink("Place", item, enabled: book.canPlace(item)) { close(); care.placeDecor(item.id) }
