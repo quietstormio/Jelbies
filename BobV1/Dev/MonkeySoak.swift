@@ -63,14 +63,32 @@ enum MonkeySoak {
             var r = g.next(total), pick = menu[0].0
             for (name, w) in menu { if r < w { pick = name; break }; r -= w }
             // legal input only: at home with no trip on, the home buttons; during a trip the monkey waits for it (its own trip step brings it home)
-            if care.tripActive || care.raceBusy {
+            if care.tripActive || care.raceBusy || care.bath.active {          // (the bath's own screen: no care menu)
                 await sleep(2); continue
             }
+            if let why = illegal(pick, care: care) { NSLog("[monkey] skip act=%@ why=%@ sim=%.0f", pick, why, sim()); await sleep(1); continue }
             say(pick)
             await act(pick, arg: nil, care: care, ui: ui, g: &g, sleep: sleep)
             await sleep(gap * (0.3 + 1.4 * g.unit()))
         }
         NSLog("[monkey] done seed=%llu steps=%d sim=%.0f", seed, n, sim())
+    }
+
+    /// The button the action presses is greyed out now (HUDMenu.enabled, the same rule the HUD draws with): a player could not press it.
+    static func illegal(_ a: String, care: GameCare) -> String? {
+        let item: HUDItem?
+        switch a {
+        case "feed", "feedone", "welcomeplayfeed": item = .feed
+        case "water", "drinkone": item = .drink
+        case "come", "comecancel", "cuddle": item = .come
+        case "comeall": item = .callAll
+        case "wash": item = .clean
+        case "cancel": return care.cancelPill ? nil : "no Cancel pill"
+        case "release": return care.focus.isActive ? nil : "no close-up"
+        default: item = nil
+        }
+        guard let item else { return nil }
+        return HUDMenu.enabled(item, .group, care: care) ? nil : "\(item) greyed out"
     }
 
     private static func someJelly(_ care: GameCare, _ g: inout LCG) -> Int { g.next(max(care.jellies.count, 1)) }
