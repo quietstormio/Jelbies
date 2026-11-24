@@ -360,7 +360,7 @@ extension GameCare {
                             if !rest.isEmpty { route = [lead] + rest }
                         }
                     } else if g.phase == .leaving, !m.replan {          // out the same way: the last leg is a straight walk out of the entrance
-                        let leadOut = to - inward * 2.4
+                        let leadOut = to + inward * 2.4          // (2.4 u inside the entrance: the last leg is straight)
                         let pre = crowdRoute(g, m, from: from, to: leadOut, landscape: landscape)
                         if !pre.isEmpty { route = pre + [to] }
                     }
