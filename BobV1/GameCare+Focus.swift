@@ -27,6 +27,13 @@ final class FocusGroup {
     /// re-asked at once, this many times at most, while the stander steps aside (`MelonController.clearWay`); not counted against the calm retries.
     static let shortRetries = 6
     var approach: [Int: Approach] = [:]
+    /// come-here-freeze-r1: Jellies whose autonomy THE CLOSE-UP switched off and has not yet given back (id -> seconds spent with no close-up on). Survives `begin` / `clear`: it is the safety net's own record
+    /// (`GameCare.focusNetTick`), so a hand-back that was lost on any path is still found. A Jelly is in it from the moment the call turns his autonomy off until the hand-back turns it on.
+    var took: [Int: Float] = [:]
+    /// Bodies the safety net released (tests / diagnostics).
+    var netReleased = 0
+    /// Dev / test switches: the single hand-back when the call ends (off = the earlier per-path behaviour), and the safety net.
+    nonisolated(unsafe) static var handBackFix = ProcessInfo.processInfo.environment["FREEZE_FIX_OFF"] == nil, netEnabled = ProcessInfo.processInfo.environment["FREEZE_FIX_OFF"] == nil
     /// Jellies whose `.come` walk has just finished (reported by their brain).
     var came: Set<Int> = []
     /// The Jelly under the finger in the close-up (set by the stage); his centroid anchors the hearts (`touchAnchor`).
@@ -321,7 +328,7 @@ extension GameCare {
         select.cancel()
         // a close-up that has just ended hands the paused Jellies' wandering back one brain per step (`driveFocus`); a call landing inside that window used
         // to wipe `saved` in `begin` and leave them with autonomy off for good (2026-10-21: "the other ones are stuck"). Hand it back here first.
-        for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a }
+        if FocusGroup.handBackFix { handBackEveryone() } else { for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a } }          // (a call that lands inside the window after one has just ended: everyone is given back first, Jelly 0 too, so no snapshot below records an "off")
         focusGroup.rowSpacing = isPreview ? GameCamera.pickRowSpacing : GameCamera.focusRowSpacing
         let others = (isPreview || !FocusGroup.sleeperFix) ? [] : (0..<jellies.count).filter { !ids.contains($0) && brainFor($0)?.isSleeping == true }.compactMap { floorOf($0) }          // (the uncalled who LIE: the row is laid clear of them; an awake one walks out of the camera's wedge by himself, `evictFromKeepOut`)
         focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }), avoiding: others, reachable: { p in ids.compactMap { self.brainFor($0) }.allSatisfy { simd_distance($0.fixed(p), p) < 0.12 } })
@@ -401,7 +408,7 @@ extension GameCare {
                 g.zeroPending = false
                 enterFocus(brain: b)
             } else {
-                g.saved[id] = autonomySnapshot(id, b); b.autonomy = false; b.onFinished = nil
+                g.saved[id] = autonomySnapshot(id, b); b.autonomy = false; g.took[id] = 0; b.onFinished = nil
                 if g.markArrived(id) { focus.arrive(snap: isPreview); if !silentArrival { AudioHub.shared.chirp(jelly: id, .happy, src: "group") } }
             }
             if !focus.isActive { return }
@@ -415,6 +422,7 @@ extension GameCare {
         guard !g.ids.isEmpty || !g.saved.isEmpty else { return }
         let phase = focus.phase
         if phase == .roaming {                     // over: hand the wandering back, then forget the group once everybody has
+            if FocusGroup.handBackFix { handBackEveryone(); return }          // (come-here-freeze-r1: one place, everyone at once, Jelly 0 too)
             if let a = g.saved.removeValue(forKey: id) { brain.autonomy = a }
             if let gp = g.gapSaved.removeValue(forKey: id) { brain.peerGap = gp }
             if id != 0 { brain.onFinished = nil }
@@ -461,7 +469,7 @@ extension GameCare {
             // standing on his slot and still = arrived (the turn and the wave play AFTER arrival, they do not gate it)
             if simd_length(Self.floorPos(brain, sim) - g.spot(of: id)) < 0.25 { s.onSlot += dt } else { s.onSlot = 0 }
             if s.onSlot > 0.3 {
-                g.saved[id] = autonomySnapshot(id, brain); brain.autonomy = false; brain.onFinished = nil
+                g.saved[id] = autonomySnapshot(id, brain); brain.autonomy = false; g.took[id] = 0; brain.onFinished = nil
                 if g.markArrived(id) { focus.arrive(snap: isPreview); if !silentArrival { AudioHub.shared.chirp(jelly: id, .happy, src: "group") } }
                 return
             }
@@ -476,7 +484,7 @@ extension GameCare {
                 s.calm = 0; g.came.remove(id)
                 let here = Self.floorPos(brain, sim)
                 if simd_length(here - g.spot(of: id)) < 0.5 {
-                    g.saved[id] = autonomySnapshot(id, brain); brain.autonomy = false
+                    g.saved[id] = autonomySnapshot(id, brain); brain.autonomy = false; g.took[id] = 0
                     brain.onFinished = nil
                     if g.markArrived(id) { focus.arrive(snap: isPreview); if !silentArrival { AudioHub.shared.chirp(jelly: id, .happy, src: "group") } }
                 } else if s.retries < 2 { s.retries += 1; s.age = 0; brain.requestNow(.come(to: g.spot(of: id))) }
@@ -495,7 +503,7 @@ extension GameCare {
         case .leaving:
             if !s.hopped {
                 s.hopped = true
-                if let a = g.saved.removeValue(forKey: id) { brain.autonomy = a }
+                if let a = g.saved.removeValue(forKey: id) { brain.autonomy = a; g.took[id] = nil }
                 if let sim { brain.startHopPlay(sim: sim, distance: 0.25) }
             }
         default: break
