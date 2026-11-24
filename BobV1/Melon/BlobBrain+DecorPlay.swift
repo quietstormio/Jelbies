@@ -27,7 +27,14 @@ extension BlobBrain {
         #endif
     }()
     static let slideRunOut: Float = 0
-    static let slideSkid: Float = 0.2          // (no-clip-r1 round 2: no coast. A 0.2 coast past the lip made ParkSlideRoundTests stand-still / drops red (bisected); the landing belly overlap stays at the measured ~14 cm)
+    /// Off: any 0.2 shift of the landing (the ride's coast, or this skid while squashed) turned ParkSlideRoundTests stand-still / drops red (bisected, round 3). `-SlideSkid 0.2` brings it back for a look.
+    nonisolated(unsafe) static var slideSkid: Float = {
+        #if targetEnvironment(simulator)
+        return UserDefaults.standard.float(forKey: "SlideSkid")
+        #else
+        return 0
+        #endif
+    }()          // (no-clip-r1 round 2: no coast. A 0.2 coast past the lip made ParkSlideRoundTests stand-still / drops red (bisected); the landing belly overlap stays at the measured ~14 cm)
     /// no-clip-r1: the floor he stands, sits and rides on is this much above the art's surface (his seated belly sank 5 cm into the platform).
     static var slideLift: Float { legacyOff["SlideNoLift"] == true ? 0 : 0.05 }
     static var slideLength: Float {
