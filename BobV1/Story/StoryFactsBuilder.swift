@@ -65,13 +65,15 @@ enum StoryFactsBuilder {
         f.togetherShare = h.togetherShare; f.restShare = h.restShare
         f.sleepHabit = h.hasHistory && h.restShare >= 0.3 ? "naps" : nil
         f.minutesSeen = h.minutes
-        f.daysTracked = h.firstDay == 0 ? 0 : max(0, h.decayDay - h.firstDay)
+        f.daysTracked = h.daysTracked
     }
 
     nonisolated static func housemate(_ h: StoryHabits, id: Int, name: String, kind: String, other: StoryHabits? = nil) -> StoryFacts.Housemate {
         var m = StoryFacts.Housemate(id: id, name: name, kindName: kind, playShare: h.playShare(with: id), togetherSeconds: h.seconds(with: id), topEmote: h.topEmote(with: id))
         m.groupKind = h.topGroupKind(with: id); m.sharedGroup = m.groupKind != nil
+        m.sharedSeconds = h.sharedEver(with: id)
         if let o = other {
+            m.livedTogether = min(h.daysTracked, o.daysTracked) >= 2 && h.everSeconds >= 1800 && o.everSeconds >= 1800
             if let a = h.favouriteSpot, a == o.favouriteSpot { m.sharedSpot = a }
             m.napBuddies = h.hasHistory && o.hasHistory && h.restShare >= 0.3 && o.restShare >= 0.3
         }

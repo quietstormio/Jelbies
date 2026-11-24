@@ -29,6 +29,9 @@ nonisolated struct StoryFacts: Codable, Equatable, Sendable {
         /// Both favour the same floor area (a StoryPhrases.spot key), and both nap a lot: true shared facts for the notes.
         var sharedSpot: String?
         var napBuddies = false
+        /// housemate-notes-r1: seconds EVER shared (sessions + nearness, never decayed) and whether the two have really lived together a while (both tracked for days, a good while each).
+        var sharedSeconds = 0
+        var livedTogether = false
         /// Phase 3 fills this (a "Relationship" level for the pair); nil for now.
         var relationshipLevel: String?
     }
@@ -153,7 +156,13 @@ nonisolated enum StoryFill {
         if let m = h ?? f.housemates.first(where: { $0.id == f.mostPlayedWithID }), m.togetherSeconds >= 60 {
             if h == nil { k.insert("partner") } else { k.insert("together"); if m.sharedGroup { k.insert("sharedGroup") } }
             if v["EMOTE"] != nil { k.insert("topEmote") }
-        } else if h != nil { k.insert("gettingToKnow") }
+        } else if let h {
+            switch StoryTemplates.tier(h) {
+            case .near: k.insert("sharedTime")
+            case .home: k.insert("livedTogether")
+            default: k.insert("gettingToKnow")
+            }
+        }
         if let h { if h.sharedSpot != nil, v["SPOT"] != nil { k.insert("sharedSpot") }; if h.napBuddies { k.insert("napBuddies") } }
         if f.relationshipLevel != nil { k.insert("bond") }
         if let n = f.news, n.kind != "bond" || v["LEVEL"] != nil { k.insert(n.factKey) }

@@ -119,16 +119,20 @@ nonisolated enum StoryTemplates {
 
     // MARK: the friendship bank (one sentence each)
 
-    enum Tier: String, Sendable { case close, regular, few }
+    /// close / regular: they play together (sessions); near: they keep each other company (nearness, ball play, napping side by side) but little real pair play; home: the two have lived together
+    /// for days but the game has little else on them; few: they have just met (the only tier a Profile may call "still finding out").
+    enum Tier: String, Sendable { case close, regular, near, home, few }
     struct NotePattern: Sendable {
         let id: Int; let tiers: Set<Tier>; let keys: [String]; let text: String
         var emote = false          // uses {EMOTE}
         var only: String?          // only when their top shared activity is exactly this SocialKind key
         var groupKinds: [String] = []          // only when the group session they shared most is one of these SocialKind keys
         var spot = false, nap = false
+        /// Only when the time EVER shared is under `maxShared` / at least `minShared` seconds (a claim about how new or how long the friendship is).
+        var minShared = 0, maxShared = Int.max
     }
-    private static func N(_ id: Int, _ tiers: [Tier], _ keys: [String], _ text: String, emote: Bool = false, only: String? = nil, groupKinds: [String] = [], spot: Bool = false, nap: Bool = false) -> NotePattern {
-        NotePattern(id: id, tiers: Set(tiers), keys: keys, text: text, emote: emote, only: only, groupKinds: groupKinds, spot: spot, nap: nap)
+    private static func N(_ id: Int, _ tiers: [Tier], _ keys: [String], _ text: String, emote: Bool = false, only: String? = nil, groupKinds: [String] = [], spot: Bool = false, nap: Bool = false, minShared: Int = 0, maxShared: Int = .max) -> NotePattern {
+        NotePattern(id: id, tiers: Set(tiers), keys: keys, text: text, emote: emote, only: only, groupKinds: groupKinds, spot: spot, nap: nap, minShared: minShared, maxShared: maxShared)
     }
     private static let tg = ["together"], few = ["gettingToKnow"]
 
@@ -143,7 +147,7 @@ nonisolated enum StoryTemplates {
         N(5, [.few], few, "Getting used to each other."),
         N(6, [.few], few, "Just getting started as friends."),
         // some play
-        N(7, [.regular], tg, "Starting to play together."),
+        N(7, [.regular], tg, "Starting to play together.", maxShared: 1800),
         N(8, [.regular], tg, "Play together now and then."),
         N(9, [.regular], tg, "Sometimes play together."),
         // most played with
@@ -165,16 +169,24 @@ nonisolated enum StoryTemplates {
         N(29, [.close, .regular], tg + ["topEmote"], "Passing the ball about is their thing.", only: "pass"),
         N(30, [.close, .regular], tg + ["topEmote"], "Hopping along side by side.", only: "hopAlong"),
         // a shared spot and a shared habit
-        N(31, [.close, .regular, .few], ["favouriteSpot", "sharedSpot"], "Both like it {SPOT}.", spot: true),
-        N(32, [.close, .regular, .few], ["favouriteSpot", "sharedSpot"], "Share a favourite spot {SPOT}.", spot: true),
-        N(33, [.close, .regular, .few], ["favouriteSpot", "sharedSpot"], "Often found {SPOT} together.", spot: true),
-        N(34, [.close, .regular, .few], ["napBuddies"], "Nap buddies.", nap: true),
-        N(35, [.close, .regular, .few], ["napBuddies"], "Both big nappers.", nap: true),
+        N(31, [.close, .regular, .near, .home, .few], ["favouriteSpot", "sharedSpot"], "Both like it {SPOT}.", spot: true),
+        N(32, [.close, .regular, .near, .home, .few], ["favouriteSpot", "sharedSpot"], "Share a favourite spot {SPOT}.", spot: true),
+        N(33, [.close, .regular, .near, .home, .few], ["favouriteSpot", "sharedSpot"], "Often found {SPOT} together.", spot: true),
+        N(34, [.close, .regular, .near, .home, .few], ["napBuddies"], "Nap buddies.", nap: true),
+        N(35, [.close, .regular, .near, .home, .few], ["napBuddies"], "Both big nappers.", nap: true),
         // a group session they shared lately (only when the game knows which kind it was)
         N(36, [.close, .regular], tg + ["sharedGroup"], "Joined a conga line together.", groupKinds: ["conga", "congaLine"]),
         N(37, [.close, .regular], tg + ["sharedGroup"], "Shared a group hug lately.", groupKinds: ["groupHug"]),
         N(38, [.close, .regular], tg + ["sharedGroup"], "Danced in a ring together.", groupKinds: ["circleDance", "ringDance"]),
         N(39, [.close, .regular], tg + ["sharedGroup"], "Cheered together lately.", groupKinds: ["groupCheer"]),
+        // they keep each other company (time near each other is NOT called play)
+        N(40, [.near], ["sharedTime"], "Often keep each other company."),
+        N(41, [.near], ["sharedTime"], "Like to be close by each other."),
+        N(42, [.near], ["sharedTime"], "Spend a lot of time side by side.", minShared: 3600),
+        // they have lived together for days; nothing more is on record
+        N(43, [.home], ["livedTogether"], "Share the same room."),
+        N(44, [.home], ["livedTogether"], "Housemates for a while now."),
+        N(45, [.home], ["livedTogether"], "Live together."),
     ]
 
     /// The first word of a note as it will be read (letters only, lower case).
@@ -203,13 +215,16 @@ nonisolated enum StoryTemplates {
         return n
     }
 
-    /// Sampled awake time together below which a long-time Jelmiko's row says nothing ("Still finding out"): about 10 minutes. The "little time together" notes belong to a real newcomer only.
-    static let noteMinSeconds = 600
-    static func noteAllowed(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> Bool { f.newcomer || h.togetherSeconds >= noteMinSeconds }
+    /// housemate-notes-r1. The RULE: a row says "Still finding out" only for a pair that has truly just met: under `nearMinSeconds` ever shared (sessions + nearness, never decayed),
+    /// under a minute of play lately, and not yet days under one roof. Any pair past that has a note (a real newcomer's "just met" notes aside, which are about the newcomer).
+    static let nearMinSeconds = 600
+    static func noteAllowed(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> Bool { f.newcomer || tier(h) != .few }
 
     static func tier(_ h: StoryFacts.Housemate) -> Tier {
         if h.togetherSeconds >= 300 && h.playShare >= 0.5 { return .close }
         if h.togetherSeconds >= 60 { return .regular }
+        if h.sharedSeconds >= nearMinSeconds { return .near }
+        if h.livedTogether { return .home }
         return .few
     }
 
@@ -251,7 +266,7 @@ nonisolated enum StoryTemplates {
         let t = tier(h)
         let values = StoryFill.values(f, with: h), offered = StoryFill.offered(f, with: h), avail = StoryFill.facts(f, with: h)
         let eligible = noteBank.filter { p in
-            guard p.tiers.contains(t), !p.emote || values["EMOTE"] != nil, p.only == nil || p.only == h.topEmote, (p.groupKinds.isEmpty || (h.groupKind.map { p.groupKinds.contains($0) } ?? false)), !p.spot || (h.sharedSpot != nil && values["SPOT"] != nil), !p.nap || h.napBuddies else { return false }
+            guard p.tiers.contains(t), h.sharedSeconds >= p.minShared, h.sharedSeconds < p.maxShared, !p.emote || values["EMOTE"] != nil, p.only == nil || p.only == h.topEmote, (p.groupKinds.isEmpty || (h.groupKind.map { p.groupKinds.contains($0) } ?? false)), !p.spot || (h.sharedSpot != nil && values["SPOT"] != nil), !p.nap || h.napBuddies else { return false }
             return !avoid.contains(firstWord(p.text))
         }
         var pool = eligible.filter { !used.contains($0.id) }
