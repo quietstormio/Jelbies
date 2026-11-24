@@ -27,7 +27,7 @@ struct WalkPolishState {
 
 extension BlobBrain {
     /// The level a plain launch runs: the best iteration (3). `0` always restores the locked walk (`-WalkPolish 0`).
-    static let walkPolishDefault = 3
+    static let walkPolishDefault = 0          // (move-crowd-r1 merge: 0 until the owner picks a level from the side-by-side; level 3 = `-WalkPolish 3` / WALK_POLISH_DEFAULT=3)
     /// The switch (`-WalkPolish N` honoured where dev arguments are on; the default is `walkPolishDefault`).
     nonisolated(unsafe) static var walkPolish: Int = {
         if DevArgs.enabled, UserDefaults.standard.object(forKey: "WalkPolish") != nil { return UserDefaults.standard.integer(forKey: "WalkPolish") }
