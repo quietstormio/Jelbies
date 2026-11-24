@@ -302,7 +302,8 @@ extension GameCare {
         if Self.startVolleyPending, !volley.active, w.wait == nil {          // capture aid: `-StartVolley 1` match
             Self.startVolleyFrames += 1
             if Self.startVolleyFrames > 120 {
-                if let why = volleyBlocker(jelly: 0, match: true) { if Self.startVolleyFrames % 120 == 0 { volleyAidLog("STARTVOLLEY blocked: \(why)\n") } }          // (retries every step until the room allows it)
+                if let why = volleyBlocker(jelly: 0, match: true) { if focus.isActive, Self.startVolleyFrames % 240 == 0 { release() }          // (capture aid: a close-up held from the launch is let go)
+                    if Self.startVolleyFrames % 120 == 0 { volleyAidLog("STARTVOLLEY blocked: \(why)\n") } }          // (retries every step until the room allows it)
                 else {
                     Self.startVolleyPending = false
                     startVolley(jelly: 0, mode: .match(volley.book.chosen), seed: UInt64(max(UserDefaults.standard.integer(forKey: "VolleySeed"), 1)))
@@ -343,7 +344,7 @@ extension GameCare {
                 var p = 0
                 while p < sb.n { let y = sb.x[3 * p + 1]; arr.append(SIMD2(sb.x[3 * p], y)); top = max(top, y); p += 4 }
             }
-            s.setBody(i, x: c.x, z: c.z, lift: max(0, c.y - sb.restCentroid.y), top: top, grounded: b.volley.phase != .air)
+            s.setBody(i, x: c.x, z: c.z, lift: max(0, c.y - sb.restCentroid.y), top: top, grounded: b.volley.phase != .air, yaw: b.yaw)
             s.setCrown(i, volleyCrown(a))
             if b.volley.finished { s.bodyDone(i) }
             else if b.volley.phase == .ground, s.players[i].act != .stand, s.players[i].actT > 0.3 { s.bodyDone(i) }
@@ -363,7 +364,10 @@ extension GameCare {
         #endif
         s.tick(dt: dt)
         let events = s.takeEvents()
-        for (i, a) in w.players.enumerated() where i < s.players.count { a.brain?.volleyWant(x: s.players[i].wantX, z: s.players[i].wantZ, speed: s.players[i].stats.speed) }
+        for (i, a) in w.players.enumerated() where i < s.players.count {
+            a.brain?.volleyWant(x: s.players[i].wantX, z: s.players[i].wantZ, speed: s.players[i].stats.speed)
+            a.brain?.volley.restYaw = s.players[i].faceGoal ?? VolleySim.restYaw(team: s.players[i].team)          // (he looks at the ball while it is his to play)
+        }
         for e in events { applyVolley(e, &s) }
         // the slow beat of a match-point spike (real time: 0.6 s at 0.3x)
         if w.slowLeft > 0 { w.slowLeft -= dt / max(GameCare.volleySlowScale, 0.1); if w.slowLeft <= 0 { GameCare.volleySlowScale = 1 } }
@@ -416,12 +420,20 @@ extension GameCare {
         switch e {
         case .jump(let i, let dx, let dz, let apex, let block): if let a = body(i) { a.brain?.volleyJump(sim: a.sim, dx: dx, dz: dz, apex: apex, block: block) }
         case .spike(let i): body(i)?.brain?.volleySpike()
+        case .face(let i, let yaw): body(i)?.brain?.volley.faceYaw = yaw
         case .dive(let i, let dir):
             if let a = body(i) { a.brain?.volleyDive(sim: a.sim, dir: dir) }
             if s.players.indices.contains(i) { w.puffs.append((s.players[i].x + dir * 0.5, s.players[i].z, 0, 1.0)) }
         case .serveToss: AudioHub.shared.play(.whistle, volume: 0.35, rate: 1.3)
         case .contact(let i, let kind, let quality, let point, let normal, let speed):
             guard let a = body(i) else { return }
+            #if targetEnvironment(simulator)
+            if let b = a.brain, s.players.indices.contains(i) {          // measuring aid: where the ball was from the hitter's heading when the touch began (0 = dead ahead, 180 = behind his back)
+                let d = SIMD2(s.contactBall.x - s.players[i].x, s.contactBall.z - s.players[i].z), l = simd_length(d)
+                let ang = l < VolleyTuning.overheadRadius ? 0 : acosf(max(-1, min(1, simd_dot(VolleySim.forward(b.yaw), d / l)))) * 180 / .pi
+                volleyAidLog(String(format: "TOUCH p%d %@ angle %.0f off %.2f t %.2f\n", i, "\(kind)", ang, l, s.clock))
+            }
+            #endif
             a.brain?.volleyImpact(sim: a.sim, kind: kind, quality: quality, ball: point + normal * VolleyTuning.ballR * 0.65, normal: normal, speed: speed)
             let big = kind == .spike || kind == .block
             AudioHub.shared.play(big ? .volleySpike : .volleyBonk, jelly: a.id, x: point.x, volume: min(1.1, 0.6 + speed * 0.08))
