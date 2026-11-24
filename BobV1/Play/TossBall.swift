@@ -48,6 +48,8 @@ nonisolated enum TossEvent: Equatable, Sendable {
     case wall
     case bodyHit(id: Int, speed: Float)
     case headHit(id: Int)
+    /// play-net-r1: the soccer net (Play/PlayNet.swift).
+    case net(TossNetEvent)
 }
 
 /// What the ball may not enter, besides the Jelbies. `xHalf(z)` is the visible half width of the floor at depth z; `solid` is the signed distance to the
@@ -58,6 +60,8 @@ nonisolated struct TossWorld {
     var zFront: Float = TossTuning.zFront
     var solid: ((SIMD2<Float>) -> Float)?
     var solidTop: Float = 0.9
+    /// play-net-r1: the soccer net while it is up (nil = no net: nothing changes).
+    var net: TossNet?
 }
 
 nonisolated struct TossBall: Sendable {
@@ -69,9 +73,12 @@ nonisolated struct TossBall: Sendable {
     /// The Jelbie whose head the ball is on (a header in progress): the ball is not tested against him until it has left.
     var ignoring: Int?
     var ignoreT: Float = 0
-    /// beach-volley-r1: a returning ball that no body can strike or deflect (the dropped ball of a bout, on its way to the hand) / a ball only `ignoreAllBut` can touch (a bout header on its way to the one it is meant for).
+    /// play-net return round: the net's return flight is struck by nobody (every body ignored); set at the launch, cleared at the catch / past the row.
     var ignoreAll = false
+    /// beach-volley-r1: a ball only this one body may touch (a bout header on its way to the one it is meant for); every other body is ignored.
     var ignoreAllBut: Int?
+    /// play-net-r1: a goal was scored with this ball and it lies in the net (until the controller rolls it out).
+    var inNet = false
 
     init(pos: SIMD3<Float>, radius: Float) { self.pos = pos; self.radius = radius }
 
@@ -146,6 +153,7 @@ nonisolated struct TossBall: Sendable {
                 if vn < 0 { vel.x -= nrm.x * vn * (1 + 0.5); vel.z -= nrm.y * vn * (1 + 0.5); ev.append(.wall) }
             }
         }
+        if let net = w.net { net.resolve(&self, before: before, h: h, &ev) }          // (play-net-r1)
         // the Jelbies
         for b in w.bodies where b.id != ignoring && !ignoreAll && (ignoreAllBut == nil || b.id == ignoreAllBut) {
             let d = SIMD2(pos.x - b.pos.x, pos.z - b.pos.y)

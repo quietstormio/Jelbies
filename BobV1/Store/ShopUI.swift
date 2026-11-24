@@ -167,6 +167,7 @@ struct ShopScreen: View {
                 if let p = item.perk { PerkChip(kind: p) }
                 else if item.kind == .room { Text("New room").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .wallFrame { Text("Picture frame").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
+                else if item.decor?.isPlayOnly == true { Text("Comes out in Play").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .trickPage {
                     VStack(spacing: 3) {
@@ -427,7 +428,7 @@ struct ItemSheet: View {
         if item.isWearable && book.owns(item) { return "You have \(book.owned(item)) \u{00B7} buy another so two Jelmiko can match" }
         if item.unique && book.owns(item) { return "In your Bag" }
         if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
-        let dest = item.kind == .room ? "Live there from Rooms" : item.kind == .wallFrame ? "Hang it from your Bag or the album" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
+        let dest = item.kind == .room ? "Live there from Rooms" : item.kind == .wallFrame ? "Hang it from your Bag or the album" : item.isWearable ? "Wear it from your Bag" : item.decor?.isPlayOnly == true ? "Comes out in Play" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
         return "You'll have \(left) JellyCoins left \u{00B7} \(dest)"
     }
 
@@ -456,6 +457,7 @@ struct ItemSheet: View {
     private var effectTitle: String {
         if let p = item.perk { return "\(p.title) \u{00B7} \(durationText(p))" }
         if item.isWearable { return "Looks only" }
+        if item.decor?.isPlayOnly == true { return "Comes out in Play" }
         if item.kind == .decor { return item.roomUnits == 1 ? "Takes 1 spot" : "Takes \(item.roomUnits) spots" }
         if item.kind == .room { return "A new room to live in" }
         if item.kind == .wallFrame { return "A frame for the wall" }
@@ -470,6 +472,7 @@ struct ItemSheet: View {
         if let w = item.wear { return w.isShoe ? "No effect on speed. Shows in the room and in the Jelly Race." : "No effect on anything but looks. Wear it from your Bag, one piece per spot." }
         if item.kind == .room { return "Your Jelmiko move in and the room keeps its own furniture." }
         if item.kind == .wallFrame { return "Frame any photo from your album. You can move it, make it bigger or smaller, pick upright, square or wide, and slide the photo inside the frame." }
+        if item.decor?.isPlayOnly == true { return "It is never placed in the room. It stands at the back when you play soccer with the soccer ball in Play." }
         if item.kind == .decor { return "Your room has \(StoreTuning.roomCapacity) spots; \(book.roomUnitsUsed) used. Place it from your Bag, then drag it where you like." }
         if item.kind == .toy { return "Pick it from Play and the Jelmiko join in." }
         if item.food != nil { return item.description }

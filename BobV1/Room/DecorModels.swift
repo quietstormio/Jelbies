@@ -25,6 +25,9 @@ enum DecorModels {
         for f in feet {
             let c = field.position(f), v0 = b.mesh.vertices.count
             add(f.kind, at: c, lift: f.lift, anim: field.anim[f.uid] ?? DecorAnim(), time: time, uid: f.uid, into: b)
+            if f.scale != 1 {          // (play-net-r1: the play net's per-piece size, about its centre on the floor)
+                for i in v0..<b.mesh.vertices.count { let p = b.mesh.vertices[i].pos; b.mesh.vertices[i].pos = SIMD4(c.x + (p.x - c.x) * f.scale, p.y * f.scale, c.y + (p.z - c.y) * f.scale, p.w) }
+            }
             if f.quarter != 0 { turnVertices(&b.mesh, from: v0, about: c, yaw: f.yaw) }
         }
         return b.mesh

@@ -19,6 +19,8 @@ struct DecorDrawn {
     var activeShown = false
     var preview: SIMD2<Float>?
     var previewUID = -1
+    /// play-net-r1: where the play net stands while it is up (nil = none): the dirty key for the temporary piece.
+    var netAt: SIMD2<Float>?
 }
 
 extension GameCare {
@@ -26,12 +28,14 @@ extension GameCare {
     func syncDecor() {
         let hide = cafe.hidesDecor || park.hidesDecor || volley.hidesDecor || groom.inScene          // in the café (or the park) the room's furniture is away (it is not that room)
         let pv = dragPreview
-        if store.revision != decorDrawn.storeRevision || hide != decorDrawn.cafeHidden || pv?.at != decorDrawn.preview || (pv?.uid ?? -1) != decorDrawn.previewUID {
+        let netAt: SIMD2<Float>? = (play.netUp && !hide && !park.inScene) ? play.net.spec?.centre : nil          // (play-net-r1: the soccer net of Play mode, a temporary piece: never saved)
+        if store.revision != decorDrawn.storeRevision || hide != decorDrawn.cafeHidden || pv?.at != decorDrawn.preview || (pv?.uid ?? -1) != decorDrawn.previewUID || netAt != decorDrawn.netAt {
             if !hide, !park.inScene, dragPreview == nil, store.refitSlides() { return }          // (a saved slide whose landing is off the floor moved: draw again with the new revision)
             decorDrawn.storeRevision = store.revision; decorDrawn.cafeHidden = hide
-            decorDrawn.preview = pv?.at; decorDrawn.previewUID = pv?.uid ?? -1
+            decorDrawn.preview = pv?.at; decorDrawn.previewUID = pv?.uid ?? -1; decorDrawn.netAt = netAt
             var list = store.placedDecor
             if let pv, let i = list.firstIndex(where: { $0.uid == pv.uid }) { list[i].x = pv.at.x; list[i].z = pv.at.y }          // (the piece in the hand is drawn at the finger; the saved spot is untouched)
+            if let c = netAt { list.removeAll { $0.kind == .minigoal }; list.append(PlacedDecor(uid: PlayNetTuning.uid, kind: .minigoal, x: c.x, z: c.y)) }          // (the player's own goal is hidden while the play net is up, and comes back at Done)
             DecorField.shared.set(park.inScene ? (park.place == .camp ? [] : ParkVisitPlan.placedToday + parkBook.work.ownToys) : (hide ? [] : list))          // (the Camp yard has no toys)
         }
     }
