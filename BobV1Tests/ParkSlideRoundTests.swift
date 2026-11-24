@@ -102,10 +102,11 @@ final class ParkSlideRoundTests: XCTestCase {
         let c = DecorField.shared.foot(ParkToys.slideUID)!.centre
         var l: [(String, SIMD2<Float>)] = []
         for k in 0..<8 { let a = Float(k) * .pi / 4; l.append(("compass\(k)", c + SIMD2(sinf(a), cosf(a)) * 2.5)) }
-        l.append(("foot", SIMD2(2.9, 3.24))); l.append(("corner1", SIMD2(3.13, 3.55))); l.append(("corner2", SIMD2(1.30, 3.55)))
-        l.append(("C1real", SIMD2(1.86, 2.40)))
-        l.append(("C1real2", SIMD2(1.30, 3.55)))
-        l.append(("west0", SIMD2(1.2, 0.0))); l.append(("west1", SIMD2(1.5, 1.5))); l.append(("frontL", SIMD2(2.0, 3.3))); l.append(("northW", SIMD2(1.0, -1.0)))
+        let dz = ParkOpen.slideZ - 1.0          // (park-open-r1: these points are the slide's own surroundings; they move with it)
+        l.append(("foot", SIMD2(2.9, 3.24 + dz))); l.append(("corner1", SIMD2(3.13, 3.55 + dz))); l.append(("corner2", SIMD2(1.30, 3.55 + dz)))
+        l.append(("C1real", SIMD2(1.86, 2.40 + dz)))
+        l.append(("C1real2", SIMD2(1.30, 3.55 + dz)))
+        l.append(("west0", SIMD2(1.2, 0.0 + dz))); l.append(("west1", SIMD2(1.5, 1.5 + dz))); l.append(("frontL", SIMD2(2.0, 3.3 + dz))); l.append(("northW", SIMD2(1.0, -1.0 + dz)))
         return l
     }
 
