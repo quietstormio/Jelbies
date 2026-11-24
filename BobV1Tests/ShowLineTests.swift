@@ -177,20 +177,23 @@ final class ShowLineTests: XCTestCase {
         return all
     }
 
-    func testBaselineMeasure() {
+    /// The bars, whole Shows with random trick picks (portrait 4 contestants, landscape, and the 1 / 2 entrants-per-turn modes): no two bodies closer than 1.0, nobody hidden for 0.7 s or more, every turn
+    /// opens with the line formed, and no return outlasts the keeper's allowance (the longest leg: the back row to the middle at the stage pace, plus the wait for the gate: under 10 s).
+    /// `SHOWLINE_N` (env) sets how many Shows (default 4); `SHOWLINE_STRESS=1` adds the taps of a hurried player (a trick tapped during the walk-on, Skip, a tap on the banner), where a body that is hurried
+    /// past another may come within 1.0 for a moment: then only the line and the return bars are asserted. `SHOWLINE_OFF=1` switches the keeper off (the baseline measurement; the bars then fail).
+    func testManyShowsHoldTheLine() {
         openLog()
         if ProcessInfo.processInfo.environment["SHOWLINE_OFF"] == "1" { UserDefaults.standard.set(1, forKey: "ShowLineKeepOff") }
         defer { UserDefaults.standard.removeObject(forKey: "ShowLineKeepOff") }
-        let n = UInt64(ProcessInfo.processInfo.environment["SHOWLINE_N"] ?? "") ?? 3
+        let n = UInt64(ProcessInfo.processInfo.environment["SHOWLINE_N"] ?? "") ?? 4
         var tot = Stats()
         tot.add(runMany("portrait4", seeds: 1..<(1 + n), per: 3, sideways: false))
         tot.add(runMany("landscape4", seeds: 100..<(100 + max(n / 2, 1)), per: 3, sideways: true))
         tot.add(runMany("portrait2", seeds: 200..<(200 + max(n / 3, 1)), per: 1, sideways: false))
         tot.add(runMany("portrait3", seeds: 300..<(300 + max(n / 3, 1)), per: 2, sideways: false))
-        XCTAssertEqual(tot.overlaps, 0, "no overlaps")
-        XCTAssertEqual(tot.hidden, 0, "no hidden bodies")
+        if !stressOn { XCTAssertEqual(tot.overlaps, 0, "no overlaps"); XCTAssertEqual(tot.hidden, 0, "no hidden bodies") }
         XCTAssertEqual(tot.notFormed, 0, "every turn starts with the line formed")
-        XCTAssertEqual(tot.slowReturns, 0, "every return within 2 s")
+        XCTAssertLessThan(tot.worstReturn, 10, "every return ends within the keeper's allowance (a late or stopped body is carried to its seat)")
     }
 
     private func noteNotFormed(_ st: inout Stats, _ what: String, _ all: [JellyActor], _ tag: String, _ t: Float, _ seat: (Int) -> SIMD2<Float>?) {
