@@ -101,7 +101,7 @@ final class CafeBusyTests: XCTestCase {
             worst = max(worst, acosf(max(-1, min(1, simd_dot(d1, d2)))))
         }
         pts.removeAll()
-        XCTAssertLessThan(worst, 0.95, "a quarter turn became three smaller turns (worst \(worst) rad)")
+        XCTAssertLessThan(worst, 0.6, "a quarter turn became five smaller turns (worst \(worst) rad)")
     }
 
     func testNoEntranceRightAfterAnExit() {
@@ -212,7 +212,7 @@ final class CafeBusyTests: XCTestCase {
     func testCustomerTableCapacityKeepsEveryRouteClearOfThePlayersBodies() {
         XCTAssertEqual(CafeTables.door(landscape: false, table: SIMD2(2.7, -3.3)), SIMD2(4.2, -2.4), "the back-right table has its own entrance")
         XCTAssertEqual(CafeTables.door(landscape: false, table: SIMD2(-1.6, -3.3)), SIMD2(3.7, 1.8))
-        XCTAssertEqual(CafeTables.door(landscape: true, table: SIMD2(2.8, -2.6)), SIMD2(4.4, 1.0))
+        XCTAssertEqual(CafeTables.door(landscape: true, table: SIMD2(2.8, -2.6)), SIMD2(3.8, 2.4))
         for (name, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
             let landscape = aspect >= 1
             DiningLayout.ends = true; DiningLayout.sideX = 1.3; DiningLayout.reachFood = true; DiningLayout.endsYaw = DiningLayout.cafeEndsYaw

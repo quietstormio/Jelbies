@@ -392,7 +392,6 @@ extension GameCare {
                     if let f = route.first { b.yaw = atan2f(f.x - door.x, f.y - door.y) }          // (he already faces the way he walks: no turn before the first step)
                     Self.crowdLog(String(format: "ENTRY member %d appears at (%.2f,%.2f) bodyVisible=%d, first point (%.2f,%.2f)", m.actor.id, door.x, door.y, Self.crowdBodyVisible(door) ? 1 : 0, route.first?.x ?? 0, route.first?.y ?? 0))
                     b.restTimer = 0; b.reserved = false; b.mealFaceYaw = nil
-                    if i == 0 { crowdBell(g, entering: true); g.belled = true }
                 }
                 // round 4 (found with the stall log): a body that has sat or been parked can be left in a rest the brain will not walk out of ("idle, script none, restTimer 2-3 s" with a goTo asked and ignored,
                 // until an abort and a fresh ask). So every walk starts the way the re-ask did: abort, no commanded idle, then the goTo.
@@ -481,6 +480,9 @@ extension GameCare {
                 } else { crowdArrived(g, m, landscape: landscape) }
             }
         }
+        // the door bell goes with the door: coming in, when the first one shows on screen; going out, when the first one has left the frame (the way in is long when it runs past the camera's edge)
+        if g.phase == .arriving, !g.belled, g.members.contains(where: { $0.state == .walking && Self.crowdBodyVisible(Self.floorPos($0.actor.brain!, $0.actor.sim)) }) { crowdBell(g, entering: true); g.belled = true }
+        if g.phase == .leaving, !g.belled, g.members.contains(where: { $0.state == .walking && !Self.crowdBodyVisible(Self.floorPos($0.actor.brain!, $0.actor.sim)) && simd_distance(Self.floorPos($0.actor.brain!, $0.actor.sim), g.table.stands[$0.index]) > 2.0 }) { crowdBell(g, entering: false); g.belled = true }
         // the group's phase
         if g.phase == .arriving, g.members.allSatisfy({ $0.state == .seated }) {
             g.phase = .seated; cs.crowd?.seated(g.id)

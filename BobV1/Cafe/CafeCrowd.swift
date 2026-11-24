@@ -152,7 +152,7 @@ nonisolated enum CafeRoute {
     static func clearLine(_ a: SIMD2<Float>, _ b: SIMD2<Float>, base: [Disc], gap: Float) -> Bool {
         base.allSatisfy { d in segmentClear(a, b, .init(c: d.c, r: min(d.r, max(gap, 0.6)))) }
     }
-    /// Corners of a path turn gently: a corner sharper than 40 degrees becomes three points (a quarter-turn each way) so the walk never has to turn on the spot. `from` is where it starts.
+    /// Corners of a path turn gently: a corner sharper than 40 degrees becomes a five-point curve so the walk never has to turn on the spot. `from` is where it starts.
     static func rounded(from: SIMD2<Float>, path: [SIMD2<Float>], reach: Float = 1.1) -> [SIMD2<Float>] {
         guard path.count >= 2 else { return path }
         var pts = [from] + path
@@ -166,8 +166,8 @@ nonisolated enum CafeRoute {
             if ang > 0.7 {
                 let r = min(reach, 0.45 * l1, 0.45 * l2)
                 let q1 = v - d1 * r, q2 = v + d2 * r
-                let apex = v + ((q1 + q2) / 2 - v) * 0.4
-                out += [q1, apex, q2]
+                let ctrl = v + ((q1 + q2) / 2 - v) * 0.0          // (quadratic curve q1 -> q2 with the corner as its control point, five points: each turn about a fifth of the corner)
+                for t in [Float(0), 0.25, 0.5, 0.75, 1] { let u = 1 - t; out.append(q1 * (u * u) + ctrl * (2 * u * t) + q2 * (t * t)) }
             } else { out.append(v) }
         }
         out.append(pts[pts.count - 1])
