@@ -147,7 +147,8 @@ final class SoccerTests: XCTestCase {
             room(a)
             let book = StoreBook(wallet: DropsWallet(persists: false), persists: false)
             book.grant("decor-minigoal"); book.grant("decor-soccerball")
-            guard let g = book.place("decor-minigoal") else { return XCTFail("\(name): the goal has a spot") }
+            XCTAssertNil(book.place("decor-minigoal"), "\(name): the Soccer net is play-only: the player's route refuses it")          // (owner rule 2026-11-23; the dev route still places it for this layout test)
+            guard let g = book.place("decor-minigoal", dev: true) else { return XCTFail("\(name): the goal has a spot") }
             guard let b = book.place("decor-soccerball") else { return XCTFail("\(name): the ball has a spot") }
             XCTAssertTrue(DecorPlacement.isValid(.minigoal, at: g.at, among: [b]), "\(name): the goal's spot is valid")
             XCTAssertEqual(book.roomUnitsUsed, 3)

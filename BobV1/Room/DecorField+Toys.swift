@@ -82,7 +82,7 @@ extension DecorField {
         let now = ProcessInfo.processInfo.systemUptime
         if toys.firstSet < 0 { toys.firstSet = now }
         let settled = now - toys.firstSet >= ToyTuning.settle
-        for p in list {
+        for p in list where p.uid != PlayNetTuning.uid {          // (play-net-r1: the temporary play net is no news)
             guard let k = toys.known[p.uid] else {
                 toys.known[p.uid] = (p.at, p.quarter)
                 if settled, toyInteresting(p.kind), p.uid != held { toyPostNews(p.uid, p.at) }
