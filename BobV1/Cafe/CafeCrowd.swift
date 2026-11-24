@@ -132,7 +132,7 @@ nonisolated enum CafeRoute {
     }
     static func path(from: SIMD2<Float>, to: SIMD2<Float>, discs: [Disc], inside: (SIMD2<Float>) -> Bool = { _ in true }) -> [SIMD2<Float>] {
         var nodes: [SIMD2<Float>] = [from, to]
-        for d in discs { for k in 0..<8 { let a = Float(k) * .pi / 4; let p = d.c + SIMD2(sinf(a), cosf(a)) * (d.r + 0.12); if inside(p) { nodes.append(p) } } }
+        for d in discs { for k in 0..<8 { let a = Float(k) * .pi / 4; let p = d.c + SIMD2(sinf(a), cosf(a)) * (d.r + 0.25); if inside(p) { nodes.append(p) } } }
         func open(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool { discs.allSatisfy { segmentClear(a, b, $0) } }
         let n = nodes.count
         var dist = [Float](repeating: .infinity, count: n), prev = [Int](repeating: -1, count: n), done = [Bool](repeating: false, count: n)

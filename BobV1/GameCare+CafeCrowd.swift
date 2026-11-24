@@ -269,7 +269,11 @@ extension GameCare {
                 }
                 let from = g.phase == .leaving ? g.table.stands[m.index] : door
                 let to = g.phase == .leaving ? door : g.table.stands[m.index]
-                let discs = crowdDiscs(for: g, excluding: m, landscape: landscape).filter { simd_distance($0.c, from) > $0.r - 0.05 && simd_distance($0.c, to) > $0.r - 0.05 }
+                // planning discs are bigger than the keep-apart gap (a walker cuts corners by up to 0.4 u); a disc that holds the start or the goal is shrunk to just clear it
+                let discs = crowdDiscs(for: g, excluding: m, landscape: landscape).map { d -> CafeRoute.Disc in
+                    let near = min(simd_distance(d.c, from), simd_distance(d.c, to))
+                    return .init(c: d.c, r: max(min(d.r + 0.4, near - 0.02), min(d.r, near - 0.02)))
+                }
                 let route = CafeRoute.path(from: from, to: to, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.4 })
                 if route.isEmpty {          // no way round the seated bodies yet: he waits (off the floor when coming in) and looks again; after 10 s he is simply seated
                     m.waitT += dt
@@ -300,7 +304,7 @@ extension GameCare {
                     // leaving: the entrance itself may lie past the walkable floor, so the last leg counts as done within 1.3 u of it (or when he has stopped within 2 u of it)
                     let atDoor = g.phase == .leaving && lastLeg && (simd_distance(pos, wp) < 1.3 || (m.stuck > 2.5 && simd_distance(pos, wp) < 2.0))
                     if atDoor { m.path.removeAll(); crowdArrived(g, m, landscape: landscape); continue }
-                    if simd_distance(pos, wp) < (lastLeg ? 0.45 : 0.55) {
+                    if simd_distance(pos, wp) < (lastLeg ? 0.45 : 0.35) {
                         m.path.removeFirst()
                         if let n = m.path.first { b.requestNow(.goTo(n)) } else { crowdArrived(g, m, landscape: landscape) }
                     } else { b.requestNow(.goTo(wp)) }
