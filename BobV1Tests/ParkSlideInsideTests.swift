@@ -128,6 +128,17 @@ extension ParkSlideRoundTests {
         return out
     }
 
+    /// park-open-r1: one line per run into /tmp/parkopen_psi_<old|new>.txt (old = PARKOPEN_OLD=1, fdb1acd0's layout), so the absolute counts of both layouts can be read side by side.
+    func psiFile(_ line: String) {
+        let path = "/tmp/parkopen_psi_\(ParkOpen.old ? "old" : "new").txt"
+        if !FileManager.default.fileExists(atPath: path) { FileManager.default.createFile(atPath: path, contents: nil) }
+        if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write((line + "\n").data(using: .utf8)!); try? h.close() }
+    }
+    func psiSummary(_ tag: String, _ r: InsideRun, seconds: Float, seeds: Int) {
+        let min = Double(seconds) * Double(seeds) / 60
+        psiFile(String(format: "%@ | game minutes %.1f | deep (centre inside the box, not on it) %d = %.2f/min | overlap (footprint over the edge by > 5 cm) %d = %.2f/min | episodes %d = %.2f/min | rides %d | hopscotch %d | socials %d | closePairs(<0.9) %d | landingClose %d | samples %d", tag, min, r.deep, Double(r.deep) / min, r.overlap, Double(r.overlap) / min, r.episodes, Double(r.episodes) / min, r.rides, r.hops, r.socials.values.reduce(0, +), r.closePairs, r.landingClose, r.samples))
+    }
+
     func insideReport(_ name: String, _ r: InsideRun, wall: TimeInterval) {
         for nt in r.notes { print("PSI \(name) note \(nt)") }
         for nt in r.deepNotes { print("PSI \(name) DEEP \(nt)") }
@@ -152,6 +163,7 @@ extension ParkSlideRoundTests {
             print("PSI \(name) seed \(seed): before deep \(bs.deep) overlap \(bs.overlap) close \(bs.closePairs) landingClose \(bs.landingClose) rides \(bs.rides) hopscotch \(bs.hops) socials \(sb) | after(level \(level)) deep \(as1.deep) overlap \(as1.overlap) close \(as1.closePairs) landingClose \(as1.landingClose) rides \(as1.rides) hopscotch \(as1.hops) socials \(sa) footTurnAways \(as1.turnAways)")
             b.merge(bs); a.merge(as1)
         }
+        psiSummary("\(name) seeds \(seeds) BEFORE arm (slide fix level 0)", b, seconds: seconds, seeds: seeds.count); psiSummary("\(name) seeds \(seeds) AFTER arm (level \(level))", a, seconds: seconds, seeds: seeds.count)
         insideReport(name + "-before", b, wall: Date().timeIntervalSince(t0))
         insideReport(name + "-after", a, wall: Date().timeIntervalSince(t0))
         XCTAssertEqual(a.deep, 0, "\(name): a centre inside the slide's box while not on it: \(a.deepTag)")
@@ -160,6 +172,20 @@ extension ParkSlideRoundTests {
         print("PSI \(name) rates before/after: rides \(b.rides)/\(a.rides) hopscotch \(b.hops)/\(a.hops) socials \(sb)/\(sa) per-seed social ratios \(ratios.map { String(format: "%.2f", $0) }) mean \(String(format: "%.2f", mean)) closePairs \(b.closePairs)/\(a.closePairs) landingClose \(b.landingClose)/\(a.landingClose)")
         if meanCheck, !ratios.isEmpty { XCTAssertGreaterThanOrEqual(mean, 0.9, "\(name): socials stay at 0.9x or more (mean of the per-seed ratios)") }
         return (b, a, bySeed)
+    }
+    /// park-open-r1: ABSOLUTE counts of the game's own slide rules (level 3) on six seeds, dense and plain, 120 sim-s each: how often a body is inside / over the slide's box per minute. The old layout's numbers come
+    /// from the same test with PARKOPEN_OLD=1 (lines in /tmp/parkopen_psi_old.txt). The bar here is the park-slide rule's own: no centre inside the box while not using the slide.
+    func testParkInsideAbsoluteSixSeeds() {
+        for mode in [InsideMode.dense, .plain] {
+            var all = InsideRun()
+            for seed in UInt64(1)...6 {
+                let r = insideRun(seeds: [seed], seconds: 120, mode: mode, level: 3)
+                psiSummary("\(mode) seed \(seed) level 3", r, seconds: 120, seeds: 1)
+                all.merge(r)
+            }
+            psiSummary("\(mode) six seeds level 3", all, seconds: 120, seeds: 6)
+            XCTAssertEqual(all.deep, 0, "\(mode): a centre inside the slide's box while not on it: \(all.deepNotes.prefix(3))")
+        }
     }
     /// As the game plays: five bodies, two seeds x 180 sim-s per arm.
     func testParkNobodyInsideTheSlide() { _ = insideBothArms("plain", seeds: [1, 2], seconds: 180, mode: .plain) }

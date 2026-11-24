@@ -22,9 +22,9 @@ enum ParkWand {
     /// The area never goes nearer the floor's back edge than this.
     static let backMargin: Float = 0.3
     /// A spot keeps this far off the hopscotch court's edge (a court is flat paint but nobody stands about on it) and off a solid piece's reach.
-    static let courtMargin: Float = 0.6, bodyRadius: Float = 0.8
+    static let courtMargin: Float = 0.4, bodyRadius: Float = 0.8
     /// The spread of the picks: a spot counts as well apart at this distance (so the first ones are not driven to the corners).
-    static let wellApart: Float = 2.8
+    static let wellApart: Float = 2.4
 
     /// `count` spots in the box lo...hi, clear of every solid piece and the court, at least `wellApart` from each other and from `others` where the box allows (the farthest-first pick, nearer the middle on a tie).
     /// Fewer than `count` come back only when the box has no clear ground left.
@@ -46,18 +46,41 @@ enum ParkWand {
         }
         guard !cands.isEmpty else { return [] }
         let mid = (lo + hi) * 0.5
-        var chosen: [SIMD2<Float>] = []
-        for _ in 0..<count {
-            var best: (SIMD2<Float>, Float)?
-            for p in cands {
-                var m: Float = wellApart
-                for q in chosen + others { m = min(m, simd_distance(p, q)) }
-                let score = m - 0.05 * simd_distance(p, mid)
-                if best == nil || score > best!.1 { best = (p, score) }
+        // the spread of a set: its least pairwise distance (to each other and to `others`), capped at `wellApart`, less a small pull away from the middle (a tie goes to the more central set)
+        func score(_ set: [SIMD2<Float>]) -> Float {
+            var m: Float = wellApart
+            for i in set.indices {
+                for j in set.indices where j > i { m = min(m, simd_distance(set[i], set[j])) }
+                for q in others { m = min(m, simd_distance(set[i], q)) }
             }
-            guard let b = best else { break }
-            chosen.append(b.0)
+            let far = set.reduce(Float(0)) { $0 + simd_distance($1, mid) } / Float(set.count)
+            return m - 0.05 * far
+        }
+        // farthest-first start, then swap moves: replace one spot by any candidate while that raises the score (3 spots fit 2.2 apart in the portrait box; the first pick alone left them 1.75 - 1.9 apart)
+        var chosen: [SIMD2<Float>] = []
+        for _ in 0..<min(count, cands.count) {
+            var best: (SIMD2<Float>, Float)?
+            for p in cands where !chosen.contains(p) {
+                let sc = score(chosen + [p])
+                if best == nil || sc > best!.1 { best = (p, sc) }
+            }
+            if let b = best { chosen.append(b.0) }
+        }
+        var cur = score(chosen)
+        for _ in 0..<12 {
+            var improved = false
+            for i in chosen.indices {
+                for p in cands where !chosen.contains(p) {
+                    var t = chosen; t[i] = p
+                    let sc = score(t)
+                    if sc > cur + 1e-4 { chosen = t; cur = sc; improved = true }
+                }
+            }
+            if !improved { break }
         }
         return chosen
     }
+
+    /// The part of the wand's area the spots are chosen in: the front `slotDepth` of it, where the bubbles are.
+    static func slotBox(lo: SIMD2<Float>, hi: SIMD2<Float>) -> (lo: SIMD2<Float>, hi: SIMD2<Float>) { (SIMD2(lo.x, max(lo.y, hi.y - slotDepth)), hi) }
 }
