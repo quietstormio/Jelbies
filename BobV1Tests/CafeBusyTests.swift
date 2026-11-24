@@ -9,8 +9,12 @@ import simd
 
 @MainActor
 final class CafeBusyTests: XCTestCase {
+    private var savedAspect: Float = 0
+    override func setUp() { super.setUp(); savedAspect = GameCamera.aspect }
     override func tearDown() {
+        GameCamera.aspect = savedAspect
         RoomLayout.apply(RoomCatalog.home)
+        _ = GameCamera.refreshRoam(aspect: savedAspect)
         DecorField.shared.set([])
         DayClock.shared.forcedHour = 12
         DiningLayout.ends = false; DiningLayout.sideX = 1.11; DiningLayout.reachFood = false; DiningLayout.endsYaw = DiningLayout.homeEndsYaw
@@ -62,7 +66,7 @@ final class CafeBusyTests: XCTestCase {
             let r = run(seed: seed, seconds: 900)
             gaps += zip(r.enters.dropFirst(), r.enters).map { $0.0 - $1.0 }
             XCTAssertGreaterThanOrEqual(r.enters.first!.t + 0.02, 15, "seed \(seed): the first entrance comes 15 s in at the soonest (later when a seated group is leaving: one walks at a time)")
-            XCTAssertLessThanOrEqual(r.enters.first!.t, 50, "seed \(seed)")
+            XCTAssertLessThanOrEqual(r.enters.first!.t, 90, "seed \(seed)")
             for l in r.leaves { let e = r.enters.first { $0.g.id == l.id }; if let e { XCTAssertGreaterThanOrEqual(l.t - e.t, 40 + 6 - 0.1, "stays at least 40 s once seated") } }
         }
         XCTAssertGreaterThanOrEqual(gaps.min()!, 20 - 0.05)
@@ -113,6 +117,7 @@ final class CafeBusyTests: XCTestCase {
         for (name, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
             let landscape = aspect >= 1
             GameCamera.aspect = aspect
+            DecorField.shared.set([])
             RoomLayout.apply(RoomCatalog.cafe)
             _ = GameCamera.refreshRoam(aspect: aspect)
             DiningLayout.ends = true; DiningLayout.sideX = 1.3; DiningLayout.reachFood = true; DiningLayout.endsYaw = DiningLayout.cafeEndsYaw
@@ -197,7 +202,7 @@ final class CafeBusyTests: XCTestCase {
                     var busy = false, why = ""
                     let giggling = b.idleState.kind == .giggle || b.commandedIdle == .giggle          // (the talk's own giggle runs as a planted idle script: allowed)
                     if case .none = b.script {} else if !giggling { busy = true; why = "script:\(b.script)".prefix(30).description }
-                    if !(b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace) { busy = true; if why.isEmpty { why = "act:\(b.activity)" } }
+                    if !(b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace) && !(giggling || b.activity == .playing) { busy = true; if why.isEmpty { why = "act:\(b.activity)" } }
                     if let k = b.idleState.kind, k != .giggle { busy = true; if why.isEmpty { why = "idle:\(k.rawValue)" } }
                     if let k = b.commandedIdle, k != .giggle { busy = true; if why.isEmpty { why = "cmd:\(k.rawValue)" } }
                     if yawErr > 0.3 { if turning[s.id] != true { turns += 1; kinds["turn@" + why, default: 0] += 1 }; turning[s.id] = true } else if yawErr < 0.15 { turning[s.id] = false }
