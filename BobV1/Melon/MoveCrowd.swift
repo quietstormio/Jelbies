@@ -21,7 +21,7 @@ nonisolated enum MoveCrowd {
         guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "MoveCrowd") else { return defaultOn }
         return !["0", "no", "false", "old", "off"].contains(v.lowercased())
     }
-    static let defaultOn = false
+    static let defaultOn = true          // (`-MoveCrowd 0` / MOVECROWD=0 = the old steering)
     nonisolated(unsafe) static var on: Bool = master()
     private static let offParts = Set((env["MOVECROWD_OFF"] ?? "").split(separator: ",").map { String($0) })
     private static func part(_ k: String) -> Bool { !offParts.contains(k) }
@@ -30,7 +30,8 @@ nonisolated enum MoveCrowd {
     nonisolated(unsafe) static var yieldOn = part("yield")
     nonisolated(unsafe) static var lookOn = part("look")
     nonisolated(unsafe) static var partOn = part("part")
-    nonisolated(unsafe) static var speedOn = part("speed")
+    /// speed is OFF by default (iteration 2: the real-speed look-ahead fired more often and raised hard stops ~70% at home); env MOVECROWD_ON=speed turns it on.
+    nonisolated(unsafe) static var speedOn = (env["MOVECROWD_ON"] ?? "").contains("speed") && part("speed")
     nonisolated(unsafe) static var allOn = part("all")
     nonisolated(unsafe) static var legOn = part("leg")
     nonisolated(unsafe) static var spotOn = part("spot")
