@@ -29,6 +29,7 @@ final class CafeMember {
     var path: [SIMD2<Float>] = []
     var stuck: Float = 0
     var waitT: Float = 0
+    var replan = false, replans = 0
     var lastPos: SIMD2<Float> = .zero
     var held = false
     init(actor: JellyActor, visitor: ParkVisitor, index: Int) { self.actor = actor; self.visitor = visitor; self.index = index }
@@ -132,7 +133,6 @@ extension GameCare {
             for m in g.members where m !== me && m.state == .seated {
                 d.append(.init(c: Self.floorPos(m.actor.brain!, m.actor.sim), r: Self.crowdMinGap))
             }
-            if g === group, g.phase == .arriving { for m in g.members where m !== me && m.state != .seated && m.state != .out { d.append(.init(c: g.table.stands[min(m.index, g.table.stands.count - 1)], r: Self.crowdMinGap)) } }
         }
         return d
     }
@@ -209,7 +209,7 @@ extension GameCare {
         let free = cs.pool.filter { m in !cs.live.values.contains { $0.members.contains { $0 === m } } }
         guard free.count >= cg.size else { return }
         let g = CafeLiveGroup(id: cg.id, table: table, phase: seated ? .seated : .arriving)
-        for k in 0..<cg.size { let m = free[k]; m.index = k; m.state = seated ? .seated : .waiting; g.members.append(m) }
+        for k in 0..<cg.size { let m = free[k]; m.index = k; m.state = seated ? .seated : .waiting; m.replan = false; m.replans = 0; m.waitT = 0; g.members.append(m) }
         cs.live[cg.id] = g
         cs.tablesUsed.append(table.slot)
         if seated {
@@ -229,7 +229,7 @@ extension GameCare {
         g.phase = .leaving
         let door = CafeTables.door(landscape: landscape)
         g.members.sort { simd_distance(g.table.stands[$0.index], door) < simd_distance(g.table.stands[$1.index], door) }          // (the one nearer the door first)
-        for m in g.members { m.state = .waiting; m.path = []; m.held = false }
+        for m in g.members { m.state = .waiting; m.path = []; m.held = false; m.replan = false; m.replans = 0 }
         g.belled = false
         Self.crowdLog(String(format: "t=%.1f LEAVE group %d", cafeBook.crowd.clock, id))
     }
@@ -267,7 +267,7 @@ extension GameCare {
                         if simd_distance(ap, ref) < (g.phase == .leaving ? 1.7 : 1.9) { continue }
                     }
                 }
-                let from = g.phase == .leaving ? g.table.stands[m.index] : door
+                let from = m.replan ? pos : (g.phase == .leaving ? g.table.stands[m.index] : door)
                 let to = g.phase == .leaving ? door : g.table.stands[m.index]
                 // planning discs are bigger than the keep-apart gap (a walker cuts corners by up to 0.4 u); a disc that holds the start or the goal is shrunk to just clear it
                 let base = crowdDiscs(for: g, excluding: m, landscape: landscape)
@@ -277,22 +277,22 @@ extension GameCare {
                         let near = min(simd_distance(d.c, from), simd_distance(d.c, to))
                         return .init(c: d.c, r: max(min(d.r + extra, near - 0.02), min(d.r, near - 0.02)))
                     }
-                    route = CafeRoute.path(from: from, to: to, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.4 })
+                    route = CafeRoute.path(from: from, to: to, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.9 })
                 }
                 if route.isEmpty {          // no way round the seated bodies yet: he waits (off the floor when coming in) and looks again; after 10 s he is simply seated
                     m.waitT += dt
-                    if g.phase == .arriving, m.waitT > 10 { m.path = [to]; m.state = .walking; m.stuck = 6.1; rehome(m.actor, at: to); Self.crowdLog("no route for member \(m.actor.id): seated directly") }
+                    if g.phase == .arriving, m.waitT > 10 { m.path = [to]; m.state = .walking; m.stuck = 6.1; rehome(m.actor, at: to); if i == 0 { crowdBell(g, entering: true); g.belled = true }; Self.crowdLog("no route for member \(m.actor.id): seated directly") }
                     else if g.phase == .leaving, m.waitT > 10 { m.path = [door]; m.state = .walking; m.stuck = 0 }
                     continue
                 }
                 m.waitT = 0
                 m.path = route
-                if g.phase == .arriving {          // (he appears at the entrance, the bell rings once for the group)
+                if g.phase == .arriving, !m.replan {          // (he appears at the entrance, the bell rings once for the group)
                     rehome(m.actor, at: door)
                     b.restTimer = 0.2; b.reserved = false; b.mealFaceYaw = nil
                     if i == 0 { crowdBell(g, entering: true); g.belled = true }
                 }
-                m.state = .walking; m.stuck = 0; m.lastPos = g.phase == .arriving ? door : pos
+                m.state = .walking; m.stuck = 0; m.lastPos = g.phase == .arriving && !m.replan ? door : pos; m.replan = false
                 if g.phase == .leaving { b.reserved = false; b.mealFaceYaw = nil }
             case .walking:
                 // yield: a follower stops while the one ahead of it in this group is closer than 1.3
@@ -314,7 +314,10 @@ extension GameCare {
                     } else { b.requestNow(.goTo(wp)) }
                 } else { crowdArrived(g, m, landscape: landscape) }
                 if simd_distance(pos, m.lastPos) < 0.01 { m.stuck += dt } else { m.stuck = 0; m.lastPos = pos }
-                if m.stuck > 6, let last = m.path.last {          // (never stuck forever: set him at the end of the path)
+                if m.stuck > 4, m.replans < 2 {          // (stopped for 4 s: look for a new way from where he stands)
+                    m.replans += 1; m.replan = true; m.state = .waiting; m.waitT = 0; m.stuck = 0
+                    Self.crowdLog("member \(m.actor.id) stopped at \(pos): new route (\(m.replans))")
+                } else if m.stuck > 6, let last = m.path.last {          // (never stuck forever: set him at the end of the path)
                     Self.crowdLog("member \(m.actor.id) stuck at \(pos), placed at \(last)")
                     rehome(m.actor, at: last); m.path = [last]; m.stuck = 0
                 }
