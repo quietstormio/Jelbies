@@ -31,12 +31,13 @@ nonisolated enum MoveCrowd {
     nonisolated(unsafe) static var lookOn = part("look")
     nonisolated(unsafe) static var partOn = part("part")
     nonisolated(unsafe) static var speedOn = part("speed")
+    nonisolated(unsafe) static var allOn = part("all")
     private static func num(_ k: String, _ d: Float) -> Float { Float(env[k] ?? "") ?? d }
 
     /// The one clearance (u, centre to centre): trigger, detour offset, goal rejection.
     nonisolated(unsafe) static var gap = num("MOVECROWD_GAP", 1.45)
 
-    static var text: String { "MoveCrowd on=\(on) gap=\(gapOn) goal=\(goalOn) yield=\(yieldOn) look=\(lookOn) part=\(partOn) speed=\(speedOn) gapU=\(gap)" }
+    static var text: String { "MoveCrowd on=\(on) gap=\(gapOn) goal=\(goalOn) yield=\(yieldOn) look=\(lookOn) part=\(partOn) speed=\(speedOn) all=\(allOn) gapU=\(gap)" }
 }
 
 /// Read by the scoreboard (tests): the switches as they stand.
@@ -99,5 +100,18 @@ extension BlobBrain {
         case .wait: return .some(nil)
         case .clear: return nil
         }
+    }
+}
+
+extension BlobBrain {
+    /// all: a detour point `w` is at least `gap` x 0.9 from every other body (but `except`, the one being passed), at its position now and where it will be when I get to `w`.
+    func crowdDetourFree(_ w: SIMD2<Float>, root: SIMD2<Float>, vSelf: Float, except: Int) -> Bool {
+        let t = min(simd_distance(root, w) / max(vSelf, 0.3), ContactTuning.lookTime)
+        let r = MoveCrowd.gap * 0.9
+        for p in steerPeers() where p.id != except {
+            if simd_distance(p.pos, w) < r { return false }
+            if p.id < Int.max / 4, let v = peerVel[p.id], simd_distance(p.pos + v * t, w) < r { return false }
+        }
+        return true
     }
 }

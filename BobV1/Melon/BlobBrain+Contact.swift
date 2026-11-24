@@ -128,6 +128,7 @@ extension BlobBrain {
                         let w = fixed(w0)
                         guard simd_distance(w, q) >= cg * 0.92 * scale, abs(simd_dot(w - q, right)) >= cg * 0.7 * scale else { continue }
                         guard intrusion(w, margin: steerMargin) < 0.01, scale >= 1 ? legClear(root, w, margin: steerMargin) : softLegClear(root, w, r: peerGap * 0.8) else { continue }
+                        if MoveCrowd.allOn, !crowdDetourFree(w, root: root, vSelf: vSelf, except: h.id) { continue }          // (all: the detour point is clear of EVERY other body, now and where it will be - the leg checks only see higher ids)
                         yieldT = max(0, yieldT - runDt)
                         return .via(w)
                     }
