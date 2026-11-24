@@ -11,10 +11,10 @@ import simd
 extension ParkSlideRoundTests {
     func testStandingFriendOnTheNextLegDoesNotHoldHimOver6Seconds() {
         struct Case { var name: String; var start: SIMD2<Float>; var friend: SIMD2<Float> }
-        let cases = [Case(name: "foot -> west corner", start: SIMD2(2.90, 3.59), friend: SIMD2(1.85, 3.55)),
-                     Case(name: "foot -> west corner, friend nearer", start: SIMD2(2.90, 3.59), friend: SIMD2(1.95, 3.40)),
-                     Case(name: "west corner -> north leg", start: SIMD2(1.30, 3.55), friend: SIMD2(1.30, 2.45)),
-                     Case(name: "west corner -> north leg, friend west", start: SIMD2(1.30, 3.55), friend: SIMD2(0.40, 2.60))]
+        let cases = [Case(name: "foot -> west corner", start: SIMD2(2.90, 3.59 + (ParkOpen.slideZ - 1.0)), friend: SIMD2(1.85, 3.55 + (ParkOpen.slideZ - 1.0))),
+                     Case(name: "foot -> west corner, friend nearer", start: SIMD2(2.90, 3.59 + (ParkOpen.slideZ - 1.0)), friend: SIMD2(1.95, 3.40 + (ParkOpen.slideZ - 1.0))),
+                     Case(name: "west corner -> north leg", start: SIMD2(1.30, 3.55 + (ParkOpen.slideZ - 1.0)), friend: SIMD2(1.30, 2.45 + (ParkOpen.slideZ - 1.0))),
+                     Case(name: "west corner -> north leg, friend west", start: SIMD2(1.30, 3.55 + (ParkOpen.slideZ - 1.0)), friend: SIMD2(0.40, 2.60 + (ParkOpen.slideZ - 1.0)))]
         var worst: Float = 0, bad: [String] = []
         for c in cases {
             for seed in UInt64(1)...3 {

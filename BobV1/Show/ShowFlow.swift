@@ -146,6 +146,8 @@ final class ShowFlow {
     @ObservationIgnored var rivalReady: (_ who: Int?, _ atCentre: Bool) -> Bool = { _, _ in true }
     /// The walk to the middle has used up its own allowance (its length at the stage pace + 1.5 s, counted on the body by the glue): the turn goes on with her where she stands.
     @ObservationIgnored var rivalGiveUp: (_ who: Int?) -> Bool = { _ in false }
+    /// Everybody who has a seat stands in it (the glue's line keeper): an entrant performs, and his go opens, only with the line formed (show-line-r1). Always true without a stage (the pure-flow tests).
+    @ObservationIgnored var lineFormed: () -> Bool = { true }
     /// Money (the care glue sets it).
     @ObservationIgnored var wallet: DropsWallet?
     @ObservationIgnored var cue: (ShowCue) -> Void = { AudioHub.shared.showCue($0) }
@@ -514,7 +516,7 @@ final class ShowFlow {
         entranceT += dt
         if entrancePick != nil { entranceTapT += dt }
         let arrived = s.rivals.indices.allSatisfy { rivalReady($0, false) }
-        if entranceT >= Self.entranceMin && arrived || entranceT > Self.entranceMax || (entrancePick != nil && entranceTapT >= 1.0) {
+        if entranceT >= Self.entranceMin && arrived && (lineFormed() || entranceT > Self.entranceMax - 1) || entranceT > Self.entranceMax || (entrancePick != nil && entranceTapT >= 1.0) {
             if !arrived { onRival(.snap) }
             entranceDone = true
             revision += 1
@@ -558,7 +560,7 @@ final class ShowFlow {
             guard rivalT >= 0.3, rivalReady(nil, false) || rivalT > 0.9 else { return }
             nextRival()
         case .walkIn:
-            guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalGiveUp(i) || rivalT > Self.walkInCap else { return }          // (the turn WAITS for her to arrive: no teleport; past the cap she performs where she stands)
+            guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalGiveUp(i) || rivalT > Self.walkInCap, lineFormed() || rivalT > Self.lineCap else { return }          // (the turn WAITS for her to arrive: no teleport; past the cap she performs where she stands)
             startRivalPerform(i)
         case .perform:
             guard let i = rivalTurn, rivalT >= Self.rivalSeconds(rivalNow?.turn.trick ?? .sit) else { return }
@@ -567,11 +569,13 @@ final class ShowFlow {
             guard rivalT >= 0.25, rivalT >= 0.55 || (rivalTurn.map { rivalReady($0, false) } ?? true) else { return }          // (the next entrant sets off while she is still stepping back: they leave and arrive on opposite sides)
             nextRival()
         case .playerBack:
-            guard rivalT >= 0.3, rivalReady(nil, true) || rivalGiveUp(nil) || rivalT > Self.playerBackCap else { return }
+            guard rivalT >= 0.3, rivalReady(nil, true) || rivalGiveUp(nil) || rivalT > Self.playerBackCap, lineFormed() || rivalT > Self.lineCap else { return }
             endRivals()
         }
     }
     /// How long the turn waits for an entrant to reach the middle (was 3.5 s, and she was put there when it ran out), and for his Jelmiko to come back (was 3 s): 2.5 s more each.
+    /// The most a turn waits for the line to form (the keeper carries any body to its seat within ~3.5 s, so this is a safety net that is never meant to be reached).
+    static let lineCap: Float = 30.0
     static let walkInCap: Float = 15.0, playerBackCap: Float = 15.0          // (hard ceilings only: each walk has its own allowance, `rivalGiveUp`)
     /// The entrant who is up after the one performing now (for the glue to start a far one walking early), nil at the end of the turn.
     var nextRivalUp: Int? { rivalQueue.first }
