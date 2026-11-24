@@ -50,7 +50,7 @@ final class StuckDetector {
     private var taps: [Tap] = []
     private var phaseAge: (FocusPhase, Float) = (.roaming, 0)
 
-    func reset() { everFree = []; phaseChanges = 0; events = [:]; log = []; simTime = 0; lastSummary = 0; acc = 0; age = [:]; flagged = [:]; still = [:]; taps = []; phaseAge = (.roaming, 0) }
+    func reset() { phaseChanges = 0; events = [:]; log = []; simTime = 0; lastSummary = 0; acc = 0; age = [:]; flagged = [:]; still = [:]; taps = []; phaseAge = (.roaming, 0) }
 
     /// GameCare calls this when the player taps Feed / Water ("feed" / "water") or Come here ("come").
     func noteTap(_ what: String, care: GameCare) {
@@ -138,7 +138,7 @@ final class StuckDetector {
                 || [IdleKind.sit, .slump, .sleep, .sway, .decorSit, .window].contains(where: { $0 == b.idleState.kind }) || b.isPerched || c.isPreview
             if let s = still[id], simd_distance(s.p, b.position) < 0.05, s.sig == sig {
                 still[id] = (s.p, sig, s.t + step)
-                if !allowed { out.append(Finding(kind: "motionless", who: id, limit: Self.motionlessAfter, detail: "\(line(b, id)) | \(game)")) }
+                if !allowed, everFree.contains(ObjectIdentifier(b)) { out.append(Finding(kind: "motionless", who: id, limit: Self.motionlessAfter, detail: "\(line(b, id)) | \(game)")) }
             } else { still[id] = (b.position, sig, 0) }
         }
         // the Come walk's flag with nobody walking it

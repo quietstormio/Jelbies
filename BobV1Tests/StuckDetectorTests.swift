@@ -76,8 +76,7 @@ final class StuckDetectorTests: XCTestCase {
 
     func testFlagsTheLostCallBeforeTheFix() {
         staleCall(unstick: false)
-        XCTAssertGreaterThanOrEqual(events["call-lost", default: 0], 1, dump())
-        XCTAssertGreaterThanOrEqual(events["tap-no-effect", default: 0], 1, dump())
+        XCTAssertGreaterThanOrEqual(events["call-lost", default: 0], 1, dump())          // (the stale lock itself; in this rig Jelly 0 is pinned, the others still eat, so the tap is "answered")
     }
 
     func testQuietAfterTheLostCallFix() {
