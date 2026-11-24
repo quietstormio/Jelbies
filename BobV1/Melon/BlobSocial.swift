@@ -370,13 +370,14 @@ extension BlobBrain {
         socialBook.hopStarted = false; o.socialBook.hopStarted = false
         onSocial?(.began(kind, partner: o.steerID)); o.onSocial?(.began(kind, partner: steerID))
         roomCue(.social(kind))
+        if MeetLog.on { MeetLog.began(s, [self, o] + (third.map { [$0] } ?? [])) }
         return s
     }
 
     /// Start `kind` with `o` now (the scheduler's autonomous pick calls this; tests call it directly). False = not possible right now
     /// (either one is busy / blocked, too far or too near for this kind, no room).
     @discardableResult
-    func socialStart(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
+    func socialStartCore(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
         guard socialFree, o.socialFree, o !== self else { return false }
         currentPose(sim)          // (his own body only: the partner has a sim of his own, and re-seeding HIS root from THIS sim teleported him onto the initiator)
         let me = position, you = o.position
@@ -480,6 +481,7 @@ extension BlobBrain {
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
         if anticsEnabled { socialBook.lastKind = kind }
         for (a, b) in [(self, o), (o, self)] { var r = a.socialBook.recentWith[b.steerID] ?? []; r.append(kind); a.socialBook.recentWith[b.steerID] = Array(r.suffix(3)) }
+        if MeetLog.on { MeetLog.pick(self, o, kind, how: o.socialFree ? "free" : "invite") }
         if emoteMeetPlan(kind, with: o) { varietyNoteSocial(kind, with: o); return true }          // (EmoteSpot.swift: both walk to a spot first, the pair starts there)
         if !o.socialFree {          // he is out on a wander leg: ask him to stop; the social starts when he has (socialInviteTick)
             guard o.socialBeckonStop() else { socialBook.cooldown = max(socialBook.cooldown, 3); return false }
@@ -607,6 +609,7 @@ extension BlobBrain {
         if !socialBook.lookPair.isEmpty { for k in socialBook.lookPair.keys { socialBook.lookPair[k]! -= dt } }
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
         socialBook.handWant = nil
+        if MeetLog.on { MeetLog.sample(self) }
         SoccerSession.shared.tick(by: self, dt)          // (soccer-room-r1: inert without a soccer ball in the room)
         if mix.sess || mix.order.kind != .none { mixSessionTick(sim) }
 
