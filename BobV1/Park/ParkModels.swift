@@ -101,6 +101,16 @@ nonisolated enum ParkFriendLevel: Int, Comparable, Sendable {
     var hearts: Int { rawValue }
 }
 
+/// best-friend-r1: THE definition of "the best friend at the Park" (the Profile's row and the game's pairing preference both read this, so they cannot disagree):
+/// the live visitor with the most points with this character, at Friend level or better (the first one on a tie). nil = "Still finding out".
+nonisolated enum ParkBestFriend {
+    static func of(character: Int, in visitors: [ParkVisitor]) -> (ParkVisitor, Float)? {
+        visitors.filter { $0.mergedInto == nil }
+            .compactMap { v -> (ParkVisitor, Float)? in let pts = v.friendship["\(character)"] ?? 0; return ParkFriendLevel.of(pts) >= .friend ? (v, pts) : nil }
+            .max { $0.1 < $1.1 }
+    }
+}
+
 nonisolated struct ParkVisitor: Codable, Identifiable, Equatable, Sendable {
     /// Index in the pool (stable).
     let id: Int

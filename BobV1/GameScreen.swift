@@ -459,6 +459,7 @@ struct GameScreen: View {
         .onAppear { model.coverUp = covered; DayClock.shared.setOutingRate(outing) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
+        .overlay { if MoveClockOverlay.on { MoveClockView() } }          // (-MoveClockOverlay 1: the game clock of the logs, for cutting strips)
         .overlay {
             WelcomeCoverArt(running: welcomeCover).opacity(welcomeCover ? 1 : 0).allowsHitTesting(welcomeCover)          // always built, only its opacity changes: instant in, 0.25 s out
                 .animation(welcomeCover ? nil : .easeOut(duration: 0.25), value: welcomeCover)
@@ -652,7 +653,12 @@ struct GameScreen: View {
             await sleep(2.5)
             var kinds: [DecorKind] = [.soccerball]
             if d.integer(forKey: "PlaceSoccer") >= 2 { kinds.append(.minigoal) }
-            for k in kinds where !care.store.placedDecor.contains(where: { $0.kind == k }) { care.store.grant(k.storeID); _ = care.store.place(k.storeID, dev: true) }
+            let atXZ = (d.string(forKey: "PlaceSoccerAt") ?? "").split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }          // (soccer-room-r1: -PlaceSoccerAt "x,z" puts the ball at that open-floor spot, after the launch job is over)
+            if atXZ.count == 2 { await sleep(15) }
+            for k in kinds where !care.store.placedDecor.contains(where: { $0.kind == k }) {
+                care.store.grant(k.storeID)
+                if let p = care.store.place(k.storeID, dev: true), k == .soccerball, atXZ.count == 2 { care.store.move(p.uid, to: SIMD2(atXZ[0], atXZ[1])) }
+            }
             care.syncDecor()
             NSLog("[placesoccer] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
         }
@@ -739,9 +745,11 @@ struct GameScreen: View {
             await sleep(3)
             let vid = d.integer(forKey: "InviteGuest") - 1
             care.parkBook.markSeen([vid], at: Date().timeIntervalSince1970)
-            for k in 0..<max(care.jellyCount, 1) { if let c = care.jelly(k)?.character { _ = care.parkBook.add(points: 100, visitor: vid, character: c) } }
+            // best-friend-r1 capture aid: -BestFriend <visitor>:<slot> makes him Best friend of that one Jelmiko only (not everybody's); -InviteKind sleepover asks him for a sleepover
+            if d.string(forKey: "BestFriend") != nil { care.devSeedBestFriend() }
+            else { for k in 0..<max(care.jellyCount, 1) { if let c = care.jelly(k)?.character { _ = care.parkBook.add(points: 100, visitor: vid, character: c) } } }
             NSLog("[arrival] invite")
-            care.inviteFriend(vid, kind: .playDate)
+            care.inviteFriend(vid, kind: d.string(forKey: "InviteKind") == "sleepover" ? .sleepover : .playDate)
             // capture aid: -GuestGoodbye <seconds> ends the visit that long after the invitation (the run-out through the left edge)
             if d.integer(forKey: "GuestGoodbye") > 0 {
                 await sleep(Double(d.integer(forKey: "GuestGoodbye")))

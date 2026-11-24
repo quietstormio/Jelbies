@@ -944,6 +944,7 @@ final class BlobBrain {
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
+        if mix.sess { restTimer = 0.25; return }          // (soccer-room-r1: a member of a soccer session stands where the director put him)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         if !emoteSpotLive || reserved { emoteSpot.soloKind = nil; emoteMeetEnd(); socialBook.meetHeldBy = -1 }          // (EmoteSpot.swift: a meal, a bath or the park drops what was waiting for a spot)
         if emoteSoloArrived(sim) { mixNoteIdle(); return }          // (EmoteSpot.swift: he has walked to the spot of a solo emote)
@@ -953,6 +954,8 @@ final class BlobBrain {
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
         if footKeep { Self.slideFootTurnAways += 1 }
         if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { slideFootWalkTo = out; request(.goTo(out)); restTimer = 0.3; return }
+        if buddyPickDue(sim) { return }          // (best-friend-r1 round 4: a reserved buddy block takes its flag before every other urge)
+        if !footKeep, bondUrge(sim) { return }
         if !footKeep, mixSoccerFollowDue(sim) { return }
         if !footKeep, mixAfterRunDue(sim) { return }
         if !footKeep, mixStrollDue(sim) { return }          // (MoveMix.swift: a walk away after a pair / group emote)
@@ -1069,6 +1072,7 @@ final class BlobBrain {
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
+            if attempt == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
@@ -1097,6 +1101,7 @@ final class BlobBrain {
             if valid >= (MoveMix.on ? MoveMix.roamCandidates : 6) { break }
         }
         }
+        if best != nil { partDone() }
         if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
     }
@@ -1131,6 +1136,7 @@ final class BlobBrain {
         script = .none
         restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively * vJit()          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
         if bubbleLeash != nil { restTimer *= 0.3 }          // (bubble play: eager, the next little move comes quickly)
+        if socialBook.block != nil { restTimer = min(restTimer, 0.3) }          // (best-friend-r1 round 4: a reserved buddy body takes its flag at once)
         if let j = job { job = nil; onFinished?(j) }
         _ = served
     }
@@ -1304,6 +1310,10 @@ final class BlobBrain {
     /// The clock of this brain's own steps (s), the last sampled position of each WALKING peer, and his velocity (u/s) over the last ~0.3 s. A standing peer has none.
     /// The steering predicts where a walker will be (BlobBrain+Contact.swift: `lookAhead`) so two walkers curve round each other early instead of meeting.
     var peerClock: Float = 0
+    /// (curved walk) `peerClock` of the last planned step that carried the root: a walk is 'moving' for 0.5 s after it.
+    var lastTranslateClock: Float = -10
+    var lastCurvedClock: Float = -10          // (log only: `peerClock` of the last curved step)
+    var spotTurnClock: Float = -10          // (log only: `peerClock` of the last turn-on-the-spot step of a walk)
     var peerSample: [Int: (pos: SIMD2<Float>, t: Float)] = [:]
     var peerVel: [Int: SIMD2<Float>] = [:]
     private func trackPeerVelocities(_ all: [(id: Int, pos: SIMD2<Float>)]) {
@@ -1428,6 +1438,10 @@ final class BlobBrain {
             while let w = route.first, simd_distance(root, w) < 0.2 { route.removeFirst() }          // (0.2, not 0.4: every cut corner shortens the gap between two followers by about as much)
             return route.first ?? target
         }
+        if curveBody, route.count >= 1, case .walk(let tgt, _) = script {          // (curved walk: a waypoint the body has rounded - it is past it along the next leg - is passed, whatever the distance)
+            let w = route[0], nx = route.count > 1 ? route[1] : tgt
+            if simd_distance(root, w) < 1.0, simd_dot(root - w, nx - w) > 0 { route.removeFirst() }
+        }
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
             else if roomWaypointWait(root, w) { return nil }          // (the 11-15 room round, T5: nothing looked ahead on a waypoint leg; the one who gets there second stands a beat)
@@ -1528,8 +1542,10 @@ final class BlobBrain {
     }
 
     /// Plan the next walking step toward `target`. Returns 0 = keep going, 1 = arrived, 2 = stuck. `intermediate`: a waypoint on a route, so no final stop.
-    func planWalkStep(to target: SIMD2<Float>, intermediate: Bool = false) -> Int {
+    func planWalkStep(to targetIn: SIMD2<Float>, intermediate: Bool = false) -> Int {
         let root = SIMD2(px, pz)
+        let target = (intermediate && curveBody) ? curveAim(root, targetIn) : targetIn
+        let aimSub = target != targetIn          // (curved walk: a routed walk aims at a point ahead on its route, so the corner is rounded)
         let d = target - root
         let D = simd_length(d)
         let hd = D > 1e-4 ? atan2f(d.x, d.y) : yaw
@@ -1555,8 +1571,14 @@ final class BlobBrain {
             finalTurn = rest <= (n + ContactTuning.finalTurnExtra) * stride * runStrideMul * amplitude.clamped(0.6, 1)
             if mealArcOff { finalTurn = false }
         }
-        let arc = (abs(err) <= (mealFinalYaw != nil ? 0.5 : 1.2) && D > 0.4 && !intermediate) || finalTurn          // (meal-walk-r1: a meal walk turns to its way first, then walks straight)         // turn while moving: a short arc into the new direction
+        // CURVED WALK (BlobBrain+CurvedWalk.swift): a body that is already walking and is re-aimed by 0.5 ... 2.4 rad (a route's corner, a new aim) bends into the new direction at the gait's own turn per step, when the turn lands on free floor
+        var bend: (u: SIMD2<Float>, dy: Float)?
+        if abs(err) > 0.5, !finalTurn, !exact, abs(err) <= ((aimSub || !intermediate) ? Self.curveMaxErr : 1.2), D > 0.4, !(D < 0.6 && abs(err) > 1.2), curveBody { bend = curvedBend(root, err, dist: D) }
+        let arc = bend != nil || (abs(err) <= (mealFinalYaw != nil ? 0.5 : 1.2) && D > 0.4 && !intermediate) || finalTurn          // (meal-walk-r1: a meal walk turns to its way first, then walks straight)         // turn while moving: a short arc into the new direction
         if abs(err) > 0.5 && !arc {                        // not facing the target yet: turn on the spot first
+            spotTurnClock = peerClock
+            if EmoteSpot.logOn, peerClock - lastTranslateClock < 0.5 { curveLogTurn(err: err, D: D, intermediate: intermediate, exact: exact) }
+            lastTranslateClock = -10          // (a turn on the spot is a stop: the walk that follows starts from a stand)
             let tp = turnPlan(err: err, idle: false)
             startStep(dyaw: tp.dyaw, peak: turnLift * amplitude, rate: stepRate * runRateMul * locoRateMul * tp.rate)
             return 0
@@ -1565,10 +1587,12 @@ final class BlobBrain {
         let arcK: Float = (abs(err) > 0.5 && !finalTurn) ? 0.6 : 1
         let L = stride * runStrideMul * amplitude.clamped(0.6, 1) * arcK
         var a: Float, r: Float
-        if !intermediate && (abs(D - s) < 0.06 || D < s) { a = exact ? min(D, max(0, s) + 0.06) : max(0, s); r = 0; walkFinal = true }    // final step: root over the stance foot, feet land square
-        else if D > s + 1.1 * L || intermediate { r = 0.5 * L; a = s + r }                        // regular step: lands half a step ahead
+        let uS = bend?.u ?? u          // (a curved step travels along the heading it turns through, not straight at the target)
+        let sS = bend != nil ? simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), uS) : s
+        if bend == nil && !intermediate && (abs(D - s) < 0.06 || D < s) { a = exact ? min(D, max(0, s) + 0.06) : max(0, s); r = 0; walkFinal = true }    // final step: root over the stance foot, feet land square
+        else if bend != nil || D > s + 1.1 * L || intermediate { r = 0.5 * L; a = sS + r }                        // regular step: lands half a step ahead
         else { r = min(0.6 * L, max(0.06, D / 3)); a = max(0, D - r) }            // two-step finish, the second one is final
-        var rootD = u * a
+        var rootD = uS * a
         let cand = root + rootD
         // THE FINAL STEP OF A STANCE WALK lands on the spot the stance decided (the touch distance for the posture the pair ENDS in). The room's peer wall measures the partner at the walker's CURRENT, mid-turn
         // outline (80 deg off the final yaw: 10 cm wider than the pose he lands in) and used to cut the step 9 cm short, which the lean then closed (stop-turn-lean). So this one planning call does not see the partner.
@@ -1576,13 +1600,23 @@ final class BlobBrain {
         let pRV = PerfProbe.begin(); let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); PerfProbe.end("rs.resolve", pRV)
         stanceStepFree = false
         let got = SIMD2(rv.x, rv.z) - root
-        if MoveLog.on, simd_distance(SIMD2(rv.x, rv.z), cand) > 0.01 { MoveLog.note(.push) }          // (MoveLog: the floor rules / the peer spring moved the planned step by more than 1 cm)
+        if MoveLog.on, simd_distance(SIMD2(rv.x, rv.z), cand) > 0.01 {
+            MoveLog.note(.push)
+            if EmoteSpot.logOn {          // (soccer-room-r1 log only: which body, which moment, what pushed it)
+                let pe = steerPeers().map { (id: $0.id, d: simd_distance($0.pos, cand)) }.min { $0.d < $1.d }
+                NSLog("[push] sess=%d t=%.1f id=%d at=(%.2f,%.2f) moved=%.2f nearestPeer=%d d=%.2f order=%@ st=%d script=%@ idle=%@ target=(%.2f,%.2f)", mix.sess ? 1 : 0, variety.now, steerID, root.x, root.y, simd_distance(SIMD2(rv.x, rv.z), cand), pe?.id ?? -1, pe?.d ?? -1, String(describing: mix.order.kind), mix.order.state, String(describing: script).prefix(14) as CVarArg, String(describing: idleState.kind) as CVarArg, target.x, target.y)
+                curveLogPush(got: SIMD2(rv.x, rv.z), cand: cand, curved: bend != nil || aimSub)          // (curved-walk-r1 log: which pushes came on a curved step)
+            }
+        }          // (MoveLog: the floor rules / the peer spring moved the planned step by more than 1 cm)
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
-        let wm = finalTurn ? max(-m, min(m, errF)) : (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err)))
+        let wm = finalTurn ? max(-m, min(m, errF)) : (bend?.dy ?? (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err))))
         // the last stride of a stance walk is an unhurried one (people brake into a hug): the soft body keeps the walk's momentum for a few centimetres past the root when the root stops at once
         let brake: Float = (exact && walkFinal) ? ContactTuning.finalStepRate(sideBySide: contactSideFinal) : 1
-        startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude, rate: stepRate * runRateMul * locoRateMul * brake)
+        if a > 0.01, !walkFinal { lastTranslateClock = peerClock }
+        if bend != nil || aimSub { Self.curveCounts[0] += 1; lastCurvedClock = peerClock }
+        if EmoteSpot.logOn, bend != nil || aimSub { curveLogStep(err: err, D: D, intermediate: intermediate, dy: wm, bend: bend != nil, travel: rootD) }
+        startStep(rootD: rootD, dyaw: wm, reach: uS * r, peak: stepLift * amplitude, rate: stepRate * runRateMul * locoRateMul * brake)
         return 0
     }
 

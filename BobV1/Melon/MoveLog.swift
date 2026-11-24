@@ -175,6 +175,7 @@ final class MoveLog {
                     let me = s.speed > 0.15, he = (bodies[o.steerID]?.speed ?? 0) > 0.15
                     let k = (me ? 1 : 0) + (he ? 1 : 0)
                     total.bump[k] += 1; window.bump[k] += 1
+                    if EmoteSpot.logOn { NSLog("[push] t=%.1f ids=%d,%d walkers=%d a=%@ b=%@ blockA=%d blockB=%d", b.variety.now, b.steerID, o.steerID, k, b.socialKind?.rawValue ?? ((b.activity == .walking) ? "walk" : "-"), o.socialKind?.rawValue ?? ((o.activity == .walking) ? "walk" : "-"), b.socialBook.block == nil ? 0 : (b.socialBook.block!.running ? 2 : 1), o.socialBook.block == nil ? 0 : (o.socialBook.block!.running ? 2 : 1)) }          // (best-friend-r1 round 5: where a push happens; blockX 1 = walking / waiting for the meeting, 2 = in the chain)
                 }
             } else if g > 0.03 { s.touching.remove(o.steerID) }
         }
@@ -212,6 +213,7 @@ final class MoveLog {
             if !rf.stopOK(ahead) { return "hud" }
             if !rf.contains(ahead + dir * 0.3) || rf.halfWidth(at: ahead.y) - abs(ahead.x) < 0.35 { return "edge" }
         }
+        if b.peerClock - b.spotTurnClock < 0.7 { return "turn" }          // (curved-walk-r1: the stop is a turn on the spot, `planWalkStep`)
         return "other"
     }
 
@@ -246,7 +248,7 @@ final class MoveLog {
         else if b.activity == .playing || b.toy.waitUID >= 0 || b.toy.chaseSpot != nil { cat = 6 }
         else if b.activity == .eating || b.activity == .drinking || b.activity == .touched || b.activity == .recovering { cat = 9 }
         else if let k { cat = (k == .wander || k == .run) ? 0 : 3 }
-        else { cat = 2 }
+        else { cat = b.mix.sess ? 6 : 2 }          // (soccer-room-r1: a member of a soccer session standing at his place is ball play)
         if cat != s.cat {
             if s.cat == 2, s.catT > 0.2 { total.stands.append(s.catT); window.stands.append(s.catT) }
             s.cat = cat; s.catT = 0

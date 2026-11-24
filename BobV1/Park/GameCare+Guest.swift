@@ -153,6 +153,7 @@ extension GameCare {
         }
 
         guard let a = g.actor, let b = a.brain else { return }
+        tickBestFriendsHome(actors, guest: a, vid: v.id)          // (best-friend-r1: whose best friend he is, for the pairing / greeting / bedtime)
         g.phaseT += dt
         guestRestoreArena()
         visitorLook(a, v, dt: dt, sleepLocked: false)
@@ -175,6 +176,7 @@ extension GameCare {
     func guestRemove() {
         let g = guestBook
         if let a = g.actor { a.brain?.hurry = false; visitorPutAway(a); parkBook.clear?() }
+        clearBestFriends(parkBook.roster)          // (best-friend-r1)
         g.actor = nil
         g.card = false
         g.party.cancel()
@@ -262,7 +264,8 @@ extension GameCare {
         AudioHub.shared.chirp(jelly: a.id, .happy)
         touchPlay?.spawnHeart(now: CACurrentMediaTime())
         var sent = 0
-        for r in actors {
+        func isFriend(_ r: JellyActor) -> Bool { r.brain.map { BondPairing.isBest($0, b) } ?? false }
+        for r in actors.filter(isFriend) + actors.filter({ !isFriend($0) }) {          // (best-friend-r1: his best friend's Jelmiko first)
             guard let rb = r.brain, !rb.isSleeping, rb.commandedIdle == nil, !rb.commanded else { continue }
             rb.face(.excited, hold: 2)
             if sent < 2, rb.idleState.kind == nil, rb.scriptIsNone {
