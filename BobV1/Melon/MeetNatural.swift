@@ -21,6 +21,7 @@ enum MeetNatural {
     /// Left on the old start: follow, chase, tag, sneak, keepAway, line, pass, bagSit, cuddle (a prop / a seat / a run), look, greet, zoomies, the travelling and the ring kinds.
     static let kinds: Set<SocialKind> = [.boop, .squabble, .cheekSquish, .hopAlong, .highFive, .chestBump, .twirl, .nuzzle, .sitTogether, .swayHug, .whisperGiggle, .shyWave, .danceOff, .spinHug, .backToBack, .cuddleLean, .bellyBounce, .mirrorDance, .peekaboo, .tag, .littleRace, .leapfrog, .ringAround]
     static let minLeg: Float = 0.7
+    static let minShift: Float = 0.35
     static let partnerLag: Float = 0.08
     nonisolated(unsafe) static var why = [0, 0, 0, 0]
     /// A walk's speed (u/s) for the ETA.
@@ -59,12 +60,13 @@ extension BlobBrain {
             for k in 0...18 {
                 let t = Float(k) / 20          // 0 ... 0.9 of the walk is the partner's
                 let c = dir * t
+                if simd_length(c) < MeetNatural.minShift { continue }          // (a partner who only turns and takes a step or two is still a waiter: no tiny shifts)
                 let af = ga + c, of = po + c
                 let etaA = meetTurnT(af - pa) + simd_distance(af, pa) / va
                 let etaO = (simd_length(c) > 0.05 ? o.meetTurnT(c) : 0) + simd_length(c) / vo + MeetNatural.partnerLag          // (measured, takes v2: measured on takes v2 (18 joins): the partner arrives 0.08 s later on average, spread 0.6 s)
                 let diff = abs(etaA - etaO) + abs(ang) * 0.15
-                guard diff < bestDiff - 0.02 || (best == nil && k == 0 && ang == 0) else { continue }
-                if k > 0 {
+                guard diff < bestDiff - 0.02 || best == nil else { continue }
+                do {
                     guard rf.contains(af), rf.contains(of) else { MeetNatural.why[0] += 1; continue }
                     guard simd_distance(closeFixed(af), af) < 0.1, simd_distance(o.closeFixed(of), of) < 0.1 else { MeetNatural.why[1] += 1; continue }
                     guard spotFree(af, besides: [self, o]), spotFree(of, besides: [self, o]) else { MeetNatural.why[2] += 1; continue }
