@@ -160,7 +160,7 @@ final class ParkBook {
                         for (j, o) in self.visitors.enumerated() where j != id && o.mergedInto == nil { taken.insert(ParkNames.key(o.name)) }
                         if ParkNames.isFree(t.name, taken: taken) { self.visitors[id].name = t.name }
                     }
-                    self.visitors[id].blurb = t.blurb; self.visitors[id].greeting = t.greeting
+                    self.visitors[id].blurb = t.blurb
                 }
                 self.visitors[id].written = true          // (once: a failed ask is not repeated this session either)
                 self.touch(); self.save()

@@ -194,7 +194,7 @@ struct TownView: View {
     private var category: TownCategory { TownCategory(rawValue: categoryRaw) ?? .all }
 
     private var places: [Place] {
-        let visit = care.guestStatusText() ?? "Ask a friend over"
+        let visit = care.guestStatusText() ?? "Invite a friend over"
         let atHome = JellyRoster.savedIDs().count
         let campCount = JellyCamp.saved().count
         let open = SpringStates.townEnabled(home: atHome, camp: campCount)          // closed only when home AND Jelmiko Camp are full
