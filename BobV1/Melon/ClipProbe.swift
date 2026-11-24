@@ -104,6 +104,7 @@ enum ClipProbe {
         }
     }
     nonisolated(unsafe) static var fields: [DecorKind: Field] = [:]
+    nonisolated(unsafe) static var slideLogged = Set<Int>()
     static func field(_ k: DecorKind) -> Field? {
         if let f = fields[k] { return f }
         guard let a = DecorMeshes.loaded[k] else { return nil }
@@ -150,6 +151,7 @@ enum ClipProbe {
         var out: [Prop] = []
         let df = DecorField.shared
         for f in df.feet {
+            if f.kind == .slide, f.uid != ParkToys.slideUID, !slideLogged.contains(f.uid) { slideLogged.insert(f.uid); NSLog("[clip] home slide uid %d at (%.2f,%.2f) q%d zonesClear=%d", f.uid, f.centre.x, f.centre.y, f.quarter, SlideZones.clear(f, among: df.feet) ? 1 : 0) }
             if f.kind == .slide, let fld = field(.slide) {
                 let c = f.centre, q = f.quarter, lift = f.lift
                 let lo = V3(c.x - 1.4, lift, c.y - 2.0), hi = V3(c.x + 1.4, lift + 1.6, c.y + 2.0)

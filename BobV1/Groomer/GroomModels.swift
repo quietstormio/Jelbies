@@ -54,6 +54,8 @@ nonisolated enum GroomTuning {
     static let doorOpen: Float = 0.55, walkOut: Float = 1.4
     static let toastSeconds: Float = 2.5
     static let lineSpacing: Float = 1.5
+    /// no-clip-r1: the line-up on the street is wider (two walkers' arms overlapped 4-12 cm on their way to neighbouring spots); the home line-up keeps `lineSpacing`.
+    static let streetSpacing: Float = 1.9
     static let clipBell = "groom_bell", clipAmbience = "groom_ambience", clipReveal = "groom_reveal", clipHarp = "groom_harp"
 }
 

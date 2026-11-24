@@ -67,7 +67,7 @@ enum GroomScenery {
     /// The open door leaf as a floor obstacle (a thin wall from the hinge out toward the street), for the walk resolver while the door stands open.
     static let doorLeafBox = RoomLayout.FlatBox(centre: SIMD2(0.95, frontZ + 0.85), half: SIMD2(0.21, 0.85), height: 2.0, radius: 0.04)
     static func lineUp(index k: Int, of n: Int) -> SIMD2<Float> {
-        SIMD2((Float(k) - Float(n - 1) / 2) * GroomTuning.lineSpacing, -1.2)
+        SIMD2((Float(k) - Float(n - 1) / 2) * GroomTuning.streetSpacing, -1.2)
     }
 
     // palette: warm white plaster, sage, light wood, charcoal, a touch of brass (and stone for the ground)
