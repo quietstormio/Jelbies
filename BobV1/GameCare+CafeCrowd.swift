@@ -44,6 +44,7 @@ final class CafeMember {
     var slowT: Float = 0
     var slowCounted = false
     var prevPos: SIMD2<Float> = .zero
+    var nudges = 0, spawn: SIMD2<Float> = .zero
     var lastPos: SIMD2<Float> = .zero
     var held = false
     init(actor: JellyActor, visitor: ParkVisitor, index: Int) { self.actor = actor; self.visitor = visitor; self.index = index }
@@ -313,7 +314,9 @@ extension GameCare {
                     if a.state == .walking {
                         let ap = Self.floorPos(a.actor.brain!, a.actor.sim)
                         let ref = g.phase == .leaving ? g.table.stands[a.index] : door
-                        if cs.clock - a.startedAt < 1.0 || simd_distance(ap, ref) < 1.2 { continue }
+                        // coming in, the one ahead must be fully ON the floor (0.6 u inside the visible edge) and 1.3 u from the entrance before the next appears; going out, 1.3 u from his seat
+                        let onFloor = g.phase == .leaving || ap.x <= GameCamera.visibleHalfWidthAtBody(z: ap.y, aspect: GameCamera.aspect) - 0.6
+                        if cs.clock - a.startedAt < 1.0 || simd_distance(ap, ref) < 1.3 || !onFloor { continue }
                     }
                 }
                 let from = m.replan ? pos : (g.phase == .leaving ? g.table.stands[m.index] : door)
@@ -334,7 +337,7 @@ extension GameCare {
                     if i == 0 { crowdBell(g, entering: true); g.belled = true }
                 }
                 m.state = .walking; m.stuck = 0; m.lastPos = g.phase == .arriving && !m.replan ? door : pos; m.prevPos = m.lastPos; m.replan = false
-                m.startedAt = cs.clock; m.slowT = 0; m.slowCounted = false
+                m.startedAt = cs.clock; m.slowT = 0; m.slowCounted = false; m.spawn = m.lastPos; m.nudges = 0
                 if g.phase == .leaving { b.reserved = false; b.mealFaceYaw = nil }
             case .walking:
                 // yield: a follower stops while the one ahead of it in this group is closer than 1.15
@@ -348,7 +351,19 @@ extension GameCare {
                 let lastPt = m.path.last ?? pos
                 if speed < 0.15, cs.clock - m.startedAt > 0.6, simd_distance(pos, lastPt) > 0.8 {
                     m.slowT += dt
-                    if m.slowT > 0.3, !m.slowCounted { m.slowCounted = true; cs.hesitations += 1; Self.crowdLog(String(format: "t=%.1f HESITATION member %d at (%.2f,%.2f) held=%d", cs.clock, m.actor.id, pos.x, pos.y, hold ? 1 : 0)) }
+                    if m.slowT > 0.3, !m.slowCounted {
+                        m.slowCounted = true; cs.hesitations += 1
+                        let fx = m.path.first.map { b.fixed($0) }
+                        let others = g.members.filter { $0 !== m }.map { o in String(format: "m%d %@ (%.2f,%.2f)", o.actor.id, "\(o.state)", Self.floorPos(o.actor.brain!, o.actor.sim).x, Self.floorPos(o.actor.brain!, o.actor.sim).y) }.joined(separator: "; ")
+                        Self.crowdLog(String(format: "t=%.1f HESITATION member %d at (%.2f,%.2f) held=%d idleNow=%d act=%@ script=%@ restT=%.2f path=%@ firstWpResolved=%@ reqWp=%@ others=[%@]", cs.clock, m.actor.id, pos.x, pos.y, hold ? 1 : 0, idleNow ? 1 : 0, "\(b.activity)", String("\(b.script)".prefix(60)), b.restTimer, m.path.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) }.joined(separator: ">"), fx.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", m.reqWp.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", others))
+                    }
+                    // standing still at the start of the walk: stop whatever the brain is holding him in and ask again (twice at most)
+                    if m.slowT > 1.2, m.nudges < 2, simd_distance(pos, m.spawn) < 0.8, let wp = m.path.first {
+                        m.nudges += 1; m.slowT = 0; m.slowCounted = false
+                        b.abortAll(m.actor.sim, m.actor.skinner); b.commandedIdle = nil
+                        m.reqWp = wp; m.reqT = 0; b.requestNow(.goTo(wp))
+                        Self.crowdLog("member \(m.actor.id) did not set off: asked again (\(m.nudges))")
+                    }
                 } else if speed >= 0.15 { m.slowT = 0; m.slowCounted = false }
                 if hold { if !m.held { m.held = true; b.requestNow(.goTo(pos)) }; continue }
                 m.held = false
