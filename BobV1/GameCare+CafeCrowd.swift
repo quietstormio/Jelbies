@@ -111,13 +111,28 @@ extension GameCare {
         #endif
     }
 
-    /// The entrance, a whole body past the screen's right edge at depth `z` (the same off-screen rule as the home guest's exit: the visible half width at body height + 1.3).
-    /// Landscape: the screen is much wider than the room (the right wall is ON screen, "off screen" would be 12 u away, outside the room), so there the entrance is the floor's right edge at the wall
-    /// (4.5) - a door in that wall needs art; nothing is drawn.
-    static func crowdEntry(z: Float) -> SIMD2<Float> {
-        let off = GameCamera.visibleHalfWidthAtBody(z: z, aspect: GameCamera.aspect) + 1.3
-        return SIMD2(GameCamera.aspect >= 1 ? min(off, 4.5) : off, z)
+    /// Is any part of a body standing at `p` (radius 0.8, height 1.4) inside the camera frame? The camera's own projection, for the view's aspect (`GameCamera.screenPoint`).
+    static func crowdBodyVisible(_ p: SIMD2<Float>) -> Bool {
+        let size = CGSize(width: CGFloat(GameCamera.aspect) * 1000, height: 1000)
+        for dx in [Float(-0.8), 0, 0.8] { for dz in [Float(-0.5), 0, 0.5] { for y in [Float(0.05), 0.7, 1.45] {
+            if let q = GameCamera.screenPoint(floor: SIMD2(p.x + dx, p.y + dz), y: y, size: size), q.x >= 0, q.x <= size.width, q.y >= 0, q.y <= size.height { return true }
+        } } }
+        return false
     }
+    /// The entrance, worked out with the camera: portrait = past the right edge of the screen at the door's depth, landscape (the right wall is ON screen there, no door art) = past the BOTTOM edge,
+    /// toward the camera, at the door's x. The first point found where no part of a body shows, plus a margin.
+    static func crowdEntry(for door: SIMD2<Float>) -> SIMD2<Float> {
+        if GameCamera.aspect >= 1 {
+            var z = max(door.y, 2.0)
+            while z < 9, crowdBodyVisible(SIMD2(door.x, z)) { z += 0.1 }
+            return SIMD2(door.x, z + 0.3)
+        }
+        var x = max(door.x, 2.5)
+        while x < 12, crowdBodyVisible(SIMD2(x, door.y)) { x += 0.1 }
+        return SIMD2(x + 0.3, door.y)
+    }
+    /// The way in, from the entrance toward the room (a unit vector): west from the right edge in portrait, away from the camera in landscape.
+    static func crowdInward() -> SIMD2<Float> { GameCamera.aspect >= 1 ? SIMD2(0, -1) : SIMD2(-1, 0) }
 
     /// One customer table, set out at once and empty: places 1 and 2 of the ends table, the far one (from the entrance) first. nil when it does not fit the floor or crowds the player's table.
     func cafeMakeCustomerTable(slot: Int, at t: SIMD2<Float>, landscape: Bool) -> CafeCustomerTable? {
@@ -143,7 +158,7 @@ extension GameCare {
                 && !RoomCatalog.cafe.allBoxes.contains { b in abs(e.stand.x - b.centre.x) < b.halfExtents.x + 0.3 && abs(e.stand.y - b.centre.z) < b.halfExtents.z + 0.3 }
         }
         guard fits else { table.reset(); Self.crowdLog("table slot \(slot) at \(t) does not fit"); return nil }
-        let door = Self.crowdEntry(z: CafeTables.door(landscape: landscape, table: t).y)          // (off screen, level with the table's entrance)
+        let door = CafeTables.door(landscape: landscape, table: t)
         ends.sort { simd_distance($0.stand, door) > simd_distance($1.stand, door) }          // (the first in takes the FAR end: the second never walks past the first)
         let ct = CafeCustomerTable(slot: slot, centre: t, table: table)
         ct.stands = ends.map(\.stand); ct.yaws = ends.map(\.yaw); ct.placeOf = ends.map { $0.yaw > 0 ? 1 : 2 }
@@ -258,7 +273,7 @@ extension GameCare {
     private func cafeCrowdLeave(_ id: Int, landscape: Bool) {
         guard let g = cafeBook.crowd.live[id] else { return }
         g.phase = .leaving
-        let door = Self.crowdEntry(z: g.table.door.y)
+        let door = Self.crowdEntry(for: g.table.door)
         g.members.sort { simd_distance(g.table.stands[$0.index], door) < simd_distance(g.table.stands[$1.index], door) }          // (the one nearer the door first)
         for m in g.members { m.state = .waiting; m.path = []; m.held = false; m.replan = false; m.replans = 0; m.guards = 0; m.reqWp = nil }
         g.belled = false
@@ -276,13 +291,14 @@ extension GameCare {
 
     /// A route from `from` to `to` clear of every seated body and table, the widest berth that has a way through (the room's side is open: x up to the off-screen entrance).
     private func crowdRoute(_ g: CafeLiveGroup, _ m: CafeMember, from: SIMD2<Float>, to: SIMD2<Float>, landscape: Bool) -> [SIMD2<Float>] {
+        let zMax = max(2.9, from.y + 0.3, to.y + 0.3)
         let base = crowdDiscs(for: g, excluding: m, landscape: landscape)
         for extra in [Float(0.5), 0.3, 0.1, 0.0] {
             let discs = base.map { d -> CafeRoute.Disc in
                 let near = min(simd_distance(d.c, from), simd_distance(d.c, to))
                 return .init(c: d.c, r: max(min(d.r + extra, near - 0.02), min(d.r, near - 0.02)))
             }
-            let r = CafeRoute.path(from: from, to: to, discs: discs, inside: { $0.x >= -3.9 && $0.x <= 7.5 && $0.y > -3.8 && $0.y < 2.9 })
+            let r = CafeRoute.path(from: from, to: to, discs: discs, inside: { $0.x >= -3.9 && $0.x <= 12 && $0.y > -3.8 && $0.y < zMax })
             if !r.isEmpty { return r }
         }
         return []
@@ -292,7 +308,11 @@ extension GameCare {
         guard m.savedResolve == nil, let b = m.actor.brain else { return }
         m.savedResolve = b.resolve
         m.actor.sim.arenaRadius = .infinity
-        b.resolve = { p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true) }
+        b.resolve = { p, r in
+            var q = GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true)
+            if p.z > q.z { q.z = p.z }          // (landscape: the way in is past the front (camera) edge, below the roaming floor's front)
+            return q
+        }
     }
     private func crowdClose(_ m: CafeMember) {
         guard let b = m.actor.brain, let r = m.savedResolve else { return }
@@ -303,7 +323,7 @@ extension GameCare {
         let book = cafeBook, cs = book.crowd
         // the entrance is worked out NOW: the café camera is still settling when the tables are made (the visible width at that moment was narrower than a minute later, which put the
         // "off screen" entrance on screen in the logs of round 4)
-        let door = Self.crowdEntry(z: g.table.door.y)
+        let door = Self.crowdEntry(for: g.table.door)
         // each member in turn
         for (i, m) in g.members.enumerated() {
             guard let b = m.actor.brain else { continue }
@@ -324,13 +344,40 @@ extension GameCare {
                         let ap = Self.floorPos(a.actor.brain!, a.actor.sim)
                         let ref = g.phase == .leaving ? g.table.stands[a.index] : door
                         // coming in, the one ahead must be fully ON the floor (0.6 u inside the visible edge) and 1.3 u from the entrance before the next appears; going out, 1.3 u from his seat
-                        let onFloor = g.phase == .leaving || ap.x <= GameCamera.visibleHalfWidthAtBody(z: ap.y, aspect: GameCamera.aspect) - 0.6
-                        if cs.clock - a.startedAt < 1.0 || simd_distance(ap, ref) < 1.3 || !onFloor { continue }
+                        let onFloor = g.phase == .leaving || (Self.crowdBodyVisible(ap) && simd_distance(ap, door) > 2.2)
+                        if cs.clock - a.startedAt < 1.0 || simd_distance(ap, ref) < 1.8 || !onFloor { continue }          // (1.8: the room's keep-apart gap is 1.4: a body appearing 1.3 behind him shoved the leader, which slowed it near x 3.3 in round 4)
                     }
                 }
                 let from = m.replan ? pos : (g.phase == .leaving ? g.table.stands[m.index] : door)
                 let to = g.phase == .leaving ? door : g.table.stands[m.index]
-                let route = crowdRoute(g, m, from: from, to: to, landscape: landscape)
+                var route = crowdRoute(g, m, from: from, to: to, landscape: landscape)
+                if !route.isEmpty {
+                    let inward = Self.crowdInward()
+                    if g.phase == .arriving, !m.replan {          // one straight, continuous walk in: a lead point well inside the floor, then the route from there
+                        let lead = from + inward * 2.4
+                        if CafeRoute.clearLine(from, lead, base: crowdDiscs(for: g, excluding: m, landscape: landscape), gap: Self.crowdMinGap - 0.2) {
+                            let rest = crowdRoute(g, m, from: lead, to: to, landscape: landscape)
+                            if !rest.isEmpty { route = [lead] + rest }
+                        }
+                    } else if g.phase == .leaving, !m.replan {          // out the same way: the last leg is a straight walk out of the entrance
+                        let leadOut = to - inward * 2.4
+                        let pre = crowdRoute(g, m, from: from, to: leadOut, landscape: landscape)
+                        if !pre.isEmpty { route = pre + [to] }
+                    }
+                    // a leaver stands facing his table-mate: the turn toward the way out is spread over the first steps (a point 0.9 u off his seat, half way round) instead of a turn on the spot
+                    if g.phase == .leaving, !m.replan, let first = route.first {
+                        let want = atan2f(first.x - from.x, first.y - from.y)
+                        let turn = Self.wrapAngle(want - b.yaw)
+                        if abs(turn) > 0.9 {
+                            let mid = b.yaw + turn * 0.5
+                            let bp = from + SIMD2(sinf(mid), cosf(mid)) * 0.9
+                            let clearOfTable = simd_distance(bp, g.table.centre) > 0.8
+                            let clearOfBodies = (Array(book.stands.values) + g.members.filter { $0 !== m }.map { Self.floorPos($0.actor.brain!, $0.actor.sim) }).allSatisfy { simd_distance($0, bp) > 1.4 }
+                            if clearOfTable && clearOfBodies { route.insert(bp, at: 0) }
+                        }
+                    }
+                    route = CafeRoute.rounded(from: from, path: route)
+                }
                 if route.isEmpty {          // no way round the seated bodies yet: he waits (off the floor when coming in) and looks again; after 10 s he is simply seated
                     m.waitT += dt
                     if g.phase == .arriving, m.waitT > 10 { m.path = [to]; m.state = .walking; m.stuck = 6.1; rehome(m.actor, at: to); if i == 0 { crowdBell(g, entering: true); g.belled = true }; Self.crowdLog("no route for member \(m.actor.id): seated directly") }
@@ -342,6 +389,8 @@ extension GameCare {
                 crowdOpen(m)          // (the walk runs past the screen's side: the entrance and the exit lie off screen)
                 if g.phase == .arriving, !m.replan {          // (he appears off screen at the entrance, the bell rings once for the group)
                     rehome(m.actor, at: door)
+                    if let f = route.first { b.yaw = atan2f(f.x - door.x, f.y - door.y) }          // (he already faces the way he walks: no turn before the first step)
+                    Self.crowdLog(String(format: "ENTRY member %d appears at (%.2f,%.2f) bodyVisible=%d, first point (%.2f,%.2f)", m.actor.id, door.x, door.y, Self.crowdBodyVisible(door) ? 1 : 0, route.first?.x ?? 0, route.first?.y ?? 0))
                     b.restTimer = 0; b.reserved = false; b.mealFaceYaw = nil
                     if i == 0 { crowdBell(g, entering: true); g.belled = true }
                 }
@@ -370,14 +419,14 @@ extension GameCare {
                     Self.crowdLog("member \(m.actor.id) did not set off: asked again (\(m.nudges))")
                 }
                 let lastPt = m.path.last ?? pos
-                let onScreen = abs(pos.x) < GameCamera.visibleHalfWidthAtBody(z: pos.y, aspect: GameCamera.aspect) + 0.4
+                let onScreen = Self.crowdBodyVisible(pos)          // (the camera's own frame: the round-4 check by x was wrong)
                 if speed < 0.15, onScreen, cs.clock - m.startedAt > 1.5, simd_distance(pos, lastPt) > 0.8 {
                     m.slowT += dt
                     if m.slowT > 0.3, !m.slowCounted {
                         m.slowCounted = true; cs.hesitations += 1
                         let fx = m.path.first.map { b.fixed($0) }
                         let others = g.members.filter { $0 !== m }.map { o in String(format: "m%d %@ (%.2f,%.2f)", o.actor.id, "\(o.state)", Self.floorPos(o.actor.brain!, o.actor.sim).x, Self.floorPos(o.actor.brain!, o.actor.sim).y) }.joined(separator: "; ")
-                        Self.crowdLog(String(format: "t=%.1f HESITATION member %d at (%.2f,%.2f) held=%d idleNow=%d act=%@ script=%@ restT=%.2f path=%@ firstWpResolved=%@ reqWp=%@ others=[%@]", cs.clock, m.actor.id, pos.x, pos.y, hold ? 1 : 0, idleNow ? 1 : 0, "\(b.activity)", String("\(b.script)".prefix(60)), b.restTimer, m.path.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) }.joined(separator: ">"), fx.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", m.reqWp.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", others))
+                        Self.crowdLog(String(format: "t=%.1f HESITATION(visible) member %d at (%.2f,%.2f) held=%d idleNow=%d act=%@ script=%@ restT=%.2f path=%@ firstWpResolved=%@ reqWp=%@ others=[%@]", cs.clock, m.actor.id, pos.x, pos.y, hold ? 1 : 0, idleNow ? 1 : 0, "\(b.activity)", String("\(b.script)".prefix(60)), b.restTimer, m.path.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) }.joined(separator: ">"), fx.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", m.reqWp.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", others))
                     }
                 } else if speed >= 0.15 { m.slowT = 0; m.slowCounted = false }
                 if hold { if !m.held { m.held = true; b.requestNow(.goTo(pos)) }; continue }
@@ -411,7 +460,7 @@ extension GameCare {
                     continue
                 }
                 // a waypoint that is not the last is taken while he is still walking (0.6 u before it): the next leg starts without a stop
-                if let wp = m.path.first, m.path.count > 1, simd_distance(pos, wp) < 0.6 {
+                if let wp = m.path.first, m.path.count > 1, simd_distance(pos, wp) < 0.8 {
                     m.path.removeFirst()
                     if let n = m.path.first { m.reqWp = n; m.reqT = 0; b.requestNow(.goTo(n)) }
                     continue

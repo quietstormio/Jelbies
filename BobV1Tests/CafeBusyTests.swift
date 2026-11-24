@@ -74,16 +74,34 @@ final class CafeBusyTests: XCTestCase {
         XCTAssertGreaterThan(gaps.reduce(0, +) / Float(gaps.count), 25)
     }
 
-    func testTheEntranceIsAWholeBodyPastTheScreensEdgeInBothAspects() {
+    func testTheEntranceIsOffTheCameraFrameInBothAspects() {
         for aspect in [Float(440.0 / 956.0), Float(956.0 / 440.0)] {
             let saved = GameCamera.aspect; GameCamera.aspect = aspect
-            for z in [Float(-2.4), 1.0, 1.8] {
-                let e = GameCare.crowdEntry(z: z)
-                XCTAssertGreaterThanOrEqual(e.x, aspect >= 1 ? 4.5 - 0.01 : GameCamera.visibleHalfWidthAtBody(z: z, aspect: aspect) + 1.29, "aspect \(aspect) z \(z): off screen by a body")
-                XCTAssertEqual(e.y, z)
+            RoomLayout.apply(RoomCatalog.cafe); _ = GameCamera.refreshRoam(aspect: aspect)
+            for landscape in [aspect >= 1] {
+                for t in CafeTables.customerTables(landscape: landscape) {
+                    let door = CafeTables.door(landscape: landscape, table: t)
+                    let e = GameCare.crowdEntry(for: door)
+                    XCTAssertFalse(GameCare.crowdBodyVisible(e), "aspect \(aspect) table \(t): the entrance \(e) shows no part of a body")
+                    XCTAssertTrue(GameCare.crowdBodyVisible(e + GameCare.crowdInward() * 3), "three units in, he is on screen (aspect \(aspect))")
+                }
             }
             GameCamera.aspect = saved
         }
+    }
+
+    func testRoundedCornersNeverTurnMoreThanAboutFortyDegreesAtOnce() {
+        let raw: [SIMD2<Float>] = [SIMD2(0, -4), SIMD2(4, -4), SIMD2(4, 0)]          // two right angles
+        let r = CafeRoute.rounded(from: SIMD2(0, 0), path: raw)
+        XCTAssertEqual(r.last, raw.last)
+        var worst: Float = 0
+        var pts = [SIMD2<Float>(0, 0)] + r
+        for i in 1..<(pts.count - 1) {
+            let d1 = simd_normalize(pts[i] - pts[i - 1]), d2 = simd_normalize(pts[i + 1] - pts[i])
+            worst = max(worst, acosf(max(-1, min(1, simd_dot(d1, d2)))))
+        }
+        pts.removeAll()
+        XCTAssertLessThan(worst, 0.95, "a quarter turn became three smaller turns (worst \(worst) rad)")
     }
 
     func testNoEntranceRightAfterAnExit() {

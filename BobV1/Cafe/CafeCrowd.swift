@@ -21,7 +21,7 @@ nonisolated enum CafeTables {
             if v.count == 2 { return SIMD2(v[0], v[1]) }
         }
         if !landscape, let t = table, t.y < -2.0, t.x > 1.5 { return SIMD2(4.2, -2.4) }
-        return landscape ? SIMD2(4.4, 1.0) : SIMD2(3.7, 1.8)
+        return landscape ? SIMD2(3.8, 2.4) : SIMD2(3.7, 1.8)          // (the point the real entrance is worked out from: GameCare.crowdEntry(for:) moves it off the camera's frame)
     }
     /// Tables the player's group may take (floor x, z of the table centre) with their weight. The first of each aspect is the old fixed spot ("the middle").
     /// Portrait: the middle, or one table left of it at the same depth (the group stays inside the middle 60 % of the width, clear of the order card). The right-hand one (1.0,-1.35) was dropped in round 2: no customer table can be reached clear of its bodies.
@@ -148,6 +148,32 @@ nonisolated struct CafeCrowd {
 /// A path round discs (seated bodies, tables). Nodes: the start, the goal and eight points round every disc; an edge is open when it misses every disc (the start / goal's
 /// own discs excluded by the caller). Dijkstra over that. When no path exists an empty list is returned (the caller waits and looks again).
 nonisolated enum CafeRoute {
+    /// The straight line a -> b keeps `gap` from every disc's centre (discs are bodies / tables: a table counts at its own radius).
+    static func clearLine(_ a: SIMD2<Float>, _ b: SIMD2<Float>, base: [Disc], gap: Float) -> Bool {
+        base.allSatisfy { d in segmentClear(a, b, .init(c: d.c, r: min(d.r, max(gap, 0.6)))) }
+    }
+    /// Corners of a path turn gently: a corner sharper than 40 degrees becomes three points (a quarter-turn each way) so the walk never has to turn on the spot. `from` is where it starts.
+    static func rounded(from: SIMD2<Float>, path: [SIMD2<Float>], reach: Float = 1.1) -> [SIMD2<Float>] {
+        guard path.count >= 2 else { return path }
+        var pts = [from] + path
+        var out: [SIMD2<Float>] = []
+        for i in 1..<(pts.count - 1) {
+            let a = pts[i - 1], v = pts[i], c = pts[i + 1]
+            let l1 = simd_distance(a, v), l2 = simd_distance(v, c)
+            guard l1 > 0.2, l2 > 0.2 else { out.append(v); continue }
+            let d1 = (v - a) / l1, d2 = (c - v) / l2
+            let ang = acosf(max(-1, min(1, simd_dot(d1, d2))))
+            if ang > 0.7 {
+                let r = min(reach, 0.45 * l1, 0.45 * l2)
+                let q1 = v - d1 * r, q2 = v + d2 * r
+                let apex = v + ((q1 + q2) / 2 - v) * 0.4
+                out += [q1, apex, q2]
+            } else { out.append(v) }
+        }
+        out.append(pts[pts.count - 1])
+        _ = pts.removeFirst()
+        return out
+    }
     struct Disc { var c: SIMD2<Float>; var r: Float }
     static func segmentClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ d: Disc) -> Bool {
         let ab = b - a, l2 = simd_dot(ab, ab)
