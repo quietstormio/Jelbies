@@ -20,6 +20,9 @@ final class GameCare {
     private(set) var trayOut = false
     /// The meal on the tray gives a power-up (the first-time tip "Power-up!" comes when the tray is gone).
     @ObservationIgnored private var mealHasPerk = false
+    /// night-meal-r1: seconds the tray / a wanted meal / a group serving has been continuously on (GameCare+MealUnstick.swift: a lock that outlives any real meal is cleared when the player asks again).
+    @ObservationIgnored var mealLockAge: Float = 0
+    @ObservationIgnored var callIdleT: Float = 0
     /// A group action (call everyone / come here walking to its spots, a group serving, a group bedtime walk) is on: the Cancel pill shows from its start.
     var cancelPill = false
     /// A voice command asked for a Town screen ("let's race" / "time to train" open the Track for the selected Jelly): GameScreen watches `townRequest`.
@@ -603,6 +606,7 @@ final class GameCare {
             release()
             if focus.isActive { afterRelease = c; pendingJelly = jelly; return }
         }
+        mealUnstick(why: c.kind == .drink ? "drink tap" : "food tap")          // (night-meal-r1: a leftover lock is cleared before the tap is judged)
         if let why = orderBlocker(c) { tapRefused(why); return }          // (said out loud: GameCare+MealFeedback.swift)
         if jelly == nil, jellies.count > 1, let full = fullLine(c, jelly: jelly) { tapRefused(full) }          // a group serving has no label of its own: the tray still comes out and they shake their heads, the line says why (a single Jelbie shows "Not hungry" over his head)
         if jelly == nil, jellies.count > 1 {         // the group serving: started by `tickGroup` (it has every brain)
@@ -1008,6 +1012,13 @@ final class GameCare {
         }
         finished.removeAll()
 
+        // night-meal-r1: `callRunning` means "a come job is in flight". A job that something else replaced (a ball game's line, a session, a voice walk) never reports, and the flag then held every Feed / Water
+        // until a relaunch (found by NightMealStuckTests: welcome home, then Play). No job and nothing pending for a second = the call is over.
+        if callRunning, Self.unstickOn, brain.job == nil, brain.pending == nil, !brain.isSleeping, !brain.mealWaking, !queued.contains(where: { if case .come = $0 { return true }; return false }) {
+            callIdleT += dt
+            if callIdleT > 1 { callRunning = false; callIdleT = 0; NSLog("[mealunstick] cleared=callRunning why=come job lost (replaced) greeting=%d focus=%@", greeting ? 1 : 0, String(describing: focus.phase)) }
+        } else { callIdleT = 0 }
+
         // one-shot requests (a Call drops the meal first so the tray poofs and the held piece goes with it)
         if let r = queued.first {
             var isCome = false
@@ -1033,6 +1044,7 @@ final class GameCare {
         dining.update(dt: dt)
         if let room = renderer?.room { pushDiningFrames(room) }
         let out = wanted != nil || meal != nil || dining.isPresent || groupActive
+        if out { mealLockAge += dt } else { mealLockAge = 0 }
         if out != trayOut { trayOut = out; if !out, mealHasPerk { mealHasPerk = false; TipBook.shared.request("powerup") } }          // (home again after a power-up meal: the tip waits for the tray to be gone and everyone roaming)
         let cp = focus.phase == .approaching || groupActive || bedtimeWalking
         if cp != cancelPill { cancelPill = cp }
