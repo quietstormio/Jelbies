@@ -44,12 +44,12 @@ nonisolated enum VolleyTuning {
     static let bodyTop: Float = 1.35             // a resting Jelbie's crown
     /// `-VolleyOld 1`: the play and the serve ball as they were before 2026-11-17 (the "before" numbers of the win-rate table and the serve-timing pin).
     nonisolated(unsafe) static var old: Bool = UserDefaults.standard.bool(forKey: "VolleyOld")
-    /// `-VolleyHard 0`: the play and the computer team as they were at install 10t (the "before" of the harder-and-polished round, 2026-11-24).
+    /// `-VolleyHard 1`: the harder-opponent tuning of 2026-11-24 (parked: off by default; the facing rule below is separate and on). With it off the play and the computer are as at install 10t.
     nonisolated(unsafe) static var hard: Bool = {
         #if STANDALONE
         if let v = ProcessInfo.processInfo.environment["HARD"] { return v != "0" }
         #endif
-        return UserDefaults.standard.object(forKey: "VolleyHard") == nil ? true : UserDefaults.standard.bool(forKey: "VolleyHard")
+        return UserDefaults.standard.bool(forKey: "VolleyHard")          // (off unless asked: the harder-opponent tuning is parked, see VolleyHardTests)
     }()
     /// `-VolleyFacing 0`: bodies do not turn to the ball and a touch may begin with the ball behind the hitter (as before 2026-11-24). Independent of `hard`: `-VolleyHard 0 -VolleyFacing 1` is the old play with only the facing rule.
     nonisolated(unsafe) static var facing: Bool = {

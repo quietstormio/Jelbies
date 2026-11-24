@@ -15,6 +15,9 @@ import simd
 final class VolleyHardTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
 
+    /// The harder tuning is off by default; these tests turn it on as harness config and put the defaults back after each test.
+    override func tearDown() { VolleyTuning.hard = false; VolleyTuning.facing = true; super.tearDown() }
+
     private func run(_ p: VolleyScriptProfile, tier: VolleyTier, n: Int, seed0: UInt64 = 9100) -> (win: Float, secs: Float, backTurned: Int, touches: Int, doubles: Int) {
         var w = 0, secs: Float = 0, bt = 0, tt = 0, dh = 0
         for k in 0..<n {
@@ -41,7 +44,6 @@ final class VolleyHardTests: XCTestCase {
     /// The facing rule alone (`-VolleyHard 0 -VolleyFacing 1`): the old play with only "no touch begins behind a back": 0 back-turned touches, and the old play without it has many.
     func testFacingRuleAloneIsolated() {
         VolleyTuning.hard = false
-        defer { VolleyTuning.hard = true; VolleyTuning.facing = true }
         var withRule = 0, without = 0
         for t in VolleyTier.allCases {
             VolleyTuning.facing = true; withRule += run(.ordinary, tier: t, n: 6).backTurned

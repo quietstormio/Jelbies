@@ -258,8 +258,8 @@ final class VolleyFixesTests: XCTestCase {
         XCTAssertTrue((55...75).contains(after.o[.shore]!), "Shore ordinary \(after.o[.shore]!)")
         XCTAssertTrue((45...65).contains(after.o[.reef]!), "Reef ordinary \(after.o[.reef]!)")
         XCTAssertTrue((38...55).contains(after.o[.tidal]!), "Tidal ordinary \(after.o[.tidal]!)")
-        XCTAssertTrue((50...85).contains(after.s[.tidal]!), "Tidal skilled \(after.s[.tidal]!)")          // (2026-11-24: the upper edge 70 -> 85: measured 72.5 on the rebased tip, 2.5 over the old edge; 85 leaves room for the seed noise of +-3.5)
-        XCTAssertGreaterThan(after.o[.sandcastle]!, 75, "the first level is a friendly start")          // (2026-11-24: was "> before(-VolleyOld 1) + 30"; the old-play replay now measures 80.0 on the new sim (tip 9a2b8e8e), so the comparison no longer says anything; the band above (72-98) and this floor carry it)
+        XCTAssertTrue((50...70).contains(after.s[.tidal]!), "Tidal skilled \(after.s[.tidal]!)")
+        XCTAssertGreaterThan(after.o[.sandcastle]!, before.o[.sandcastle]! + 30, "the first level got much easier for an ordinary player")
         XCTAssertGreaterThan(after.o[.sandcastle]!, after.o[.shore]!, "a gentle climb: each level is a little harder than the one before for the ordinary player")
         XCTAssertGreaterThan(after.o[.shore]!, after.o[.tidal]!)
     }
