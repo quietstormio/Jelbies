@@ -237,7 +237,7 @@ final class ParkSlideApproachTests: XCTestCase {
             r.brain.abortAll(r.sim, r.skinner)
         }
         print("HOMESLIDE start rate \(ok) of \(tried) (\(line))")
-        XCTAssertGreaterThan(tried, 15, "enough floor spots")
+        XCTAssertGreaterThan(tried, 10, "enough floor spots")          // (no-clip-r1: was 15; walkers keep armPad further off the slide, so fewer of the 40 random spots are free floor)
     }
 
     /// Part B: the rider and the landing. 5 bodies, 8 seeds x 120 s, someone forced onto the slide every 20 s. Prints; asserts only the platform cap.
