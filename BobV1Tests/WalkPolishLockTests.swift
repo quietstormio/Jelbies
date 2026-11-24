@@ -44,7 +44,7 @@ final class WalkPolishLockTests: XCTestCase {
         var walk: [String] = [], runs: [String] = []
         func go(_ r: MotionRig, _ d: Float = 16) { r.brain.request(.goTo(r.root + SIMD2(0, d))) }
         walk += record("walk_roam", seconds: 10) { go($0) }
-        walk += record("walk_plain", seconds: 10) { r in r.brain.walkBoostK = 1.0; go(r) }          // (the plain in-move walk: no roam boost)
+        walk += record("walk_mid", seconds: 10) { r in r.brain.amplitude = 0.85; go(r) }          // (a middle-sized Jelmiko)
         walk += record("walk_small", seconds: 10) { r in r.brain.amplitude = 0.7; go(r) }          // (a small / calm Jelmiko: shorter stride)
         runs += record("run", seconds: 8) { r in r.brain.idleForced = true; _ = r.brain.idleStart(.run, r.sim) }
         runs += record("zoomies", seconds: 8) { r in r.brain.idleForced = true; _ = r.brain.idleStart(.zoomies, r.sim) }

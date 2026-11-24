@@ -66,8 +66,8 @@ final class WalkPolishMetricsTests: XCTestCase {
     func testGaitNumbers() {
         func go(_ r: MotionRig) { r.brain.request(.goTo(r.root + SIMD2(0, 16))) }
         MotionLog.write(Self.measure("walk_roam", go))
-        MotionLog.write(Self.measure("walk_plain", { r in r.brain.walkBoostK = 1.0; go(r) }))
+        MotionLog.write(Self.measure("walk_mid", { r in r.brain.amplitude = 0.85; go(r) }))
         MotionLog.write(Self.measure("walk_small", { r in r.brain.amplitude = 0.7; go(r) }))
-        MotionLog.write(Self.measure("run", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.run, r.sim) }, runOnly: true, seconds: 8))
+        MotionLog.write(Self.measure("run_hurry", { r in r.brain.hurry = true; go(r) }, runOnly: true, seconds: 10))
     }
 }
