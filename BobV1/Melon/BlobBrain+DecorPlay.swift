@@ -26,7 +26,7 @@ extension BlobBrain {
         return [:]
         #endif
     }()
-    static var slideRunOut: Float { legacyOff["SlideNoCoast"] == true ? 0 : 0.2 }
+    static let slideRunOut: Float = 0          // (no-clip-r1 round 2: no coast. A 0.2 coast past the lip made ParkSlideRoundTests stand-still / drops red (bisected); the landing belly overlap stays at the measured ~14 cm)
     /// no-clip-r1: the floor he stands, sits and rides on is this much above the art's surface (his seated belly sank 5 cm into the platform).
     static var slideLift: Float { legacyOff["SlideNoLift"] == true ? 0 : 0.05 }
     static var slideLength: Float {
