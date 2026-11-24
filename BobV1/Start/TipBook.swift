@@ -141,7 +141,21 @@ final class TipBook {
     }
 
     /// Got it, a tap outside, the screen going: the card goes; the next waits `gap`.
-    func dismiss() { if current != nil { hide() } }
+    func dismiss() {
+        guard current != nil else { return }
+        consumeFrame = passThrough ? gotItFrame : cardFrame          // the tap that closed the card ends on the card: a touch that lands there a moment later is eaten by the window, never the control underneath
+        consumeUntil = now().addingTimeInterval(Self.consumeGrace)
+        hide()
+    }
+    /// Seconds after a dismissal during which the card's spot still swallows touches.
+    nonisolated static let consumeGrace: TimeInterval = 0.5
+    @ObservationIgnored var consumeFrame: CGRect = .zero
+    @ObservationIgnored var consumeUntil: Date = .distantPast
+    /// True when a touch at `p` (window points) must be swallowed by the tip window: on the card, or on the spot a card was just dismissed from.
+    func swallows(_ p: CGPoint) -> Bool {
+        if current != nil { return (passThrough ? gotItFrame : cardFrame).insetBy(dx: -4, dy: -4).contains(p) }
+        return now() < consumeUntil && consumeFrame.insetBy(dx: -4, dy: -4).contains(p)
+    }
     private func hide() { current = nil; cardFrame = .zero; lastEnd = now() }
 
     /// The pump: shows the first queued card whose screen is open (flag written now), or hides the one up when the game becomes busy.
