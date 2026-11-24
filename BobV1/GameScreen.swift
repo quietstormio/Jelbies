@@ -662,6 +662,26 @@ struct GameScreen: View {
             care.syncDecor()
             NSLog("[placesoccer] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
         }
+        // capture aid (toy-audit-r1): -PlaceToys "drum,blocks,..." grants and places the named toys (DecorKind raw values) in that order; logs what stood there before and where each went
+        if let list = d.string(forKey: "PlaceToys"), !list.isEmpty {
+            for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
+            await sleep(2.5)
+            NSLog("[placetoys] before %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
+            for name in list.split(separator: ",") {
+                // "kind" or "kind@x,z" (the second puts it there when the spot is valid)
+                let parts = name.split(separator: "@"); let nm = parts[0].trimmingCharacters(in: .whitespaces)
+                guard let k = DecorKind(rawValue: nm) else { NSLog("[placetoys] unknown %@", String(name)); continue }
+                if !care.store.placedDecor.contains(where: { $0.kind == k }) {
+                    care.store.grant(k.storeID)
+                    if let p = care.store.place(k.storeID), parts.count > 1 {
+                        let xz = parts[1].split(separator: ",").compactMap { Float($0) }
+                        if xz.count == 2 { NSLog("[placetoys] move %@ %@", nm, care.store.move(p.uid, to: SIMD2(xz[0], xz[1])) ? "ok" : "REFUSED") }
+                    }
+                }
+            }
+            care.syncDecor()
+            NSLog("[placetoys] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)#\($0.uid)@\($0.x),\($0.z)" })")
+        }
         // capture aid: -PlayDemo 1 (grant the balls, open Play mode and flick at the middle Jelbie over and over) | 2 (the toy picker, toys owned) | 3 (the picker, nothing owned) | 4 (Play mode, no auto flick)
         if d.integer(forKey: "PlayDemo") > 0 {
             for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
