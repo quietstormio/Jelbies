@@ -418,7 +418,7 @@ extension BlobBrain {
         default:          // bouncy mat: bob while the first bounces, take the turn as he gets off
             if !playing {
                 // the first one is off the mat's pad AND out of the waiter's way before the next steps on (never two bodies on one spot)
-                if let user, simd_distance(user.position, c) < 1.6 || simd_distance(user.position, position) < 1.3 { return true }
+                if let user, simd_distance(user.position, c) < 2.4 || simd_distance(user.position, position) < 1.6 { return true }          // (the first is well off the mat: bodies never closer than 1.2 on the way on)
                 toyAudienceEnd(clock, cool: 60)
                 toy.shared += 1
                 if rand() < 0.5 { toyGo(uid, sim) }          // (half the time he takes the turn: the mat is not used more overall)
