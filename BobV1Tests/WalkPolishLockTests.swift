@@ -11,7 +11,7 @@ import simd
 
 @MainActor
 final class WalkPolishLockTests: XCTestCase {
-    static var level: Int { Int(ProcessInfo.processInfo.environment["WALK_LEVEL"] ?? "0") ?? 0 }
+    static var level: Int { BlobBrain.walkPolish }
 
     private func record(_ name: String, seconds: Float, setup: (MotionRig) -> Void) -> [String] {
         let r = MotionRig(game: false)
@@ -81,15 +81,23 @@ final class WalkPolishLockTests: XCTestCase {
 
     func testRecordOrCompareTheWalkAndTheRun() {
         let env = ProcessInfo.processInfo.environment
-        BlobBrain.walkPolish = Self.level; defer { BlobBrain.walkPolish = BlobBrain.walkPolishDefault }
-        let (walk, runs) = all()
+        defer { BlobBrain.walkPolish = BlobBrain.walkPolishDefault }
         if let out = env["WALK_GOLDEN_OUT"] {
+            BlobBrain.walkPolish = 0
+            let (walk, runs) = all()
             try? (walk + runs).joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
             MotionLog.write("LOCK wrote \(walk.count + runs.count) rows to \(out)")
             return
         }
         guard let gin = env["WALK_GOLDEN_IN"] else { return }          // (nothing asked: the recording is only a tool)
-        if Self.level == 0 { compare(walk, gin, only: { $0.hasPrefix("walk") }, tol: 1e-5, label: "walk") }
-        compare(runs, gin, only: { !$0.hasPrefix("walk") }, tol: 1e-5, label: "run")
+        for level in (env["WALK_LEVELS"] ?? "0").split(separator: ",").compactMap({ Int($0) }) {
+            BlobBrain.walkPolish = level
+            let (walk, runs) = all()
+            if level == 0 { compare(walk, gin, only: { $0.hasPrefix("walk") }, tol: 1e-5, label: "walk") }
+            else {          // (the polished walk differs by design: how much, per channel, is logged)
+                compare(walk, gin, only: { $0.hasPrefix("walk") }, tol: .infinity, label: "walk-diff-level\(level)")
+            }
+            compare(runs, gin, only: { !$0.hasPrefix("walk") }, tol: 1e-5, label: "run-level\(level)")
+        }
     }
 }

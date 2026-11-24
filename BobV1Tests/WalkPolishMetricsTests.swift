@@ -61,14 +61,21 @@ final class WalkPolishMetricsTests: XCTestCase {
         return String(format: "WPM %@: speed %.3f u/s, cadence %.2f swings/s, stride %.3f u/step, planted-foot drift mean %.3f max %.3f u (%.1f / %.1f %% of H) over %d stances, roll p2p %.1f deg, bob p2p %.3f u (%.1f %% H), body tip %+.1f deg vs standing (brain.pitch mean %+.1f deg), arm swing std %.1f deg, steps started %d, polish level %d",
                       name, speed, cadence, speed / max(cadence, 0.01), dm, dx, 100 * dm / H, 100 * dx / H, drifts.count, rollP2P, bob, 100 * bob / H, lean, pit, armDeg, stepsStarted, WalkPolishMetricsTests.level)
     }
-    static var level: Int { Int(ProcessInfo.processInfo.environment["WALK_LEVEL"] ?? "0") ?? 0 }
+    static var level: Int { BlobBrain.walkPolish }
 
     func testGaitNumbers() {
-        BlobBrain.walkPolish = Self.level; defer { BlobBrain.walkPolish = BlobBrain.walkPolishDefault }
+        defer { BlobBrain.walkPolish = BlobBrain.walkPolishDefault }
+        let env = ProcessInfo.processInfo.environment
+        if let v = env["WP_LEAN"], let d = Float(v) { BlobBrain.walkLean = d * .pi / 180 }
+        if let v = env["WP_DIP"], let d = Float(v) { BlobBrain.walkLandDip = d }
+        if let v = env["WP_ARM"], let d = Float(v) { BlobBrain.walkArmGain = d }
         func go(_ r: MotionRig) { r.brain.request(.goTo(r.root + SIMD2(0, 16))) }
-        MotionLog.write(Self.measure("walk_roam", go))
-        MotionLog.write(Self.measure("walk_mid", { r in r.brain.amplitude = 0.85; go(r) }))
-        MotionLog.write(Self.measure("walk_small", { r in r.brain.amplitude = 0.7; go(r) }))
-        MotionLog.write(Self.measure("run_hurry", { r in r.brain.hurry = true; go(r) }, runOnly: true, seconds: 10))
+        for level in (env["WALK_LEVELS"] ?? "0,1,2,3").split(separator: ",").compactMap({ Int($0) }) {
+            BlobBrain.walkPolish = level
+            MotionLog.write(Self.measure("walk_roam", go))
+            MotionLog.write(Self.measure("walk_mid", { r in r.brain.amplitude = 0.85; go(r) }))
+            MotionLog.write(Self.measure("walk_small", { r in r.brain.amplitude = 0.7; go(r) }))
+            if level == 0 { MotionLog.write(Self.measure("run_hurry", { r in r.brain.hurry = true; go(r) }, runOnly: true, seconds: 10)) }
+        }
     }
 }

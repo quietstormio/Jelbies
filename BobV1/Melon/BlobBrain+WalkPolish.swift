@@ -84,8 +84,8 @@ extension BlobBrain {
         }
     }
 
-    static let walkLean: Float = 4 * .pi / 180
-    static let walkLandDip: Float = 0.04
+    nonisolated(unsafe) static var walkLean: Float = 4 * .pi / 180
+    nonisolated(unsafe) static var walkLandDip: Float = 0.04
 
     /// The walking arm target on the run's trailing spring (level 2+), at walking scale. `tgt` = the locked walk's target (deg); returns the new one.
     func walkPolishArm(_ si: Int, _ tgt: Float, _ dt: Float) -> Float {
@@ -97,5 +97,5 @@ extension BlobBrain {
         let ws = wpSmooth(wp.w)
         return tgt + (wp.armS[si] - tgt) * ws
     }
-    static let walkArmGain: Float = 0.92
+    nonisolated(unsafe) static var walkArmGain: Float = 0.92
 }
