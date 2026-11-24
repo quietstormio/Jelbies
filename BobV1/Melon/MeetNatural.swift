@@ -21,7 +21,7 @@ enum MeetNatural {
     /// Left on the old start: follow, chase, tag, sneak, keepAway, line, pass, bagSit, cuddle (a prop / a seat / a run), look, greet, zoomies, the travelling and the ring kinds.
     static let kinds: Set<SocialKind> = [.boop, .squabble, .cheekSquish, .hopAlong, .highFive, .chestBump, .twirl, .nuzzle, .sitTogether, .swayHug, .whisperGiggle, .shyWave, .danceOff, .spinHug, .backToBack, .cuddleLean, .bellyBounce, .mirrorDance, .peekaboo, .tag, .littleRace, .leapfrog, .ringAround]
     static let minLeg: Float = 0.7
-    static let partnerLag: Float = 0.4
+    static let partnerLag: Float = 0.08
     nonisolated(unsafe) static var why = [0, 0, 0, 0]
     /// A walk's speed (u/s) for the ETA.
     static let baseSpeed: Float = 1.25
@@ -61,7 +61,7 @@ extension BlobBrain {
                 let c = dir * t
                 let af = ga + c, of = po + c
                 let etaA = meetTurnT(af - pa) + simd_distance(af, pa) / va
-                let etaO = (simd_length(c) > 0.05 ? o.meetTurnT(c) : 0) + simd_length(c) / vo + MeetNatural.partnerLag          // (measured, takes v2: the partner arrives ~0.4 s later than distance / speed + turn says: he starts from a stand while the initiator's walk is already going)
+                let etaO = (simd_length(c) > 0.05 ? o.meetTurnT(c) : 0) + simd_length(c) / vo + MeetNatural.partnerLag          // (measured, takes v2: measured on takes v2 (18 joins): the partner arrives 0.08 s later on average, spread 0.6 s)
                 let diff = abs(etaA - etaO) + abs(ang) * 0.15
                 guard diff < bestDiff - 0.02 || (best == nil && k == 0 && ang == 0) else { continue }
                 if k > 0 {
