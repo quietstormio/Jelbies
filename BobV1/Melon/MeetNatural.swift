@@ -21,6 +21,8 @@ enum MeetNatural {
     /// Left on the old start: follow, chase, tag, sneak, keepAway, line, pass, bagSit, cuddle (a prop / a seat / a run), look, greet, zoomies, the travelling and the ring kinds.
     static let kinds: Set<SocialKind> = [.boop, .squabble, .cheekSquish, .hopAlong, .highFive, .chestBump, .twirl, .nuzzle, .sitTogether, .swayHug, .whisperGiggle, .shyWave, .danceOff, .spinHug, .backToBack, .cuddleLean, .bellyBounce, .mirrorDance, .peekaboo, .tag, .littleRace, .leapfrog, .ringAround]
     static let minLeg: Float = 0.7
+    static let partnerLag: Float = 0.4
+    nonisolated(unsafe) static var why = [0, 0, 0, 0]
     /// A walk's speed (u/s) for the ETA.
     static let baseSpeed: Float = 1.25
     nonisolated(unsafe) static var log = false
@@ -29,6 +31,18 @@ enum MeetNatural {
 extension BlobBrain {
     func meetSpeed() -> Float { MeetNatural.baseSpeed * min(max(amplitude, 0.6), 1) }
     private func meetTurnT(_ d: SIMD2<Float>) -> Float { simd_length(d) < 1e-4 ? 0 : abs(wrapAngle(atan2f(d.x, d.y) - yaw)) / max(turnRate, 0.5) }
+
+    /// The straight leg a -> b is free floor (the floor rules leave every sample alone) and no body but the session's two stands within 0.8 gap of it (`legClear` counts the initiator, who is about to move, as an obstacle).
+    func meetLegOK(_ a: SIMD2<Float>, _ b: SIMD2<Float>, partner: BlobBrain) -> Bool {
+        let n = max(2, Int(simd_distance(a, b) / 0.15))
+        let others = socialOthers().filter { $0 !== self && $0 !== partner }
+        for i in 1...n {
+            let p = a + (b - a) * (Float(i) / Float(n))
+            if simd_distance(closeFixed(p), p) > 0.06 { return false }
+            if others.contains(where: { simd_distance($0.position, p) < peerGap * 0.8 }) { return false }
+        }
+        return true
+    }
 
     /// The shift `c` (applied to the partner's spot and to the initiator's goal) that makes both arrive together, or nil (the old start).
     func meetShift(goal ga: SIMD2<Float>, with o: BlobBrain) -> (c: SIMD2<Float>, etaA: Float, etaO: Float)? {
@@ -39,7 +53,7 @@ extension BlobBrain {
         var best: (c: SIMD2<Float>, etaA: Float, etaO: Float)?
         var bestDiff = Float.infinity
         let dir0 = (pa - ga)
-        for ang: Float in [0, 0.5, -0.5, 1.0, -1.0] {          // (the shift points toward the initiator; a few turned ones when that one is not legal: wall, third body)
+        for ang: Float in [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.2, -2.2] {          // (the shift points toward the initiator; a few turned ones when that one is not legal: wall, third body)
             let ca = cosf(ang), sa = sinf(ang)
             let dir = SIMD2<Float>(dir0.x * ca - dir0.y * sa, dir0.x * sa + dir0.y * ca)
             for k in 0...18 {
@@ -47,13 +61,14 @@ extension BlobBrain {
                 let c = dir * t
                 let af = ga + c, of = po + c
                 let etaA = meetTurnT(af - pa) + simd_distance(af, pa) / va
-                let etaO = (simd_length(c) > 0.05 ? o.meetTurnT(c) : 0) + simd_length(c) / vo
+                let etaO = (simd_length(c) > 0.05 ? o.meetTurnT(c) : 0) + simd_length(c) / vo + MeetNatural.partnerLag          // (measured, takes v2: the partner arrives ~0.4 s later than distance / speed + turn says: he starts from a stand while the initiator's walk is already going)
                 let diff = abs(etaA - etaO) + abs(ang) * 0.15
                 guard diff < bestDiff - 0.02 || (best == nil && k == 0 && ang == 0) else { continue }
                 if k > 0 {
-                    guard rf.contains(af), rf.contains(of), simd_distance(closeFixed(af), af) < 0.1, simd_distance(o.fixed(of), of) < 0.1 else { continue }
-                    guard spotFree(af, besides: [self, o]), spotFree(of, besides: [self, o]) else { continue }
-                    guard o.legClear(po, of, margin: o.steerMargin) else { continue }
+                    guard rf.contains(af), rf.contains(of) else { MeetNatural.why[0] += 1; continue }
+                    guard simd_distance(closeFixed(af), af) < 0.1, simd_distance(o.closeFixed(of), of) < 0.1 else { MeetNatural.why[1] += 1; continue }
+                    guard spotFree(af, besides: [self, o]), spotFree(of, besides: [self, o]) else { MeetNatural.why[2] += 1; continue }
+                    guard o.meetLegOK(po, of, partner: self) else { MeetNatural.why[3] += 1; continue }
                 }
                 best = (c, etaA, etaO); bestDiff = diff
             }
@@ -66,7 +81,8 @@ extension BlobBrain {
     func meetNaturalJoin(_ kind: SocialKind, with o: BlobBrain) {
         guard MeetNatural.enabled, MeetNatural.kinds.contains(kind), let s = social, s.kind == kind, o.social === s, s.end == nil, s.phase == 0,
               case .walk(let ga, _) = script, o.scriptIsNone, o.idleState.kind == nil, !o.socialTaken, o.activity != .walking else { return }
-        guard let p = meetShift(goal: ga, with: o) else { if EmoteSpot.logOn { NSLog("[meetjoin] kind=%@ t=%.1f none (leg %.2f)", kind.rawValue, variety.now, simd_distance(ga, position)) }; return }
+        MeetNatural.why = [0, 0, 0, 0]
+        guard let p = meetShift(goal: ga, with: o) else { if EmoteSpot.logOn { NSLog("[meetjoin] kind=%@ t=%.1f none (leg %.2f) why=%@", kind.rawValue, variety.now, simd_distance(ga, position), MeetNatural.why.map(String.init).joined(separator: ",")) }; return }
         if simd_distance(s.goal, ga) < 0.02 { s.goal = ga + p.c }
         emoteSendWalk(to: closeFixed(ga + p.c))
         o.emoteSendWalk(to: o.position + p.c)
