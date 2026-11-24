@@ -81,7 +81,7 @@ final class PlayToss {
     var ballGame: Bool { active && phase != .toy }
     private(set) var ballKind: DecorKind = .ball
     private(set) var toyTitle = ""
-    /// Rally of the last throw (hand-offs between a Jelbie and the ball), shown as a small "x3" for a moment after a catch.
+    /// Rally of the last throw (hand-offs between a Jelbie and the ball); the hearts after a catch read it (shownRally).
     var rally = 0
     private(set) var shownRally = 0
     private(set) var catchSerial = 0

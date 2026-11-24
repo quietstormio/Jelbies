@@ -1,7 +1,7 @@
 //
 //  ParkText.swift
-//  The optional layer: Apple's on-device model (FoundationModels, the same availability check the voice commands use) writes a visitor's name, a one-line
-//  personality and a greeting once, and a short line when a friendship levels up. Offline by design: no network, no accounts. The result is kept in the
+//  The optional layer: Apple's on-device model (FoundationModels, the same availability check the voice commands use) writes a visitor's name and a one-line
+//  personality once, and a short line when a friendship levels up. Offline by design: no network, no accounts. The result is kept in the
 //  visitor's saved record, so each is written once. When the model is missing, off or slow the hand-written words (ParkWords) stand; nothing waits on it.
 //
 
@@ -12,7 +12,7 @@ import FoundationModels
 
 /// What the model wrote for one visitor (already cleaned).
 nonisolated struct ParkWrittenText: Sendable {
-    var name: String, blurb: String, greeting: String
+    var name: String, blurb: String
 }
 
 @MainActor
@@ -31,7 +31,7 @@ enum ParkText {
     no drinks or medicines, no names of real people or companies. Use only simple, warm, silly words a small child would love.
     """
 
-    /// A name, a personality line and a greeting for a new visitor. nil when the model is unavailable or the answer is unusable.
+    /// A name and a personality line for a new visitor. nil when the model is unavailable or the answer is unusable.
     static func write(colour: String, style: String, signature: String) async -> ParkWrittenText? {
         guard available else { return nil }
         #if canImport(FoundationModels)
@@ -41,9 +41,8 @@ enum ParkText {
                 let r = try await s.respond(to: "A \(colour) jelly creature with a \(style) nature\(signature.isEmpty ? "" : " and \(signature)") visits the park.",
                                             generating: ParkVisitorOut.self, options: GenerationOptions(temperature: 0.8))
                 guard let name = ParkPool.clean(r.content.name, limit: 12, isName: true), !name.contains(" "),
-                      let blurb = ParkPool.clean(r.content.personality, limit: 60),
-                      let greeting = ParkPool.clean(r.content.greeting, limit: 48) else { return nil }
-                return ParkWrittenText(name: name, blurb: blurb, greeting: greeting)
+                      let blurb = ParkPool.clean(r.content.personality, limit: 60) else { return nil }
+                return ParkWrittenText(name: name, blurb: blurb)
             } catch let e as LanguageModelSession.GenerationError {
                 // guardrailViolation, refusal and every other generation error: the hand-written words stand
                 switch e { case .guardrailViolation, .refusal: return nil; default: return nil }
@@ -80,8 +79,6 @@ struct ParkVisitorOut {
     var name: String
     @Guide(description: "One short kid-friendly sentence about its personality, at most 8 words")
     var personality: String
-    @Guide(description: "What it says to say hello, one short kid-friendly sentence, at most 7 words")
-    var greeting: String
 }
 
 @available(iOS 26.0, *)
