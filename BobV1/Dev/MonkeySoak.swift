@@ -66,13 +66,24 @@ enum MonkeySoak {
         let menu = d.integer(forKey: "MonkeyStress") != 0 ? Self.stressMenu : Self.menu
         let total = menu.reduce(0) { $0 + $1.1 }
         NSLog("[monkey] start seed=%llu minutes=%.0f gap=%.1f", seed, minutes, gap)
+        var awayT = 0.0
         while Date() < end {
             var r = g.next(total), pick = menu[0].0
             for (name, w) in menu { if r < w { pick = name; break }; r -= w }
             // legal input only: at home with no trip on, the home buttons; during a trip the monkey waits for it (its own trip step brings it home)
             if care.tripActive || care.raceBusy || care.bath.active {          // (the bath's own screen: no care menu)
+                // a trip that began after its own step gave up waiting (the park's walk-out procession): the player goes home from it after a while
+                awayT += 2
+                if awayT > 120 {
+                    awayT = 0
+                    NSLog("[monkey] home from a trip left running park=%d cafe=%d volley=%d groom=%d race=%d show=%d sim=%.0f", care.park.active ? 1 : 0, care.cafe.active ? 1 : 0, care.volley.active ? 1 : 0, care.groom.active ? 1 : 0, care.race.active ? 1 : 0, care.show.active ? 1 : 0, sim())
+                    if care.park.active { care.park.goHome() }
+                    if care.cafe.active { care.cafe.goHome() }
+                    if care.volley.active { care.volley.goHome() }
+                }
                 await sleep(2); continue
             }
+            awayT = 0
             if let why = illegal(pick, care: care) { NSLog("[monkey] skip act=%@ why=%@ sim=%.0f", pick, why, sim()); await sleep(1); continue }
             say(pick)
             await act(pick, arg: nil, care: care, ui: ui, g: &g, sleep: sleep)
@@ -191,7 +202,8 @@ enum MonkeySoak {
             care.requestPark()
             await sleep(1)
             if care.park.picking { care.startPark() }
-            await sleep(2)
+            for _ in 0..<60 where !care.park.active { await sleep(0.25) }          // (the walk-out procession comes first)
+            await sleep(1)
             out(a, "entered=\(care.park.active ? 1 : 0)")
             if care.park.picking { care.park.cancelPicker() }
             await tripWait(20 + 60 * g.unit(), g: &g, sleep: sleep) { care.park.active }
