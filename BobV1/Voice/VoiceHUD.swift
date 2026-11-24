@@ -100,6 +100,8 @@ struct VoiceTip: View {
     let voice: VoiceCoordinator
     @State private var shown = UserDefaults.standard.integer(forKey: VoiceTip.key) == 0 || UserDefaults.standard.bool(forKey: "VoiceReset")
     @State private var visible = true
+    /// "Hold" the mic, or "Tap" it in tap-to-talk mode (Accessibility setting, VoiceOver, Switch Control).
+    static func text(tapMode: Bool) -> String { tapMode ? "Tap the mic to talk" : "Hold the mic to talk" }
 
     /// A line on the one message bar (UI/GameMessageCenter.swift), not a pill over the left rail.
     var body: some View {
@@ -107,8 +109,8 @@ struct VoiceTip: View {
             .task(id: shown && voice.openCount == 0 && !FirstDayTour.shared.holdsGame) {
                 guard shown, voice.openCount == 0, !FirstDayTour.shared.holdsGame else { return }
                 try? await Task.sleep(nanoseconds: 600_000_000)
-                GameMessageCenter.shared.post("Hold the mic to talk", priority: .chatty, identifier: "voice-tip", sticky: GameMessageCenter.hintsSticky)
-                UserDefaults.standard.set(1, forKey: VoiceTip.key)
+                GameMessageCenter.shared.post(Self.text(tapMode: VoiceCoordinator.tapMode), priority: .chatty, identifier: "voice-tip", sticky: GameMessageCenter.hintsSticky,
+                                              onShown: { UserDefaults.standard.set(1, forKey: VoiceTip.key) })          // (seen only once it was on the bar, not when replaced or dropped from the queue)
                 if GameMessageCenter.hintsSticky {          // stays until the mic is used
                     var waited = 0.0
                     while !Task.isCancelled, waited < 60, voice.openCount == 0, voice.mode.phase == .idle { try? await Task.sleep(nanoseconds: 250_000_000); waited += 0.25 }
