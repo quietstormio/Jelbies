@@ -24,11 +24,11 @@ nonisolated enum CafeTables {
         return landscape ? SIMD2(4.4, 1.0) : SIMD2(3.7, 1.8)
     }
     /// Tables the player's group may take (floor x, z of the table centre) with their weight. The first of each aspect is the old fixed spot ("the middle").
-    /// Portrait: the middle, or one table left / right of it at the same depth (the group stays inside the middle 60 % of the width, clear of the order card).
+    /// Portrait: the middle, or one table left of it at the same depth (the group stays inside the middle 60 % of the width, clear of the order card). The right-hand one (1.0,-1.35) was dropped in round 2: no customer table can be reached clear of its bodies.
     /// Landscape: the old left spot, a table further back and one nearer the camera (the order card sits on the right).
     static func playerTables(landscape: Bool) -> [(centre: SIMD2<Float>, weight: Int)] {
         landscape ? [(SIMD2(-2.1, 0.2), 3), (SIMD2(-1.5, -0.9), 2), (SIMD2(-1.2, 0.9), 2)]
-                  : [(SIMD2(0, -1.35), 3), (SIMD2(-1.0, -1.35), 2), (SIMD2(1.0, -1.35), 2)]
+                  : [(SIMD2(0, -1.35), 3), (SIMD2(-1.0, -1.35), 2)]
     }
     /// The customers' tables (the ENDS table: two places facing each other, a single customer takes one).
     static func customerTables(landscape: Bool) -> [SIMD2<Float>] {
