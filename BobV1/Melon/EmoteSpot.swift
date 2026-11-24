@@ -175,7 +175,7 @@ extension BlobBrain {
         guard emoteSpotLive, EmoteSpot.soloKinds.contains(kind), !emoteSpot.skip, social == nil, !held, !commanded, commandedIdle == nil, pending == nil, bubbleLeash == nil, !race.active else { return false }
         let here = SIMD2(px, pz)
         let crowd = crowdLive && MoveCrowd.spotOn
-        if let g = emoteBestSpot(from: [here], maxLeg: EmoteSpot.soloLeg, here: here, ok: { [unowned self] c in simd_distance(self.fixed(c), c) < 0.1 && self.peerFree(c) && self.reachable(here, c) && self.mixStopOK(c) && (!crowd || (self.crowdGoalFree(c) && self.crowdLegFree(from: here, to: c))) }) {          // (move-crowd-r1 spot: the walk to a solo emote's spot keeps the gap too; no spot = the emote starts where he is)
+        if let g = emoteBestSpot(from: [here], maxLeg: EmoteSpot.soloLeg, here: here, ok: { [unowned self] c in (!crowd || (self.crowdGoalFree(c) && self.crowdLegFree(from: here, to: c))) && simd_distance(self.fixed(c), c) < 0.1 && self.peerFree(c) && self.reachable(here, c) && self.mixStopOK(c) }) {          // (move-crowd-r1 spot: the walk to a solo emote's spot keeps the gap too; no spot = the emote starts where he is)
             emoteSpot.soloKind = kind; emoteSpot.soloAt = variety.now
             emoteSendWalk(to: g)
             return true

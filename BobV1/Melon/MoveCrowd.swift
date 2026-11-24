@@ -144,3 +144,13 @@ extension BlobBrain {
         return true
     }
 }
+
+extension BlobBrain {
+    /// The stand-off fix (the requested walk's standing patience is not reset while a peer holds the leg) applies to come / goTo / commanded walks only, never to a meal, drink or dining walk.
+    var crowdStandOffKeep: Bool {
+        switch job {
+        case .eat?, .drink?, .dine?, .sip?: return false
+        default: return true
+        }
+    }
+}

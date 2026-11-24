@@ -220,9 +220,8 @@ extension BlobBrain {
                 guard dr > lo, dr < hi, rf.stopOK(raw), pass > 0 || simd_dot((raw - here) / dr, out) >= cosf(MoveMix.strollOutward) else { continue }          // (the cheap tests first)
                 let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
                 let d = simd_distance(cand, here)
+                if crowdPart, simd_length(cand - raw) < 0.15, d > lo, d < hi, !crowdGoalFree(cand) || (pass == 0 && MoveCrowd.legOn && !crowdLegFree(from: here, to: cand)) { continue }          // (move-crowd-r1: cheap, before the floor and route checks)
                 guard simd_length(cand - raw) < 0.15, d > lo, d < hi, rf.stopOK(cand), peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }
-                if crowdPart, !crowdGoalFree(cand) { continue }          // (move-crowd-r1: nobody stands at or walks to within the gap of a stroll goal)
-                if crowdPart, pass == 0, MoveCrowd.legOn, !crowdLegFree(from: here, to: cand) { continue }          // (move-crowd-r1 leg: the stroll leg keeps the gap from the others' walks)
                 let dir = (cand - here) / d
                 if pass == 0, simd_dot(dir, out) < cosf(MoveMix.strollOutward) { continue }
                 var split = true

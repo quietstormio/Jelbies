@@ -1075,10 +1075,9 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
+            if crowdGoal, simd_length(cand - raw) < 0.15, d > lo, d < maxL, !crowdGoalFree(cand) || (attempt == 0 && MoveCrowd.legOn && !crowdLegFree(from: here, to: cand)) { continue }          // (move-crowd-r1 goal / leg: cheap, so before the floor and route checks; nobody stands at or walks to within the gap of it, and the leg keeps the gap from the others' walks)
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             if attempt == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
-            if crowdGoal, !crowdGoalFree(cand) { continue }          // (move-crowd-r1 goal: nobody stands at or walks to within the gap of it)
-            if crowdGoal, attempt == 0, MoveCrowd.legOn, !crowdLegFree(from: here, to: cand) { continue }          // (move-crowd-r1 leg: the leg never comes within the gap of another body's walk in space and time, nor of a stander)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
@@ -1673,7 +1672,7 @@ final class BlobBrain {
             // a requested walk (come, the meal, a stand at a piece) that has made no progress for 3 s plans its route afresh (round whatever blocks it)
             // (move-crowd-r1: while a PEER holds the leg (`heldByPeer`) the re-plan keeps `steerWait`: resetting it every 3 s meant the 6 s standing patience of `steerTarget` never ran out and the walker
             //  stood forever beside a body inside the leg's margin; now the patience ends and the walk goes on, the stander asked aside by makeRoom / the spring. `-MoveCrowd 0` = the old reset.)
-            if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; if !(MoveCrowd.on && heldByPeer) { steerWait = 0 }; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
+            if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; if !(MoveCrowd.on && heldByPeer && crowdStandOffKeep) { steerWait = 0 }; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
             if !feet.active {
                 if walkFinal { walkFinal = false; step(after: then, sim); return }
                 let pF = PerfProbe.begin(); let fl = flourishMaybe(sim, skinner, target: target); PerfProbe.end("rs.flourishMaybe", pF)
