@@ -56,6 +56,7 @@ extension GameCare {
         }
         orderAge += dt
         if own, callRunning, Self.softMealWakeWatchdog(age: orderAge) { MealTrace.log("callRunning watchdog cleared (single)"); callRunning = false }
+        if own, orderAge > Self.staleCallAfter { _ = clearStaleCall(brain: brain, why: "single order") }          // (night-meal-r1)
         let free = !own || (!callRunning && queued.isEmpty)
         // a meal-woken sleeper whose wake has run past its longest legal length (a stuck stage) is called the hard way, once (the group's `wakeCap` fallback, for the single flow)
         if brain.mealWaking, brain.sleep.mealWakeT > DiningGroup.wakeCap {
