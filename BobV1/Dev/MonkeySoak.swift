@@ -27,6 +27,12 @@ enum MonkeySoak {
         ("race", 2), ("volley", 2), ("music", 3), ("rotate", 3), ("idle", 10), ("quiet", 3), ("cancel", 3), ("release", 3),
     ]
 
+    /// `-MonkeyStress 1`: extra overlapping inputs (a separate menu, so the default soak above stays comparable between rounds).
+    static let stressMenu: [(String, Int)] = [
+        ("comeduringmeal", 8), ("playthencome", 6), ("doublefeed", 5), ("bedtime", 4), ("trick", 6), ("washduringplay", 3), ("feedduringplay", 5), ("comecancel", 8),
+        ("welcomeplayfeed", 5), ("cuddle", 4), ("play", 4), ("feed", 3), ("water", 3), ("park", 2), ("show", 2), ("race", 2), ("music", 2), ("rotate", 2), ("idle", 6), ("quiet", 2),
+    ]
+
     static func run(care: GameCare, ui: Bindings) async {
         guard DevArgs.enabled else { return }
         let d = UserDefaults.standard
@@ -57,6 +63,7 @@ enum MonkeySoak {
         let minutes = d.double(forKey: "MonkeyMinutes") > 0 ? d.double(forKey: "MonkeyMinutes") : 60
         let gap = d.double(forKey: "MonkeyGap") > 0 ? d.double(forKey: "MonkeyGap") : 6
         let end = Date().addingTimeInterval(minutes * 60)
+        let menu = d.integer(forKey: "MonkeyStress") != 0 ? Self.stressMenu : Self.menu
         let total = menu.reduce(0) { $0 + $1.1 }
         NSLog("[monkey] start seed=%llu minutes=%.0f gap=%.1f", seed, minutes, gap)
         while Date() < end {
@@ -80,7 +87,9 @@ enum MonkeySoak {
         let anyTime: Set<String> = ["release", "cancel", "idle", "quiet", "music", "rotate", "feed", "water"]          // (Feed / Water in a close-up: the voice / widget path, `order()` ends the close-up first)
         if !anyTime.contains(a), care.focus.isActive { return "close-up: the care menu and Town are hidden" }
         switch a {
-        case "feed", "feedone", "welcomeplayfeed": item = .feed
+        case "feed", "feedone", "welcomeplayfeed", "comeduringmeal", "doublefeed": item = .feed
+        case "bedtime": item = .bedtime
+        case "playthencome", "washduringplay", "feedduringplay": item = .play
         case "water", "drinkone": item = .drink
         case "come", "comecancel", "cuddle": item = .come
         case "comeall": item = .callAll
@@ -230,6 +239,42 @@ enum MonkeySoak {
             await sleep(2 + 6 * g.unit())
             if !AudioHub.shared.settings.musicOn || g.next(2) == 0 { AudioHub.shared.settings.musicOn = true }
         case "rotate": rotate(&g)
+        // stress steps (-MonkeyStress 1)
+        case "comeduringmeal":
+            hungry(care); if g.next(2) == 0 { care.feed() } else { care.water() }
+            await sleep(2 + 8 * g.unit())
+            if g.next(2) == 0 { care.comeHere(jelly: j) } else { care.comeHereEveryone() }
+            await sleep(3 + 6 * g.unit())
+            if g.next(2) == 0 { withAnimation(CareMenu.spring) { care.release() } } else { care.cancelGroupAction() }
+        case "playthencome":
+            care.store.grant(DecorKind.ball.storeID); care.beginPlay(ball: .ball)
+            await sleep(1 + 4 * g.unit())
+            care.comeHere(jelly: j)
+            await sleep(2 + 6 * g.unit())
+            withAnimation(CareMenu.spring) { care.release() }
+            if g.next(2) == 0 { care.endPlay() }
+        case "doublefeed":
+            hungry(care); care.feed(); await sleep(0.2 + g.unit()); care.water(); await sleep(0.3); care.feed(jelly: j)
+        case "bedtime":
+            _ = care.goodnight()
+            await sleep(5 + 20 * g.unit())
+            if g.next(2) == 0 { care.cancelGroupAction() }
+        case "trick":
+            let ts: [VoiceTrick] = [.sit, .jacks, .run, .flip, .look, .spin, .hop]
+            let t = ts[g.next(ts.count)]; care.store.grantTrickToEveryone(t)
+            _ = care.performTrick(t, jelly: j)
+        case "washduringplay":
+            care.store.grant(DecorKind.ball.storeID); care.beginPlay(ball: .ball)
+            await sleep(2 + 3 * g.unit())
+            care.bath.grime.dirt = 0.5; care.bath.demo = true; care.clean(jelly: 0)
+            await sleep(5 + 10 * g.unit())
+            care.cancelClean(); care.endPlay()
+        case "feedduringplay":
+            care.store.grant(DecorKind.soccerball.storeID); care.beginPlay(ball: .soccerball)
+            await sleep(2 + 4 * g.unit())
+            hungry(care); if g.next(2) == 0 { care.feed() } else { care.water() }
+            await sleep(3 + 5 * g.unit())
+            if g.next(2) == 0 { care.endPlay() }
         // script-only steps (never picked by the soak): the pieces of a found case, for a replay
         case "welcome": care.showWelcomeHome(j, won: true, again: false)
         case "playball": care.store.grant(DecorKind.ball.storeID); care.beginPlay(ball: .ball)
