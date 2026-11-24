@@ -13,6 +13,8 @@ import simd
 final class WalkPolishLockTests: XCTestCase {
     static var level: Int { BlobBrain.walkPolish }
 
+    static var firstOn: [String: Int] = [:]
+
     private func record(_ name: String, seconds: Float, setup: (MotionRig) -> Void) -> [String] {
         let r = MotionRig(game: false)
         r.renderSamples = false
@@ -21,6 +23,7 @@ final class WalkPolishLockTests: XCTestCase {
         var out: [String] = [], n = 0
         r.run(seconds, each: {
             n += 1
+            if r.brain.wp.w > 0, Self.firstOn[name] == nil { Self.firstOn[name] = out.count }
             guard n % 2 == 0 else { return }
             let b = r.brain, a = r.sim.attractor
             var f: [Double] = [Double(r.t), Double(b.px), Double(b.pz), Double(b.yaw),
@@ -41,6 +44,7 @@ final class WalkPolishLockTests: XCTestCase {
     }
 
     private func all() -> (walk: [String], runs: [String]) {
+        Self.firstOn = [:]
         var walk: [String] = [], runs: [String] = []
         func go(_ r: MotionRig, _ d: Float = 16) { r.brain.request(.goTo(r.root + SIMD2(0, d))) }
         walk += record("walk_roam", seconds: 10) { go($0) }
@@ -69,6 +73,9 @@ final class WalkPolishLockTests: XCTestCase {
         for k in gold.keys.sorted() {
             guard let a = g[k], let b = gold[k] else { XCTFail("\(label) \(k) missing"); continue }
             XCTAssertEqual(a.count, b.count, "\(label) \(k) sample count")
+            let cut = (label.hasPrefix("run-level") && Self.level > 0) ? (Self.firstOn[k] ?? a.count) : a.count          // (a run-like gait that has ended and gone back to a plain walk may polish from then on)
+            if cut < a.count { MotionLog.write("LOCK \(label) \(k): polish first on at row \(cut) of \(a.count) (compared before it)") }
+            let a = Array(a.prefix(cut)), b = Array(b.prefix(cut))
             var worst = 0.0, worstAt = ""
             for (i, (x, y)) in zip(a, b).enumerated() {
                 XCTAssertEqual(x.count, y.count, "\(label) \(k) row \(i) width")

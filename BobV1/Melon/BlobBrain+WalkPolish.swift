@@ -35,7 +35,13 @@ extension BlobBrain {
 
     /// A plain roam walk: no run-like gait, no social session, no job.
     var walkPolishAllowed: Bool {
-        runW == 0 && zoomW == 0 && idleState.kind == nil && !hurry && playChase == 0 && job == nil && social == nil && mealFinalYaw == nil && !tossBusy
+        runW == 0 && zoomW == 0 && idleState.kind == nil && !hurry && playChase == 0 && walkPolishJobOK && social == nil && mealFinalYaw == nil && !tossBusy
+    }
+
+    /// A walk with no job, or a plain go-to / come (the meal, the sip and the other jobs are not polished).
+    private var walkPolishJobOK: Bool {
+        guard let j = job else { return true }
+        switch j { case .goTo, .come: return true; default: return false }
     }
 
     private func wpSmooth(_ x: Float) -> Float { let c = min(max(x, 0), 1); return c * c * (3 - 2 * c) }
