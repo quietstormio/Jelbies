@@ -17,6 +17,7 @@ final class ShowStageBodiesTests: XCTestCase {
         for a in room.actors + room.park { if a.id < room.actors.count, room.care.tripFrozen(a.id) { continue }; if let b = a.brain { b.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: false) } }          // (a housemate away is not ticked, as the stage does)
         room.care.tickRace(room.actors, dt: 1 / 60)
         room.care.tickShow(room.actors, dt: 1 / 60)
+        for a in room.actors + room.park where !(a.id < room.actors.count && room.care.tripFrozen(a.id)) { a.sim.step() }          // (show-line-r1: the bodies really walk; with frozen sims the line keeper saw every walker standing still and carried it, bodies met at the gate)
     }
     private func run(_ room: RaceThreeTests.Room, _ s: Float, until: () -> Bool = { false }) { for _ in 0..<Int(s * 60) { step(room); if until() { return } } }
 
