@@ -146,6 +146,23 @@ final class CafeBusyTests: XCTestCase {
         }
     }
 
+    /// Every player table leaves at least one customer table that is clear of the player's bodies and fully on screen (|x| <= 3.5 at the back, the screen's edge), both aspects.
+    func testEveryPlayerTableLeavesACustomerTable() {
+        for (name, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
+            let landscape = aspect >= 1
+            DiningLayout.ends = true; DiningLayout.sideX = 1.3; DiningLayout.reachFood = true; DiningLayout.endsYaw = DiningLayout.cafeEndsYaw
+            let layout = DiningLayout.make(n: 3)
+            for (i, p) in CafeTables.playerTables(landscape: landscape).enumerated() {
+                let stands = layout.places.map { p.centre + $0.rel }
+                let free = CafeTables.customerTables(landscape: landscape).filter { t in
+                    [t - SIMD2(GameCare.pairSideX, 0), t + SIMD2(GameCare.pairSideX, 0)].allSatisfy { s in abs(s.x) <= 3.7 && stands.allSatisfy { simd_distance($0, s) >= GameCare.pairMargin } }
+                }
+                print("[cafebusy-test] \(name) player table \(i) \(p.centre): \(free.count) customer tables free \(free)")
+                XCTAssertGreaterThanOrEqual(free.count, 1, "\(name) player table \(i) leaves a customer table")
+            }
+        }
+    }
+
     // MARK: paths
 
     func testRouteGoesRoundSeatedBodiesKeepingTheGap() {

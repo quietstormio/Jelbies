@@ -30,7 +30,7 @@ nonisolated enum CafeTables {
     /// The customers' tables (the ENDS table: two places facing each other, a single customer takes one).
     static func customerTables(landscape: Bool) -> [SIMD2<Float>] {
         landscape ? [SIMD2(2.8, -2.6), SIMD2(1.0, 1.4), SIMD2(-0.4, -2.9)]
-                  : [SIMD2(2.7, -3.3), SIMD2(-3.0, -2.9), SIMD2(-2.5, 0.9)]
+                  : [SIMD2(2.7, -3.3), SIMD2(-0.9, -3.3)]
     }
     /// Which player table this visit takes: weighted by `weight`, from the candidates `allowed` lets through (nil = none fits). `roll` is 0..<1.
     static func pickPlayer(landscape: Bool, roll: Float, allowed: (SIMD2<Float>) -> Bool) -> Int? {

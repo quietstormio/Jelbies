@@ -302,6 +302,18 @@ extension GameCare {
                 }
                 if hold { if !m.held { m.held = true; b.requestNow(.goTo(pos)) }; continue }
                 m.held = false
+                // no progress for 4 s (a walk that pushes against something counts too): a new route from here, twice; then he is simply set at the end of his path
+                if simd_distance(pos, m.lastPos) < 0.01 { m.stuck += dt } else { m.stuck = 0; m.lastPos = pos }
+                if m.stuck > 4, m.replans < 2 {
+                    m.replans += 1; m.replan = true; m.state = .waiting; m.waitT = 0; m.stuck = 0
+                    b.requestNow(.goTo(pos))
+                    Self.crowdLog("member \(m.actor.id) stopped at \(pos): new route (\(m.replans))")
+                    continue
+                } else if m.stuck > 6, let last = m.path.last {
+                    Self.crowdLog("member \(m.actor.id) stuck at \(pos), placed at \(last)")
+                    rehome(m.actor, at: last); m.path = [last]; m.stuck = 0
+                    continue
+                }
                 guard idleNow else { continue }
                 if let wp = m.path.first {
                     let lastLeg = m.path.count == 1
@@ -313,14 +325,6 @@ extension GameCare {
                         if let n = m.path.first { b.requestNow(.goTo(n)) } else { crowdArrived(g, m, landscape: landscape) }
                     } else { b.requestNow(.goTo(wp)) }
                 } else { crowdArrived(g, m, landscape: landscape) }
-                if simd_distance(pos, m.lastPos) < 0.01 { m.stuck += dt } else { m.stuck = 0; m.lastPos = pos }
-                if m.stuck > 4, m.replans < 2 {          // (stopped for 4 s: look for a new way from where he stands)
-                    m.replans += 1; m.replan = true; m.state = .waiting; m.waitT = 0; m.stuck = 0
-                    Self.crowdLog("member \(m.actor.id) stopped at \(pos): new route (\(m.replans))")
-                } else if m.stuck > 6, let last = m.path.last {          // (never stuck forever: set him at the end of the path)
-                    Self.crowdLog("member \(m.actor.id) stuck at \(pos), placed at \(last)")
-                    rehome(m.actor, at: last); m.path = [last]; m.stuck = 0
-                }
             }
         }
         // the group's phase
