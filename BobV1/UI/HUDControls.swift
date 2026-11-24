@@ -134,6 +134,9 @@ enum HUDMenu {
     @discardableResult
     static func perform(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> HUDRoute {
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        if i == .callAll || i == .come { StuckDetector.shared.noteTap("come", care: care) }          // (no-stuck-r1: the dev stuck detector's "a tap that did nothing")
+        #endif
         switch i {
         case .callAll: care.comeHereEveryone(); return .none
         case .feed: return .picker(.food)

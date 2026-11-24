@@ -113,6 +113,8 @@ enum MonkeySoak {
         return HUDMenu.enabled(item, .group, care: care) ? nil : "\(item) greyed out"
     }
 
+    /// A Come here / Call everyone press (the detector's tap-no-effect check), as the HUD notes its own.
+    static func tap(_ care: GameCare) { StuckDetector.shared.noteTap("come", care: care) }
     static func out(_ a: String, _ r: String) { NSLog("[monkey] out act=%@ %@ sim=%.0f", a, r, StuckDetector.shared.simTime) }
 
     /// Waits while `on()` (at most `cap` s), and like a player on a trip now and then switches the music off and on or turns the phone.
@@ -146,17 +148,17 @@ enum MonkeySoak {
             out(a, "ate=\(ate ? 1 : 0) trayOut=\(care.trayOut ? 1 : 0)")
         case "feedone": hungry(care); care.feed(jelly: j)
         case "drinkone": hungry(care); care.drink(jelly: j)
-        case "come": care.comeHere(jelly: j)
-        case "comeall": care.comeHereEveryone()
+        case "come": tap(care); care.comeHere(jelly: j)
+        case "comeall": tap(care); care.comeHereEveryone()
         case "cancel": care.cancelGroupAction()
         case "release": withAnimation(CareMenu.spring) { care.release() }
         case "comecancel":
-            if g.next(2) == 0 { care.comeHereEveryone() } else { care.comeHere(jelly: j) }
+            tap(care); if g.next(2) == 0 { care.comeHereEveryone() } else { care.comeHere(jelly: j) }
             await sleep(0.5 + 5.5 * g.unit())
             out(a, "phase=\(care.focus.phase)")
             if g.next(3) == 0 { withAnimation(CareMenu.spring) { care.release() } } else { care.cancelGroupAction() }
         case "cuddle":
-            care.comeHere(jelly: j)
+            tap(care); care.comeHere(jelly: j)
             for _ in 0..<120 where !care.focus.isFocused { await sleep(0.1) }
             out(a, "focused=\(care.focus.isFocused ? 1 : 0)")
             await sleep(2 + 8 * g.unit())
@@ -263,13 +265,13 @@ enum MonkeySoak {
         case "comeduringmeal":
             hungry(care); if g.next(2) == 0 { care.feed() } else { care.water() }
             await sleep(2 + 8 * g.unit())
-            if g.next(2) == 0 { care.comeHere(jelly: j) } else { care.comeHereEveryone() }
+            tap(care); if g.next(2) == 0 { care.comeHere(jelly: j) } else { care.comeHereEveryone() }
             await sleep(3 + 6 * g.unit())
             if g.next(2) == 0 { withAnimation(CareMenu.spring) { care.release() } } else { care.cancelGroupAction() }
         case "playthencome":
             care.store.grant(DecorKind.ball.storeID); care.beginPlay(ball: .ball)
             await sleep(1 + 4 * g.unit())
-            care.comeHere(jelly: j)
+            tap(care); care.comeHere(jelly: j)
             await sleep(2 + 6 * g.unit())
             withAnimation(CareMenu.spring) { care.release() }
             if g.next(2) == 0 { care.endPlay() }

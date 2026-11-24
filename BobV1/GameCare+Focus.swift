@@ -296,12 +296,7 @@ extension GameCare {
     func focusSpot(for id: Int) -> SIMD2<Float> { focusGroup.spot(of: id) }
 
     /// "Everyone, come here": all of them run up side by side and the close-up frames the row.
-    func comeHereEveryone() {
-        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
-        StuckDetector.shared.noteTap("come", care: self)          // (no-stuck-r1)
-        #endif
-        beginFocus(ids: Array(0..<max(jellies.count, 1)), front: targetJelly)
-    }
+    func comeHereEveryone() { beginFocus(ids: Array(0..<max(jellies.count, 1)), front: targetJelly) }
 
     /// A preview stage (the Adoption Center): Jelbie `id` hops in place, with no gates. `wantJoy` is gated (antics, a 5 s expiry, "two fast movers at most"), so a second tap soon after
     /// would silently do nothing; `startHopPlay` is the greeting / selection hop and always plays. Distance 0.0001 = on the spot.

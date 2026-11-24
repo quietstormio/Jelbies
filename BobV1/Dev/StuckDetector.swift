@@ -44,7 +44,7 @@ final class StuckDetector {
     private var still: [Int: (p: SIMD2<Float>, sig: String, t: Float)] = [:]
     private var lastSummary: Float = 0
     // taps (GameCare calls `noteTap`)
-    struct Tap { let what: String; let at: Float; let notice: Int; let msgs: Int; let phases: Int; var ate = false }
+    struct Tap { let what: String; let at: Float; let notice: Int; let msgs: Int; let phases: Int; let state: String; var ate = false }
     private var phaseChanges = 0
     private var everFree = Set<ObjectIdentifier>()          // (a body never free - a test rig's pinned Jelly 0 - is not "switched off")
     private var taps: [Tap] = []
@@ -55,7 +55,7 @@ final class StuckDetector {
     /// GameCare calls this when the player taps Feed / Water ("feed" / "water") or Come here ("come").
     func noteTap(_ what: String, care: GameCare) {
         guard Self.on else { return }
-        taps.append(Tap(what: what, at: simTime, notice: care.noticeSerial, msgs: GameMessageCenter.shared.stuckSerial, phases: phaseChanges))
+        taps.append(Tap(what: what, at: simTime, notice: care.noticeSerial, msgs: GameMessageCenter.shared.stuckSerial, phases: phaseChanges, state: "ph=\(care.focus.phase) bath=\(care.bath.active ? 1 : 0) trip=\(care.tripActive ? 1 : 0)"))
     }
 
     /// The release guard (GameCare+StuckRelease.swift) let a body go: counted as a bug of its own kind.
@@ -153,7 +153,7 @@ final class StuckDetector {
             switch t.what {
             case "come":          // answered: the call started (the phase moved, even if a Cancel came in the same second) or a line said why not
                 if c.focus.phase != .roaming || phaseChanges != t.phases || said { return true }
-                if el >= Self.comeTapAfter { out.append(Finding(kind: "tap-no-effect", who: -1, limit: 0, detail: "come tap \(Int(el)) s ago: nothing | \(game)")); return true }
+                if el >= Self.comeTapAfter { out.append(Finding(kind: "tap-no-effect", who: -1, limit: 0, detail: "come tap \(Int(el)) s ago: nothing | at tap: \(t.state) | now: \(game)")); return true }
             default:              // answered: somebody ate / drank, or the serving is over (refused with a line, or the tray came and went: "not hungry")
                 if t.ate || !c.trayOut && (said || el > 2) { return true }
                 if el >= Self.feedTapAfter { out.append(Finding(kind: "tap-no-effect", who: -1, limit: 0, detail: "\(t.what) tap \(Int(el)) s ago: nobody ate | trayPresent=\(c.dining.isPresent ? 1 : 0) wanted=\(c.wanted != nil ? 1 : 0) meal=\(c.meal != nil ? 1 : 0) \(game)")); return true }
