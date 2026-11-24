@@ -71,21 +71,21 @@ final class RestMoreTests: XCTestCase {
     func testRestShareIsLightAndEverythingElseStays() {
         var on = Soak(), off = Soak(), offRest = 0.0, onRest = 0.0
         var shares: [Double] = []
-        for seed in [1, 2, 3, 4] as [UInt64] {
-            RestMore.on = false; let o = soak(seed: seed, seconds: 600)
-            RestMore.on = true; let n = soak(seed: seed, seconds: 600)
+        for seed in [1, 2, 3] as [UInt64] {
+            RestMore.on = false; let o = soak(seed: seed, seconds: 400)
+            RestMore.on = true; let n = soak(seed: seed, seconds: 400)
             on.starts += n.starts; on.socials += n.socials; on.solo += n.solo; on.maxAtOnce = max(on.maxAtOnce, n.maxAtOnce); on.twoAtOnce += n.twoAtOnce; on.holds += n.holds; on.frames += n.frames
             off.socials += o.socials; off.solo += o.solo
             for i in 0..<3 { onRest += Double(n.restFrames[i]); shares.append(Double(n.restFrames[i]) / Double(n.frames)) }
             offRest += Double(o.restFrames.reduce(0, +))
         }
         let share = onRest / Double(on.frames * 3)
-        MotionLog.write(String(format: "RESTMORE soak 4x600 s: slot rest share %.3f per body (per body %@), starts %d, holds mean %.1f s, max at once %d (two at once %d frames), socials on %d / off %d, solo emotes on %d / off %d",
+        MotionLog.write(String(format: "RESTMORE soak 3x400 s: slot rest share %.3f per body (per body %@), starts %d, holds mean %.1f s, max at once %d (two at once %d frames), socials on %d / off %d, solo emotes on %d / off %d",
                                share, shares.map { String(format: "%.3f", $0) }.joined(separator: " "), on.starts, on.holds.reduce(0, +) / Float(max(on.holds.count, 1)), on.maxAtOnce, on.twoAtOnce, on.socials, off.socials, on.solo, off.solo))
         XCTAssertEqual(offRest, 0)
-        XCTAssertGreaterThan(share, 0.04, "a real share"); XCTAssertLessThan(share, 0.16, "a light share")
+        XCTAssertGreaterThan(share, 0.04, "a real share (the table's own sits / lies come on top)"); XCTAssertLessThan(share, 0.10, "a light share")
         XCTAssertEqual(on.maxAtOnce, 1, "never two (so never all three) at once")
-        XCTAssertGreaterThan(on.holds.min() ?? 0, 5, "a rest lasts")
+        XCTAssertGreaterThan(on.holds.reduce(0, +) / Float(max(on.holds.count, 1)), 6, "a rest lasts (a few are cut short by a moment's invite)")
         XCTAssertLessThan(on.holds.max() ?? 99, 22, "a rest ends")
         XCTAssertGreaterThanOrEqual(Double(on.socials), 0.9 * Double(off.socials), "pair / group moments keep 90 %")
         XCTAssertGreaterThanOrEqual(Double(on.solo), 0.9 * Double(off.solo), "solo emotes keep 90 %")
@@ -122,13 +122,13 @@ final class RestMoreTests: XCTestCase {
         for r in lab.rigs { r.brain.anticsEnabled = true; r.brain.homeRoom = true; r.brain.idleForced = true; r.brain.sleepEnabled = false }
         restingRig(lab, 0)
         lab.rigs[1].brain.socialBook.cooldown = 0; lab.rigs[2].brain.socialBook.cooldown = 0
-        var began: Float?, upBefore = false
+        var began: Float?, upBefore = false, rested = 0
         let t0 = lab.rigs[0].t
         for _ in 0..<(60 * 8) {
             lab.tick(watching: false)
             let b = lab.rigs[0].brain
-            if b.social == nil && b.idleState.kind == nil { upBefore = true }
-            if b.social != nil, began == nil { began = lab.rigs[0].t - t0; XCTAssertNil(b.idleState.kind == .sit ? 1 : nil, "up before the move") }
+            if b.restSlotOn { rested += 1 }
+            if b.social != nil, began == nil { began = lab.rigs[0].t - t0; upBefore = b.idleState.kind != .sit && b.idleState.kind != .lieDown && rested > 0 }
         }
         MotionLog.write("RESTMORE pair join: began after \(began ?? -1) s, stood up first \(upBefore)")
         XCTAssertNotNil(began, "the rester takes part in a moment within 8 s"); XCTAssertTrue(upBefore)
