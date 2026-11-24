@@ -16,6 +16,9 @@ enum ParkWand {
     static let topFraction: CGFloat = 0.26
     /// The park's area: the side edges at this fraction of the screen width (home 0.17 / 0.24), minus a body's half width.
     static let sideFraction: CGFloat = 0.10, sideMargin: Float = 0.55
+    /// The spots are chosen in the front `slotDepth` of the area: the stream drifts back from the wand at the front for 4 to 6 s and does not reach the far back before it pops (the first take with spots over the whole
+    /// depth left two of the three at the back looking up at nothing: 0 chases in 320 s).
+    static let slotDepth: Float = 4.2
     /// The area never goes nearer the floor's back edge than this.
     static let backMargin: Float = 0.3
     /// A spot keeps this far off the hopscotch court's edge (a court is flat paint but nobody stands about on it) and off a solid piece's reach.

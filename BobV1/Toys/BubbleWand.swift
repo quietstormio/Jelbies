@@ -720,7 +720,7 @@ final class BubbleWand: PlayToy {
     /// His spots: one each, abreast across the area (the middle one of three a step further back so nobody hides anybody), left to right by where they stand now.
     private func assignSlots(_ awake: [BubbleJelly], _ a: (lo: SIMD2<Float>, hi: SIMD2<Float>), others: [SIMD2<Float>] = []) {
         if ParkWand.on {          // (park-open-r1: scattered over the open floor, never one row; the home room's row below is untouched)
-            let pts = ParkWand.scatter(count: awake.count, lo: a.lo, hi: a.hi, others: others)
+            let pts = ParkWand.scatter(count: awake.count, lo: SIMD2(a.lo.x, max(a.lo.y, a.hi.y - ParkWand.slotDepth)), hi: a.hi, others: others)          // (the spots stay in the half of the area the bubbles reach; the chase still goes over the whole area)
             if pts.count == awake.count {
                 slots = [:]
                 for (j, p) in zip(awake.sorted(by: { $0.brain.position.x < $1.brain.position.x }), pts.sorted(by: { $0.x < $1.x })) { slots[j.id] = p }
