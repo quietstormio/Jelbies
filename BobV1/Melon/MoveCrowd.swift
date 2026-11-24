@@ -33,12 +33,13 @@ nonisolated enum MoveCrowd {
     nonisolated(unsafe) static var speedOn = part("speed")
     nonisolated(unsafe) static var allOn = part("all")
     nonisolated(unsafe) static var legOn = part("leg")
+    nonisolated(unsafe) static var spotOn = part("spot")
     private static func num(_ k: String, _ d: Float) -> Float { Float(env[k] ?? "") ?? d }
 
     /// The one clearance (u, centre to centre): trigger, detour offset, goal rejection.
     nonisolated(unsafe) static var gap = num("MOVECROWD_GAP", 1.45)
 
-    static var text: String { "MoveCrowd on=\(on) gap=\(gapOn) goal=\(goalOn) yield=\(yieldOn) look=\(lookOn) part=\(partOn) speed=\(speedOn) all=\(allOn) leg=\(legOn) gapU=\(gap)" }
+    static var text: String { "MoveCrowd on=\(on) gap=\(gapOn) goal=\(goalOn) yield=\(yieldOn) look=\(lookOn) part=\(partOn) speed=\(speedOn) all=\(allOn) leg=\(legOn) spot=\(spotOn) gapU=\(gap)" }
 }
 
 /// Read by the scoreboard (tests): the switches as they stand.
