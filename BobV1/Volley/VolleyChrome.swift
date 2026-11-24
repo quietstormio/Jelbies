@@ -368,7 +368,7 @@ struct VolleyResultsCard: View {
     private func chip(_ text: String, _ symbol: String, _ id: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .black))
-            Text(text).playFont(14, .heavy)
+            Text(text).playFont(14, .heavy).resultProbe(id)
         }.foregroundStyle(CareMenu.brown).padding(.horizontal, 12).padding(.vertical, 5)
             .background(Capsule().fill(Color(red: 0.98, green: 0.80, blue: 0.35))).accessibilityElement(children: .combine).accessibilityIdentifier(id)
     }
@@ -377,34 +377,34 @@ struct VolleyResultsCard: View {
         let s = volley.sim
         VStack(spacing: tight ? 6 : 12) {
             Group {
-                Text(s?.humanTeamWon == true ? "You won!" : "Good game!").playFont(tight ? 24 : 32, .heavy).foregroundStyle(CareMenu.brown)
-                Text("\(s?.score[0] ?? 0)  :  \(s?.score[1] ?? 0)").playFont(30, .heavy).monospacedDigit().foregroundStyle(CareMenu.brown)
+                Text(s?.humanTeamWon == true ? "You won!" : "Good game!").playFont(tight ? 24 : 32, .heavy).resultProbe("title").foregroundStyle(CareMenu.brown)
+                Text("\(s?.score[0] ?? 0)  :  \(s?.score[1] ?? 0)").playFont(30, .heavy).resultProbe("score").monospacedDigit().foregroundStyle(CareMenu.brown)
                 HStack(spacing: 8) {
                     JellyCoinIcon(size: 22)
-                    Text("+\(volley.earned.coinText) JellyCoins").lineLimit(1).minimumScaleFactor(0.8).playFont(20, .bold).foregroundStyle(CareMenu.brown)
+                    Text("+\(volley.earned.coinText) JellyCoins").lineLimit(1).minimumScaleFactor(0.8).playFont(20, .bold).resultProbe("coins").foregroundStyle(CareMenu.brown)
                 }
                 if volley.pointsEarned > 0 {
                     HStack(spacing: 8) {
                         Image(systemName: "star.fill").font(.system(size: 16, weight: .black)).foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.35))
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Jelly Volleyball points  +\(volley.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
-                            Text("\(volley.playerName) now has \(volley.pointsAfter) to spend").playFont(13, .medium).foregroundStyle(CareMenu.brown.opacity(0.85))
+                            Text("Jelly Volleyball points  +\(volley.pointsEarned)").playFont(16, .bold).resultProbe("points").foregroundStyle(CareMenu.brown)
+                            Text("\(volley.playerName) now has \(volley.pointsAfter) to spend").playFont(13, .medium).resultProbe("pointsDetail").foregroundStyle(CareMenu.brown.opacity(0.85))
                         }
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("volley-points")
                 }
-                if volley.assistFactor < 1 { Text("Auto play pays half").playFont(14, .medium).foregroundStyle(CareMenu.brown.opacity(0.85)) }
+                if volley.assistFactor < 1 { Text("Auto play pays half").playFont(14, .medium).resultProbe("assist").foregroundStyle(CareMenu.brown.opacity(0.85)) }
                 if !volley.awards.isEmpty {
                     HStack(spacing: 8) {
                         if volley.awards.newRibbon { chip("New ribbon!", "rosette", "volley-new-ribbon") }
                         if let t = volley.awards.trophies.first { chip(volley.awards.trophies.count > 1 ? "New trophy! \(t.title) +\(volley.awards.trophies.count - 1)" : "New trophy! \(t.title)", "trophy.fill", "volley-trophy") }
                     }
                 }
-                if let t = volley.unlockedNow { Text("\(t.title) unlocked!").playFont(15, .heavy).foregroundStyle(SK.pink).accessibilityIdentifier("volley-unlocked") }
+                if let t = volley.unlockedNow { Text("\(t.title) unlocked!").playFont(15, .heavy).resultProbe("unlocked").foregroundStyle(SK.pink).accessibilityIdentifier("volley-unlocked") }
             }
             Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); home() } label: {
-                Text("Back home").playFont(20, .bold).foregroundStyle(.white).padding(.horizontal, 30).padding(.vertical, tight ? 8 : 12)
+                Text("Back home").playFont(20, .bold).resultProbe("home").foregroundStyle(.white).padding(.horizontal, 30).padding(.vertical, tight ? 8 : 12)
                     .background(Capsule().fill(SK.pink).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))
             }.buttonStyle(.plain).accessibilityIdentifier("volley-home")
         }

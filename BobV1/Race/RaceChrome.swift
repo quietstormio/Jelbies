@@ -276,7 +276,7 @@ struct RacePlacingsCard: View {
     private func celebration(_ text: String, symbol: String, id: String) -> some View {
         HStack(spacing: 5) {
             Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .black))
-            Text(text).playFont(14, .heavy)
+            Text(text).playFont(14, .heavy).resultProbe(id)
         }
         .foregroundStyle(CareMenu.brown)
         .padding(.horizontal, 12).padding(.vertical, 5)
@@ -290,21 +290,24 @@ struct RacePlacingsCard: View {
         VStack(spacing: tight ? 6 : 14) {
             Text(race.ui.playerPlace == 1 ? "You won!" : "Finish!")
                 .playFont(tight ? 24 : 30, .heavy)
+                .resultProbe("title")
                 .foregroundStyle(CareMenu.brown)
             VStack(spacing: tight ? 2 : 8) {
                 ForEach(race.ui.placings, id: \.racer) { p in
                     HStack(spacing: 12) {
                         Text(ordinal(p.place))
                             .playFont(17, .heavy)
+                            .resultProbe("place\(p.place)")
                             .foregroundStyle(CareMenu.brown)
                             .frame(minWidth: 52, minHeight: 34)
                             .background(Capsule().fill(medal(p.place)))
                         Text(p.name)
                             .playFont(20, p.isPlayer ? .heavy : .semibold)
+                            .resultProbe("name\(p.place)")
                             .foregroundStyle(CareMenu.brown)
                         Spacer()
                         Text(p.time.map { String(format: "%.1f s", $0) } ?? "-")
-                            .playFont(18, .semibold).monospacedDigit()
+                            .playFont(18, .semibold).resultProbe("time\(p.place)").monospacedDigit()
                             .foregroundStyle(CareMenu.brown.opacity(0.85))
                     }
                     .padding(.horizontal, 10).padding(.vertical, tight ? 2 : 5)
@@ -315,12 +318,12 @@ struct RacePlacingsCard: View {
                 JellyCoinIcon(size: 22)
                 Text("+\(race.ui.earned.coinText) JellyCoins")
                     .lineLimit(1).minimumScaleFactor(0.8)
-                    .playFont(20, .bold)
+                    .playFont(20, .bold).resultProbe("coins")
                     .foregroundStyle(CareMenu.brown)
             }
             if race.assist == .auto {
                 Text("Auto run pays half the JellyCoins")
-                    .playFont(14, .medium)
+                    .playFont(14, .medium).resultProbe("assist")
                     .foregroundStyle(CareMenu.brown.opacity(0.85))
                     .accessibilityIdentifier("race-auto-note")
             }
@@ -328,8 +331,8 @@ struct RacePlacingsCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: "star.fill").font(.system(size: 16, weight: .black)).foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.35))
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("Jelly Race points  +\(race.ui.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
-                        Text("\(race.ui.playerName) now has \(race.ui.pointsAfter) to spend").playFont(13, .medium).foregroundStyle(CareMenu.brown.opacity(0.85))
+                        Text("Jelly Race points  +\(race.ui.pointsEarned)").playFont(16, .bold).resultProbe("points").foregroundStyle(CareMenu.brown)
+                        Text("\(race.ui.playerName) now has \(race.ui.pointsAfter) to spend").playFont(13, .medium).resultProbe("pointsDetail").foregroundStyle(CareMenu.brown.opacity(0.85))
                     }
                 }
                 .accessibilityElement(children: .combine)
@@ -345,7 +348,7 @@ struct RacePlacingsCard: View {
             }
             if let t = race.unlockedNow {
                 Text("\(t.title) course unlocked!")
-                    .playFont(15, .heavy)
+                    .playFont(15, .heavy).resultProbe("unlocked")
                     .foregroundStyle(SK.pinkStrong)
                     .accessibilityIdentifier("race-unlocked")
             }
@@ -354,7 +357,7 @@ struct RacePlacingsCard: View {
                 home()
             } label: {
                 Text("Back home")
-                    .playFont(20, .bold)
+                    .playFont(20, .bold).resultProbe("home")
                     .foregroundStyle(.white)
                     .padding(.horizontal, 30).padding(.vertical, tight ? 8 : 12)
                     .background(Capsule().fill(SK.pinkStrong).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))
@@ -365,6 +368,7 @@ struct RacePlacingsCard: View {
         .padding(.horizontal, 22).padding(.vertical, tight ? 10 : 20)
         .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 6, y: 3))
         .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
+        
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("race-card")
     }

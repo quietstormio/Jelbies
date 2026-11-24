@@ -38,17 +38,17 @@ final class ShowFlow {
     /// The stage is shown instead of the room (0 / 1: snapped under the white, never blended on screen).
     @ObservationIgnored private(set) var cameraBlend: Float = 0
     /// The rules (nil when off). Not observed (the dance changes it every step); the views read `revision` and the published bits.
-    @ObservationIgnored private(set) var sim: ShowSim?
+    @ObservationIgnored var sim: ShowSim?
     /// Bumped whenever the show moved on in a way the screens redraw for.
     private(set) var revision = 0
     /// Ranks won and trophies (saved outside tests).
     var progress = ShowProgress(persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
 
     private(set) var playerID = 0
-    private(set) var playerName = ""
-    private(set) var character = 0
-    private(set) var rank: ShowRank = .puddle
-    private(set) var theme: ShowTheme = .bunnyPicnic
+    var playerName = ""
+    var character = 0
+    var rank: ShowRank = .puddle
+    var theme: ShowTheme = .bunnyPicnic
     private(set) var dayKey = 0
     /// How many bodies stand on the stage (the player's plus the rival bodies borrowed from the room).
     private(set) var bodies = 1
@@ -111,8 +111,8 @@ final class ShowFlow {
     private(set) var burstFlash = 0
 
     // results
-    private(set) var earned = 0
-    private(set) var awards: ShowProgress.Awards?
+    var earned = 0
+    var awards: ShowProgress.Awards?
     @ObservationIgnored private(set) var settled = false
     /// The player went home in the middle (Race/ForfeitHome.swift): nothing is settled and the trip is not a win.
     @ObservationIgnored private(set) var forfeited = false
