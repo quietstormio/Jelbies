@@ -42,7 +42,7 @@ extension GameCare {
             if simd_distance(floorOf(bodies[i]), floorOf(bodies[j])) < 1.0 { ov = true }
             for (a, b) in [(bodies[i], bodies[j]), (bodies[j], bodies[i])] { let d = floorOf(a) - floorOf(b); if d.y > 0 && d.y < 1.1 && abs(d.x) < 1.0 && abs(floorOf(a).x) < 3 && abs(floorOf(b).x) < 3 { hid = true } }
         } }
-        func line() -> String { bodies.map { a in String(format: "[%d (%.2f,%.2f) -> %@]", a.id, floorOf(a).x, floorOf(a).y, showSeat(a.id).map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-") }.joined(separator: " ") }
+        func line() -> String { bodies.map { a in String(format: "[%d (%.2f,%.2f) -> %@%@]", a.id, floorOf(a).x, floorOf(a).y, showSeat(a.id).map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", book.keep[a.id].map { $0.gliding ? " GLIDE" : ($0.off > 0 ? String(format: " off%.1f/%.1f", $0.off, $0.budget) : "") } ?? "") }.joined(separator: " ") }
         let st = "\(show.trickStage)/\(show.rivalStep)/\(String(describing: show.rivalTurn))"
         if ov && !p.overlap { print(String(format: "[showline] VIOL overlap t=%.2f r%d %@ %@", p.clock, show.rivalRound, st, line())) }
         if hid && !p.hidden { print(String(format: "[showline] VIOL hidden t=%.2f r%d %@ %@", p.clock, show.rivalRound, st, line())) }
@@ -165,7 +165,7 @@ extension GameCare {
                 let idle = b.pending == nil && { if case .none = b.script { return true }; return false }()
                 // a body that stands still off its seat: one fresh ask for a seat that is not the middle (the middle walks have their own retry), then the carry
                 if k.still > 0.5, !k.asked, simd_distance(seat, ShowStage.playerSpot) > 0.01 { k.asked = true; showRoute(a, to: seat) }
-                if k.still > (idle ? Self.lineStall : Self.lineStallWalk) { k.off = max(k.off, k.budget + 1) }
+                if k.still > (idle || b.heldByPeer ? Self.lineStall : Self.lineStallWalk) { k.off = max(k.off, k.budget + 1) }          // (held by a body on its leg that the planner cannot go round: the same as standing)
                 if k.off > k.budget {
                     let aim = k.viaGate && simd_distance(here, ShowStage.gate) > 0.3 && (here.y < Self.backRowLine) != (seat.y < Self.backRowLine) ? ShowStage.gate : seat
                     // the line to the carry's goal is free of bodies, or the wait for it is over (then the carry goes regardless: the others have their own allowance)
@@ -174,7 +174,8 @@ extension GameCare {
             }
             if k.gliding {
                 var aim = seat
-                if k.viaGate, (here.y < Self.backRowLine) != (seat.y < Self.backRowLine), simd_distance(here, ShowStage.gate) > 0.12 { aim = ShowStage.gate }
+                if k.viaGate, simd_distance(here, ShowStage.gate) < 0.12 { k.viaGate = false }          // (the gate is passed: on to the seat; no going back to it)
+                if k.viaGate { aim = ShowStage.gate }
                 let dd = simd_distance(here, aim)
                 let speed = min(Self.glideSpeed, 0.6 + dd * 4)
                 let step = min(dd, speed * dt)
