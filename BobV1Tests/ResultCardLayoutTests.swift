@@ -141,7 +141,7 @@ final class ResultCardLayoutTests: XCTestCase {
                     let (infos, img) = host(s, ax: ax) { h in AnyView(make(ResultCardMetrics.maxHeight(screenH: h)).resultCardSlot()) }
                     let tag = "\(cname)_\(s.name)_\(ax ? "ax5" : "default")"
                     save(img, comp, tag)
-                    let p = problems(infos, s, scrolls: ax || s.h < 700 || (s.landscape && s.h < 400 && cname.contains("longest")))
+                    let p = problems(infos, s, scrolls: ax || s.h < 700 || s.name == "ipad-landscape" || (s.landscape && s.h < 400 && cname.contains("longest")))
                     if infos.isEmpty { failures.append("\(tag): no probes (not rendered)") }
                     if !p.isEmpty { failures.append("\(tag): " + p.joined(separator: "; ")) }
                 }

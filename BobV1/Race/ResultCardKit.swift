@@ -15,7 +15,7 @@ enum ResultCardMetrics {
     /// The tallest the card may be: the screen height the chrome measured, less the top bar band and the gaps. iPad draws the card at 1.45x (a transform, not layout), so its layout height is divided by that.
     static func maxHeight(screenH: CGFloat) -> CGFloat {
         guard screenH > 0 else { return .infinity }
-        return PadLayout.isPad ? max(200, (screenH - 150) / 1.45) : max(160, screenH - 96)
+        return PadLayout.isPad ? max(200, (screenH - 120) / 1.45) : max(160, screenH - 96)
     }
 }
 
@@ -82,7 +82,8 @@ struct ResultCardFrame<Primary: View, Secondary: View>: View {
     var body: some View {
         ViewThatFits(in: .vertical) {
             card(scrolling: false)
-            card(scrolling: true)
+            // too tall: fill the height we are given, the content scrolls inside and "Back home" stays under it
+            card(scrolling: true).frame(height: maxHeight.isFinite ? maxHeight : nil)
         }
         .frame(maxHeight: maxHeight)
     }
