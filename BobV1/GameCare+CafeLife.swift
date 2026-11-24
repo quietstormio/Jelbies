@@ -18,6 +18,23 @@ extension GameCare {
         return false
     }
 
+    /// A treat is done: from now on this diner only sits and talks (cheer, lounge and done phases count for everybody).
+    func cafeFinished(_ id: Int) -> Bool {
+        switch cafe.phase { case .cheer, .lounge, .done: return true; case .eating: return cafe.served.contains(id); default: return false }
+    }
+    /// cafe-busy-r1: every diner whose treat is done keeps his seat and his facing, every step (the group serving hands a finished diner back to his own life: it unreserves him, so he would turn to
+    /// the camera, and the café's tray-clear step-aside would walk him off his stand). `-CafeCalmOff 1` is the old behaviour (A/B).
+    func cafeHoldFinished(_ actors: [JellyActor]) {
+        guard !Self.cafeCalmOff, cafe.phase == .eating || cafe.phase == .cheer || cafe.phase == .lounge || cafe.phase == .done else { return }
+        for s in cafeSeats(actors) where cafeFinished(s.id) {
+            let b = s.brain
+            if !b.reserved || b.mealFaceYaw != s.yaw { b.reserved = true; b.mealFaceYaw = s.yaw }
+            b.idleBlocked = true; b.autonomy = false
+        }
+    }
+    /// The customers who are sitting at their tables now.
+    var cafeSeatedCustomers: [CafeMember] { cafeBook.crowd.live.values.flatMap { $0.members.filter { $0.state == .seated } } }
+
     /// Chatter and thoughts, once per step while they are at the table (menu, meal, cheer and lounge).
     func tickCafeTalk(_ actors: [JellyActor], dt: Float) {
         let book = cafeBook
@@ -33,23 +50,23 @@ extension GameCare {
             guard let a = live.first(where: { $0.id == id }), let b = a.brain else { continue }
             AudioHub.shared.chirp(jelly: id, Bool.random() ? .happy : .babble, src: "cafe")
             b.face(.happy, hold: 1.0)
-            if cafeIdleNow(b) { b.startHopPlay(sim: a.sim, distance: 0.0001) }
+            if cafeIdleNow(b), Self.cafeCalmOff || !cafeFinished(id) { b.startHopPlay(sim: a.sim, distance: 0.0001) }          // (cafe-busy-r1: nobody hops once his treat is done)
         }
         // turn-taking: one speaks every few seconds, another answers a moment later
         book.chatT -= dt
         if lounging {
             if book.chatT <= 0 {
                 book.chatT = Float.random(in: CafeTuning.chatEvery)
-                if !book.regulars.isEmpty, !book.guests.isPair, Float.random(in: 0..<1) < 0.25, let k = book.regularVisitors.indices.randomElement(), let rb = book.regulars[k].brain {          // a regular chimes in (his own species' voice)
-                    AudioHub.shared.chirp(character: Self.regularVoiceCharacter(book.regularVisitors[k]), Bool.random() ? .babble : .happy)
+                if Float.random(in: 0..<1) < 0.25, let m = cafeSeatedCustomers.randomElement(), let rb = m.actor.brain {          // a customer chimes in (his own species' voice)
+                    AudioHub.shared.chirp(character: Self.regularVoiceCharacter(m.visitor), Bool.random() ? .babble : .happy, quiet: true)
                     rb.face(.excited, hold: 1.2)
                 }
             }
         } else if book.chatT <= 0 {
             book.chatT = Float.random(in: CafeTuning.chatEvery)
             let pool = live.count > 1 ? live.filter { $0.id != book.lastSpeaker } : live
-            if !book.regulars.isEmpty, !book.guests.isPair, Float.random(in: 0..<1) < 0.25, let k = book.regularVisitors.indices.randomElement(), let rb = book.regulars[k].brain {          // a regular chimes in (his own species' voice)
-                AudioHub.shared.chirp(character: Self.regularVoiceCharacter(book.regularVisitors[k]), Bool.random() ? .babble : .happy)
+            if Float.random(in: 0..<1) < 0.25, let m = cafeSeatedCustomers.randomElement(), let rb = m.actor.brain {          // a customer chimes in (his own species' voice)
+                AudioHub.shared.chirp(character: Self.regularVoiceCharacter(m.visitor), Bool.random() ? .babble : .happy, quiet: true)
                 rb.face(.excited, hold: 1.2)
             } else if let sp = pool.randomElement(), let sb = sp.brain {
                 book.lastSpeaker = sp.id
@@ -100,11 +117,10 @@ extension GameCare {
             let seats = cafeSeats(actors)
             for a in actors {
                 guard let b = a.brain else { continue }
-                b.abortAll(a.sim, a.skinner)
-                b.commandedIdle = nil
+                if Self.cafeCalmOff { b.abortAll(a.sim, a.skinner); b.commandedIdle = nil }          // (cafe-busy-r1: nothing is aborted, nobody is walked back: they have been held on their stand since their treat was done)
                 if let s = seats.first(where: { $0.id == a.id }) {
                     b.reserved = true; b.mealFaceYaw = s.yaw          // (the calm wait holds his facing: the ends at each other, the middle the room, a pair at each other)
-                    if simd_distance(Self.floorPos(b, a.sim), s.stand) > 0.15 { b.requestNow(.goTo(s.stand)) }
+                    if Self.cafeCalmOff, simd_distance(Self.floorPos(b, a.sim), s.stand) > 0.15 { b.requestNow(.goTo(s.stand)) }
                 }
                 b.face(.happy, hold: 2)
                 b.blushBump(hold: 3, peak: 0.5)

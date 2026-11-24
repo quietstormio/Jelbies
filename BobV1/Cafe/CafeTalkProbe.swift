@@ -42,3 +42,46 @@ final class CafeTalkProbe {
         }
     }
 }
+
+/// cafe-busy-r1: counts what a player's Jelmiko does after its treat is done (`-CafeCalmLog 1`, dev builds only): every step it counts the RISING edges of a turn (facing more than 0.3 rad off its seat),
+/// a move (more than 0.2 u off its stand) and an action (a walk / emote / hop / idle that is not the talk's own giggle), by what the action was. The summary prints at the visit's end and every 15 s.
+@MainActor
+final class CafeCalmProbe {
+    static let shared = CafeCalmProbe()
+    static var on: Bool { DevArgs.enabled && UserDefaults.standard.integer(forKey: "CafeCalmLog") != 0 }
+    struct Count { var settled = false, turns = 0, moves = 0, acts = 0, steps = 0; var kinds: [String: Int] = [:]; var turning = false, moving = false, acting = false }
+    var by: [Int: Count] = [:]
+    var next: Float = 15, clock: Float = 0
+    func reset() { by = [:]; next = 15; clock = 0 }
+
+    func tick(_ care: GameCare, _ actors: [JellyActor], dt: Float) {
+        guard Self.on else { return }
+        guard care.cafe.phase == .eating || care.cafe.phase == .cheer || care.cafe.phase == .lounge || care.cafe.phase == .done else { return }
+        clock += dt
+        for s in care.cafeSeats(actors) where care.cafeFinished(s.id) {
+            let b = s.brain
+            var c = by[s.id] ?? Count()
+            if !c.settled { if case .none = s.brain.script, s.brain.activity == .idle || s.brain.activity == .lookingAround || s.brain.activity == .steppingInPlace { c.settled = true } else { by[s.id] = c; continue } }          // (counting starts when the last bite / sip is over: the eating itself is not extra movement)
+            c.steps += 1
+            let yawErr = abs(GameCare.wrapAngle(b.yaw + b.twist + b.chat.twist - s.yaw))
+            let off = simd_distance(GameCare.floorPos(b, s.sim), s.stand)
+            let calmAct = b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace
+            var what = ""
+            if case .none = b.script {} else { what = "script:\(b.script)".prefix(24).description }
+            if what.isEmpty, !calmAct { what = "act:\(b.activity)" }
+            if what.isEmpty, let k = b.idleState.kind, k != .giggle { what = "idle:\(k.rawValue)" }
+            if what.isEmpty, let k = b.commandedIdle, k != .giggle { what = "cmd:\(k.rawValue)" }
+            if b.idleState.kind == .giggle || b.commandedIdle == .giggle { if !what.hasPrefix("script:walk") && !what.hasPrefix("script:dine") { what = "" } }          // (the talk's own giggle is allowed)
+            let busy = !what.isEmpty
+            if yawErr > 0.3 { if !c.turning { c.turns += 1; c.kinds["turn@" + (what.isEmpty ? "-" : what), default: 0] += 1 }; c.turning = true } else if yawErr < 0.15 { c.turning = false }
+            if off > 0.2 { if !c.moving { c.moves += 1; c.kinds["move@" + (what.isEmpty ? "-" : what), default: 0] += 1 }; c.moving = true } else if off < 0.1 { c.moving = false }
+            if busy { if !c.acting { c.acts += 1; c.kinds[what, default: 0] += 1 }; c.acting = true } else { c.acting = false }
+            by[s.id] = c
+        }
+        if clock >= next { next += 15; summary("t=\(Int(clock))") }
+    }
+    func summary(_ tag: String) {
+        guard Self.on, !by.isEmpty else { return }
+        NSLog("[cafecalm] %@ %@", tag, by.sorted { $0.key < $1.key }.map { "id\($0.key) turns=\($0.value.turns) moves=\($0.value.moves) acts=\($0.value.acts) steps=\($0.value.steps) \($0.value.kinds.sorted { $0.key < $1.key })" }.joined(separator: " | "))
+    }
+}

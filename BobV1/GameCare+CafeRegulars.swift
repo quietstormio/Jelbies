@@ -306,6 +306,7 @@ extension GameCare {
     /// The regulars leave (the café's swap home, under the white): looks put away, bodies hidden, their tables gone.
     func cafeRegularsLeave() {
         let book = cafeBook
+        cafeCrowdLeave()
         book.regularsPending = false
         for t in book.extraTables { t.reset() }
         book.extraTables = []; book.extraFrames = []; book.regularTable = [:]; book.forceDiningPush = true
