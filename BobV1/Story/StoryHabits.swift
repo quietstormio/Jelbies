@@ -23,6 +23,10 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
     /// "<partner>|<kind>" seconds in group sessions (which kind of group session they shared).
     var groupKinds: [String: Float]? = nil
     var area: [String: Float] = [:]
+    /// housemate-notes-r1 (all Optional: an old save has neither key). Seconds lately spent near a housemate outside any pair / group session (side by side, ball play, napping beside
+    /// each other); decayed like the rest. And the time EVER shared with each housemate (sessions plus nearness): never decayed, so "just met" never comes back after a week away.
+    var near: [String: Float]? = nil
+    var shared: [String: Float]? = nil
     /// Seconds sampled lately (decayed like the rest) and ever (not decayed, capped for sanity).
     var total: Float = 0
     var everSeconds: Float = 0
@@ -37,11 +41,21 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
     // MARK: sampling
 
     /// Adds one second (or `dt`).
-    mutating func add(activity: String, partners: [Int], area areaKey: String?, day: Int, dt: Float = 1) {
+    mutating func add(activity: String, partners: [Int], area areaKey: String?, day: Int, dt: Float = 1, nearby: [Int] = []) {
         if firstDay == 0 { firstDay = day; decayDay = day }
         act[activity, default: 0] += dt
         total += dt; everSeconds = min(everSeconds + dt, 1e9)
         if let areaKey { area[areaKey, default: 0] += dt }
+        if !nearby.isEmpty || !partners.isEmpty {
+            var sh = shared ?? [:]
+            for p in partners where activity.hasPrefix("pair:") || activity.hasPrefix("group:") { sh[String(p), default: 0] += dt }
+            if !nearby.isEmpty {
+                var nr = near ?? [:]
+                for p in nearby where !partners.contains(p) { nr[String(p), default: 0] += dt; sh[String(p), default: 0] += dt }
+                Self.cap(&nr, Self.maxPartnerKeys); near = nr
+            }
+            Self.cap(&sh, Self.maxPartnerKeys); shared = sh
+        }
         if activity.hasPrefix("pair:") || activity.hasPrefix("group:") {
             let kind = String(activity.drop(while: { $0 != ":" }).dropFirst())
             for p in partners {
@@ -69,6 +83,7 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
         if var g = group { for k in g.keys { g[k]! *= f }; group = g.filter { $0.value >= Self.dropBelow } }
         if var g = groupKinds { for k in g.keys { g[k]! *= f }; groupKinds = g.filter { $0.value >= Self.dropBelow } }
         for k in area.keys { area[k]! *= f }
+        if var n = near { for k in n.keys { n[k]! *= f }; near = n.filter { $0.value >= Self.dropBelow } }
         total *= f
         act = act.filter { $0.value >= Self.dropBelow }; partner = partner.filter { $0.value >= Self.dropBelow }
         emote = emote.filter { $0.value >= Self.dropBelow }; area = area.filter { $0.value >= Self.dropBelow }
@@ -79,6 +94,8 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
     /// Activities that say nothing about what a Jelmiko likes to do (standing about, walking about, resting).
     static let plainKinds: Set<String> = ["stand", "walk", "rest"]
 
+    /// Whole days since the sampler first ran for this body.
+    var daysTracked: Int { firstDay == 0 ? 0 : max(0, decayDay - firstDay) }
     /// How much has been seen lately, in minutes (decayed seconds).
     var minutes: Int { Int(total / 60) }
     /// Enough lately to say anything about habits (about five minutes of room life).
@@ -112,6 +129,8 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
         return Int(m.key)
     }
     func seconds(with id: Int) -> Int { Int(partner[String(id)] ?? 0) }
+    /// All the time ever shared with a housemate (pair / group sessions and nearness). An old save has no `shared`: its (decayed) pair seconds are the floor.
+    func sharedEver(with id: Int) -> Int { Int(max(shared?[String(id)] ?? 0, partner[String(id)] ?? 0)) }
     /// The kind of group session they shared most (a SocialKind key), nil when there is not at least 20 s of one kind.
     func topGroupKind(with id: Int) -> String? {
         let pre = "\(id)|"
@@ -135,6 +154,8 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
 // MARK: the floor area and the label (pure, used by the sampler)
 
 nonisolated enum StorySampling {
+    /// Floor distance (room units) within which two Jelmiko count as keeping each other company.
+    static let nearRadius: Float = 2.6
     /// Window side (the back wall), the couch, the rug, the front of the room; nil for the open floor in between. From the floor position (x, z), the room's own layout.
     static func area(x: Float, z: Float, sofaDistance: Float, rugDistance: Float, backZ: Float, frontZ: Float) -> String? {
         if sofaDistance < 1.1 { return "couch" }
@@ -152,6 +173,7 @@ final class StoryHabitStore {
     private(set) var books: [Int: StoryHabits] = [:]
     private var dirty: Set<Int> = []
     private var sinceSave: Float = 0
+    private var logTick: [Int: Int] = [:]
     var defaults: UserDefaults = .standard
     /// Slot (the room's body index) -> instance id; set by the stage. nil = not a home Jelmiko.
     var resolve: (Int) -> Int? = { $0 }
@@ -181,14 +203,21 @@ final class StoryHabitStore {
     }
 
     /// The sampler's one entry: a second of life for `slot`.
-    func sample(slot: Int, activity: String, partnerSlots: [Int], area: String?) {
+    func sample(slot: Int, activity: String, partnerSlots: [Int], area: String?, nearSlots: [Int] = []) {
         guard let id = resolve(slot) else { return }
         let ps = partnerSlots.compactMap { resolve($0) }.filter { $0 != id }
+        let ns = nearSlots.compactMap { resolve($0) }.filter { $0 != id }
         var h = habits(id)
         let day = today()
         if h.decayDay != 0, day > h.decayDay { h.decay(toDay: day) }
-        h.add(activity: activity, partners: ps, area: area, day: day)
+        h.add(activity: activity, partners: ps, area: area, day: day, nearby: ns)
         books[id] = h; dirty.insert(id)
+        logTick[id, default: 0] += 1
+        if logTick[id]! >= 60 {          // once a minute per body: what the counters hold with each housemate (the `[storysample]` line)
+            logTick[id] = 0
+            let keys = Set((h.shared ?? [:]).keys).union(h.partner.keys).union((h.near ?? [:]).keys).sorted()
+            NSLog("[storysample] id=%d total=%.0f ever=%.0f %@", id, h.total, h.everSeconds, keys.map { "with \($0): near \(Int(h.near?[$0] ?? 0)) shared \(Int(h.shared?[$0] ?? 0)) partner \(Int(h.partner[$0] ?? 0))" }.joined(separator: " | "))
+        }
         sinceSave += 1
         if sinceSave >= 60 { flush() }
     }

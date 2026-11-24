@@ -32,6 +32,8 @@ extension BlobBrain {
         guard homeRoom, !volley.active, !race.active else { return }
         let here = SIMD2<Float>(px, pz)
         let area = StorySampling.area(x: px, z: pz, sofaDistance: RoomLayout.sofaDistanceXZ(here), rugDistance: simd_distance(here, RoomLayout.rugCentre), backZ: RoomLayout.minZ, frontZ: -RoomLayout.walls[1].d)
-        StoryHabitStore.shared.sample(slot: steerID, activity: storyActivityKey, partnerSlots: storyPartnerSlots, area: area)
+        // housemate-notes-r1: who is within a couple of metres right now (side by side, a ball between them, napping beside each other): shared life that is not a pair / group session.
+        let near = socialOthers().filter { $0 !== self && simd_distance_squared(here, SIMD2<Float>($0.px, $0.pz)) < StorySampling.nearRadius * StorySampling.nearRadius }.map(\.steerID)
+        StoryHabitStore.shared.sample(slot: steerID, activity: storyActivityKey, partnerSlots: storyPartnerSlots, area: area, nearSlots: near)
     }
 }

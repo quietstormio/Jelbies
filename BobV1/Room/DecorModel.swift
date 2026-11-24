@@ -470,6 +470,8 @@ enum DecorPlacement {
                     // the sides first (left and right in turn), then the back, the middle of the floor last (flat pieces may go there, solid ones may not)
                     var cost = abs(z - 0.4) * 0.25 + (sideSign * x > 0 ? 0 : 3) + (3.6 - abs(x)) * 0.5 + max(0, 3.0 - simd_length(p)) * 0.3
                     if inCore(kind, at: p) { cost += 6 }
+                    // (toy-audit-r1: a toy keeps clear of the other toys: within 1.5 of one it costs more, so a drum does not end up right behind the hoop while there is free floor elsewhere)
+                    if kind.category == .toys { for o in placed where o.kind.category == .toys && simd_distance(p, o.at) - kind.spec.radius - o.kind.spec.radius < 1.5 { cost += 5 } }
                     if best == nil || cost < best!.1 - 1e-5 { best = (p, cost) }
                 }
                 x += 0.1

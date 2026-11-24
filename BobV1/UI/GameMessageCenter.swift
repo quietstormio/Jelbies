@@ -99,7 +99,7 @@ final class GameMessageCenter {
 
     nonisolated deinit {}
 
-    func post(_ text: String, icon: String? = nil, priority: Priority = .normal, scope: Scope = .none, identifier: String = "game-message", announce: Bool = true, sticky: Bool = false, now: Date = Date()) {
+    func post(_ text: String, icon: String? = nil, priority: Priority = .normal, scope: Scope = .none, identifier: String = "game-message", announce: Bool = true, sticky: Bool = false, onShown: (() -> Void)? = nil, now: Date = Date()) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         tick(now: now)
@@ -114,13 +114,18 @@ final class GameMessageCenter {
         if let l = lastShown, l.text == text, now.timeIntervalSince(l.at) < Self.mergeWindow { return }
         seq += 1
         let m = Message(id: seq, text: text, icon: icon, priority: priority, scope: scope, identifier: identifier, announce: announce, posted: now, sticky: sticky, shownAt: nil)
+        if let onShown { hooks[m.id] = onShown }
         if let c = current, Self.replaces(m, c) { show(m, now: now); return }
         if current == nil, !tipShowing() { show(m, now: now); return }
         queue.append(m)
         queue = Self.stableSorted(queue)          // (highest first, equal priorities in the order posted)
         if queue.count > Self.queueCap { queue.removeLast(queue.count - Self.queueCap) }
+        pruneHooks()
         arm(now: now)
     }
+    /// `onShown` callbacks of lines still waiting (a line that was dropped never calls its own: a hint is only "seen" once it was on the bar).
+    @ObservationIgnored private var hooks: [Int: () -> Void] = [:]
+    private func pruneHooks() { let waiting = Set(queue.map(\.id)); hooks = hooks.filter { waiting.contains($0.key) } }
 
     nonisolated static func replaces(_ new: Message, _ cur: Message) -> Bool {
         return cur.priority == .chatty && new.priority >= .normal
@@ -133,6 +138,7 @@ final class GameMessageCenter {
         if let c = caption, let s = c.shownAt, now.timeIntervalSince(s) >= c.duration { caption = nil }
         queue.removeAll { now.timeIntervalSince($0.posted) > Self.staleAfter }
         if current == nil, !tipShowing(), !queue.isEmpty { show(queue.removeFirst(), now: now) }
+        pruneHooks()
         if current != nil || caption != nil || !queue.isEmpty { arm(now: now) }
     }
 
@@ -147,19 +153,22 @@ final class GameMessageCenter {
     func dismiss(scope: Scope, now: Date = Date()) {
         guard scope != .none else { return }
         queue.removeAll { $0.scope == scope }
+        pruneHooks()
         if current?.scope == scope { current = nil; tick(now: now) }
     }
     /// The player acted: a sticky hint (or any line) with this identifier goes now.
     func dismiss(identifier: String, now: Date = Date()) {
         queue.removeAll { $0.identifier == identifier }
+        pruneHooks()
         if current?.identifier == identifier { current = nil; tick(now: now) }
     }
-    func clear() { current = nil; caption = nil; queue = []; lastShown = nil; timer?.cancel() }
+    func clear() { current = nil; caption = nil; queue = []; hooks = [:]; lastShown = nil; timer?.cancel() }
 
     private func show(_ m: Message, now: Date) {
         var m = m; m.shownAt = now
         current = m
         lastShown = (m.text, now)
+        hooks.removeValue(forKey: m.id)?()          // actually on the bar now
         if m.announce { A11yAnnounce.say(m.text, priority: m.priority == .important ? .high : .normal, now: now) }          // VoiceOver: once, when it appears
         arm(now: now)
     }

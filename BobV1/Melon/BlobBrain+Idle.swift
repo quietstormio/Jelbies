@@ -338,8 +338,9 @@ extension BlobBrain {
         if anticsEnabled, runMoveDemo == nil, idleState.treat <= 0, treatMaybeStart(sim) { return true }
         let decorOffers: Set<IdleKind> = anticsEnabled && !decorLocked ? Self.decorOffers() : []
         // a toy is out: a direct chance (ToyTuning.directChance) to go and play with one, before the bag; not the toy he used last, at least directGap s between his sessions
-        if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleMood != .grumpy, idleNight < 0.6, variety.now - toy.lastDirect >= (outingPlay ? ParkPlayTuning.directGap : ToyTuning.directGap), rand() < (outingPlay ? ParkPlayTuning.directChance : ToyTuning.directChance) {
+        if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleNight < 0.6, variety.now - toy.lastDirect >= (outingPlay ? ParkPlayTuning.directGap : ToyTuning.directGap), rand() < (outingPlay ? ParkPlayTuning.directChance : ToyTuning.directChance) * (idleMood == .grumpy ? ToyTuning.grumpyShare : 1) {          // (toy-audit-r1: a grumpy one plays too, the kick / hop toys, at about half the rate; he never refuses a toy outright)
             var kinds = Array(decorOffers)
+            if idleMood == .grumpy { kinds = kinds.filter { $0 == .decorKick || $0 == .decorHop } }
             for i in kinds.indices.reversed() where i > 0 { kinds.swapAt(i, min(i, Int(rand() * Float(i + 1)))) }
             for k in kinds where !varietyPeerJustStarted(k) && !(MoveMix.on && k == .soccerKick && rand() < MoveMix.soccerSoloSkip) && decorStart(k, sim) {          // (MoveMix round 3b: the scheduler's own solo soccer kicks come half as often: the soccer urge and the follow-ups make the moments, with passes)
                 toy.lastDirect = variety.now; idleState.cooldown = max(idleState.cooldown, 3)

@@ -119,7 +119,7 @@ Competitions are how JellyCoins are earned.
 - **Nothing leaves the device.** The game makes no network requests. There are no accounts, ads, analytics, tracking or in-app purchases.
 - **JellyCoins are earned by playing** and cannot be bought.
 - **Voice is recognised on the device** and is never recorded or sent anywhere.
-- **On-device intelligence, where the device supports it,** helps understand loosely phrased voice requests and can write names and greetings for park visitors, checked and filtered before anything is shown. An optional setting lets it write the short notes about housemates on the Profile; that setting is off by default, and pre-written notes are used otherwise.
+- **On-device intelligence, where the device supports it,** helps understand loosely phrased voice requests and can write names for park visitors, checked and filtered before anything is shown. An optional setting lets it write the short notes about housemates on the Profile; that setting is off by default, and pre-written notes are used otherwise.
 
 See [docs/PRIVACY.md](docs/PRIVACY.md).
 

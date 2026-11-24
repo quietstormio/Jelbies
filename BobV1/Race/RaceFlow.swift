@@ -34,7 +34,7 @@ final class RaceFlow {
     /// The relationship hook: (character, won) when a finished race is settled.
     var onBond: ((Int, Bool) -> Void)?
     /// What the finished race earned him (the results card says "New ribbon!" / "Trophy!").
-    private(set) var awards = TrophyAwards()
+    var awards = TrophyAwards()
     /// The course of the race under way (the chosen one when none is).
     var course: RaceCourse { sim?.course ?? RaceCourse.course(courseTier) }
     /// 0...1 white overlay opacity (the view draws it).
@@ -44,21 +44,21 @@ final class RaceFlow {
     /// The race (nil when off). Not observed (it changes every step); the view reads `ui`.
     @ObservationIgnored var sim: RaceSim?
     /// What the view needs of the race, republished only when it changes.
-    private(set) var ui = RaceUI()
+    var ui = RaceUI()
     /// Bumped on every countdown number / GO / finish so the view can animate each (the numbers themselves are in `sim`).
     var cueSerial = 0
     /// Seconds the placings card has been up.
     var cardAge: Float = 0
     /// What the player earned and gained, once settled.
-    private(set) var earned = 0
+    var earned = 0
     /// Race points the Upgrade menu gave for this finish (3 / 2 / 1), and his balance after; 0 until settled.
-    private(set) var pointsEarned = 0
-    private(set) var pointsAfter = 0
+    var pointsEarned = 0
+    var pointsAfter = 0
     /// A course this race opened (the placings card says so), nil when none.
-    private(set) var unlockedNow: CourseTier?
+    var unlockedNow: CourseTier?
     /// Rivals of this race (names / tints / stats), for the lane labels and the body colours.
     private(set) var rivals: [Rival] = []
-    private(set) var playerName = ""
+    var playerName = ""
     private(set) var playerID = 0
     /// How many races have been started (tests).
     private(set) var started = 0

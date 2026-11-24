@@ -174,8 +174,8 @@ nonisolated struct VolleySim: Sendable {
     let mode: VolleyMode
     private(set) var players: [VolleyPlayer] = []
     private(set) var ball = VolleyBall()
-    private(set) var phase: VolleyPhase = .intro
-    private(set) var score = [0, 0]
+    var phase: VolleyPhase = .intro
+    var score = [0, 0]
     private(set) var server = 0                 // team serving
     private(set) var serverIndex = 0            // the player who serves
     private var serveRot = [0, 0]
@@ -185,7 +185,7 @@ nonisolated struct VolleySim: Sendable {
     /// How many times the human actually played: Hit taps, fresh stick pushes and manual switches. An idle (AFK) player stays near 0.
     private(set) var humanInputs = 0
     private(set) var phaseT: Float = 0
-    private(set) var winner: Int?
+    var winner: Int?
     private(set) var events: [VolleyEvent] = []
     var rng: VolleyRng
     /// Accessibility: a slower ball, one-button play (the sim walks him under the ball and switches control), hits at Good timing for him, a wider Perfect window.

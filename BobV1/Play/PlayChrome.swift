@@ -1,7 +1,7 @@
 //
 //  PlayChrome.swift
 //  Play mode's screen furniture: the drag surface that lets the ball go (a flick), the Done pill (same cream capsule as Cancel / Let them go), a tiny first-time hint,
-//  hearts rising from the hand when the ball is caught after a good rally, and the small "x3" rally mark. Opaque cream like the rest of the HUD (no glass over the game view).
+//  hearts rising from the hand when the ball is caught after a good rally. Opaque cream like the rest of the HUD (no glass over the game view).
 //
 
 import SwiftUI
@@ -11,7 +11,6 @@ struct PlayChrome: View {
     private var play: PlayToss { care.play }
     @State private var hearts: [PlayHeart] = []
     @State private var seenCatch = 0
-    @State private var rallyShown = 0
     @State private var thrown = false
     @State private var dragStart: CGPoint?
     @Environment(\.verticalSizeClass) private var vsc
@@ -23,7 +22,7 @@ struct PlayChrome: View {
             if play.phase == .toy { toySurface } else if play.active { surface }
         }
         .animation(.easeInOut(duration: 0.25), value: play.active)
-        .onChange(of: play.active) { _, on in if on { thrown = false; hearts = []; rallyShown = 0; seenCatch = play.catchSerial } }
+        .onChange(of: play.active) { _, on in if on { thrown = false; hearts = []; seenCatch = play.catchSerial } }
     }
 
     private var surface: some View {
@@ -73,10 +72,10 @@ struct PlayChrome: View {
                     .accessibilityIdentifier("play-surface")
                 Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
                     .onChange(of: play.phase == .inHand && !thrown && play.camBlend > 0.8, initial: true) { _, on in          // (the hint is a line on the one message bar)
-                        if on { GameMessageCenter.shared.post("Flick the ball to a Jelmiko", priority: .chatty, identifier: "play-hint", sticky: GameMessageCenter.hintsSticky) }
+                        if on { GameMessageCenter.shared.post(PlayHint.text(toy: play.toyTitle), priority: .chatty, identifier: "play-hint", sticky: GameMessageCenter.hintsSticky) }
                         else { GameMessageCenter.shared.dismiss(identifier: "play-hint") }          // (thrown, or the toy is away: the hint has done its job)
                     }
-                // hearts from the hand, and the rally mark
+                // hearts from the hand
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { tl in
                     Canvas { ctx, sz in
                         let now = tl.date
@@ -106,20 +105,6 @@ struct PlayChrome: View {
                 }
                 .frame(width: g.size.width, height: g.size.height)
                 .animation(.spring(response: 0.3, dampingFraction: 0.82), value: play.keeping)
-                if rallyShown >= 2 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "heart.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(FocusStyle.pink)
-                        Text("×\(rallyShown)").jFont(14, .bold).foregroundStyle(FocusStyle.brown)
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.18), radius: 5, y: 2))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, size.height * (HUDLayout.isLandscape(vsc: vsc, size: size) ? 0.25 : 0.23))
-                    .transition(.scale(scale: 0.7).combined(with: .opacity))
-                    .allowsHitTesting(false)
-                    .accessibilityLabel("\(rallyShown) in a row")
-                    .accessibilityIdentifier("play-rally")
-                }
             }
             .frame(width: g.size.width, height: g.size.height)
         }
@@ -128,7 +113,6 @@ struct PlayChrome: View {
         .onChange(of: play.catchSerial) { _, n in
             guard n != seenCatch else { return }
             seenCatch = n
-            if play.shownRally >= 2 { rallyShown = play.shownRally; Task { try? await Task.sleep(nanoseconds: 2_200_000_000); withAnimation { if rallyShown == play.shownRally { rallyShown = 0 } } } }
             if play.shownRally >= 1 {
                 let t = Date()
                 for k in 0..<(play.shownRally >= 3 ? 5 : 3) { hearts.append(PlayHeart(x: CGFloat(k - 1) * 34 + CGFloat.random(in: -8...8), born: t.addingTimeInterval(Double(k) * 0.07))) }
@@ -192,5 +176,13 @@ struct PassBackPill: View {
         .accessibilityIdentifier("play-pass-back")
         .accessibilityLabel("Pass it back")
         .accessibilityHint("Asks the Jelmiko to send the ball back to you")
+    }
+}
+
+/// The Play hint line, with the toy's own name ("Flick the bouncy ball to a Jelmiko"). The bubble wand has its own line ("Hold the wand to blow bubbles", Toys/BubbleOverlay.swift).
+enum PlayHint {
+    static func text(toy title: String) -> String {
+        let t = title.trimmingCharacters(in: .whitespaces).lowercased()
+        return "Flick the \(t.isEmpty ? "toy" : t) to a Jelmiko"
     }
 }

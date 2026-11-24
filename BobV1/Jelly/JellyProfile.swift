@@ -46,9 +46,8 @@ final class JellyProfile: Identifiable {
         let c = character ?? id
         let fresh = defaults.object(forKey: JellyKeys.needs(c)) == nil
         let needs = BlobNeeds(defaults: defaults, key: JellyKeys.needs(c), now: now, persists: persists)
-        if fresh, c > 0 {          // a first launch for this Jelly: they differ, so the roster shows who wants what (Pip is thirsty, Moss wants love)
-            for k in NeedKind.allCases { needs.set(k, NeedsTuning.seedOthers) }
-            needs.set(NeedKind(rawValue: c % 3) ?? .thirst, NeedsTuning.seedHunger)
+        if fresh, c > 0 {          // a first launch for this Jelly: a new arrival comes home with every need full (owner 11-24)
+            for k in NeedKind.allCases { needs.set(k, NeedsTuning.seedArrival) }
             if persists { needs.save() }
         }
         let grime = BlobGrime(persists: persists, seed: 0xB47B &+ UInt32(c) &* 7919, defaults: defaults, key: JellyKeys.grime(c), now: now)

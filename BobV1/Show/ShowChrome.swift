@@ -24,7 +24,7 @@ struct ShowChrome: View {
                 case .look: LookRound(care: care)
                 case .dance: DanceRound(care: care)
                 case .trick: TrickRound(care: care)
-                case .results: if show.trickStage != .pick { TrickRound(care: care) } else { ResultsScreen(care: care) }          // (the last turn's rivals still perform)
+                case .results: if show.trickStage != .pick { TrickRound(care: care) } else { ResultsScreen(show: show) }          // (the last turn's rivals still perform)
                 }
             }
             ForfeitHomeCard(care: care)
@@ -844,10 +844,9 @@ struct Confetti: View {
 // MARK: - Results
 
 struct ResultsScreen: View {
-    let care: GameCare
+    let show: ShowFlow
     @Environment(\.verticalSizeClass) private var vsc
     private var compact: Bool { vsc == .compact }
-    private var show: ShowFlow { care.show }
     @State private var grown = false
 
     var body: some View {
@@ -906,7 +905,7 @@ struct ResultsScreen: View {
     /// The place, said once, as a ribbon under the creature.
     private func ribbonView(_ place: Int) -> some View {
         Text(place == 1 ? "\(show.playerName) wins!" : "\(show.playerName) comes \(ShowUI.ordinal(place))")
-            .font(SK.font(24, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
+            .font(SK.font(24, .black)).resultProbe("place").foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
             .padding(.horizontal, 26).padding(.vertical, 8)
             .background(Capsule().fill(ShowUI.gold)).overlay(Capsule().strokeBorder(ShowUI.goldDeep, lineWidth: 3))
             .accessibilityIdentifier("results-place")
@@ -925,10 +924,10 @@ struct ResultsScreen: View {
                     if e.isPlayer {
                         EntrantBubble(tint: tint, size: 34 * k).overlay(Circle().strokeBorder(ShowUI.gold, lineWidth: 3)).shadow(color: ShowUI.gold.opacity(0.8), radius: 6)
                     } else { EntrantBubble(tint: e.tint, size: 34 * k) }
-                    Text(e.name).font(SK.font(13, .black)).foregroundStyle(e.isPlayer ? ShowUI.gold : ShowUI.mist).lineLimit(1).minimumScaleFactor(0.6)
+                    Text(e.name).font(SK.font(13, .black)).resultProbe("podiumName\(e.place)").foregroundStyle(e.isPlayer ? ShowUI.gold : ShowUI.mist).lineLimit(1).minimumScaleFactor(0.6)
                     VStack(spacing: 1) {
-                        Text(ShowUI.ordinal(e.place)).font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                        Text("\(e.scores.totalPts)").font(SK.font(12, .black)).foregroundStyle(SK.ink)
+                        Text(ShowUI.ordinal(e.place)).font(SK.font(20, .black)).resultProbe("podiumPlace\(e.place)").foregroundStyle(SK.ink)
+                        Text("\(e.scores.totalPts)").font(SK.font(12, .black)).resultProbe("podiumPts\(e.place)").foregroundStyle(SK.ink)
                     }
                     .frame(maxWidth: .infinity, minHeight: grown ? heights[min(max(e.place - 1, 0), 3)] * k : 20)
                     .background(UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12).fill(colours[min(max(e.place - 1, 0), 3)]))
@@ -951,8 +950,8 @@ struct ResultsScreen: View {
         .accessibilityIdentifier("results-scores")
     }
     private func scoreChip(_ name: String, _ v: Int, _ c: Color) -> some View {
-        HStack(spacing: 6) { Circle().fill(c).frame(width: 11, height: 11); Text("\(name) \(v)").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
-            .padding(.horizontal, 12).padding(.vertical, 6).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SK.cream.opacity(0.96)))
+        HStack(spacing: 6) { Circle().fill(c).frame(width: 11, height: 11); Text("\(name) \(v)").font(SK.font(15, .black)).fixedSize().resultProbe("score\(name)").foregroundStyle(SK.ink) }
+            .padding(.horizontal, 10).padding(.vertical, 6).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SK.cream.opacity(0.96)))
             .accessibilityElement(children: .combine)
     }
 
@@ -962,15 +961,15 @@ struct ResultsScreen: View {
             HStack(spacing: 10) {
                 HStack(spacing: 10) {
                     JellyCoinIcon(size: 40)
-                    Text("+\(show.earned.coinText)").font(SK.font(28, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
+                    Text("+\(show.earned.coinText)").font(SK.font(28, .black)).resultProbe("coins").foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
                 }
                 .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: compact ? 60 : 72, alignment: .leading).background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(SK.sky))
                 .accessibilityElement(children: .combine).accessibilityLabel("\(show.earned.coinText) JellyCoins").accessibilityIdentifier("results-drops")
                 HStack(spacing: 10) {
                     Image(systemName: "trophy.fill").font(.system(size: 30, weight: .black)).foregroundStyle(a?.cup == 1 ? ShowUI.goldDeep : a?.cup == 2 ? Color(hex: 0x9AA3B2) : a?.cup == 3 ? Color(hex: 0xC98B55) : SK.muted.opacity(0.35))
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(a?.cup.map { $0 == 1 ? "Gold cup" : $0 == 2 ? "Silver cup" : "Bronze cup" } ?? (show.sim?.playerPlace ?? 4 <= 3 ? "Cup kept" : "No cup this time")).font(SK.font(18, .black)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.7)
-                        Text(a?.unlocked.map { "\($0.title) is open!" } ?? (show.rank.above.map { show.progress.requirement($0) ?? "\($0.title) is open" } ?? "Top rank!")).font(SK.font(14, .heavy)).foregroundStyle(ShowUI.brownGold).lineLimit(2).minimumScaleFactor(0.7)
+                        Text(a?.cup.map { $0 == 1 ? "Gold cup" : $0 == 2 ? "Silver cup" : "Bronze cup" } ?? (show.sim?.playerPlace ?? 4 <= 3 ? "Cup kept" : "No cup this time")).font(SK.font(18, .black)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).resultProbe("cup").foregroundStyle(SK.ink)
+                        Text(a?.unlocked.map { "\($0.title) is open!" } ?? (show.rank.above.map { show.progress.requirement($0) ?? "\($0.title) is open" } ?? "Top rank!")).font(SK.font(14, .heavy)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).resultProbe("cupDetail").foregroundStyle(ShowUI.brownGold)
                     }
                 }
                 .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: compact ? 60 : 72, alignment: .leading).background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(hex: 0xFFE7A8)))
@@ -978,8 +977,8 @@ struct ResultsScreen: View {
             }
             if let a, !(a.stickers.isEmpty && a.rosette == nil) {
                 let chips = Group {
-                    ForEach(a.stickers, id: \.rawValue) { s in Text("\u{2605} \(s.title)").font(SK.font(11, .black)).foregroundStyle(ShowUI.brownGold).lineLimit(1).fixedSize().padding(.horizontal, 7).padding(.vertical, 5).background(Capsule().fill(ShowUI.light)) }
-                    if let r = a.rosette { Text("\u{2605} \(r.title)").font(SK.font(11, .black)).foregroundStyle(Color(hex: 0x2E6B26)).lineLimit(1).fixedSize().padding(.horizontal, 7).padding(.vertical, 5).background(Capsule().fill(Color(hex: 0xE3F4DD))) }
+                    ForEach(a.stickers, id: \.rawValue) { s in Text("\u{2605} \(s.title)").font(SK.font(11, .black)).resultProbe("sticker\(s.rawValue)").foregroundStyle(ShowUI.brownGold).lineLimit(1).fixedSize().padding(.horizontal, 7).padding(.vertical, 5).background(Capsule().fill(ShowUI.light)) }
+                    if let r = a.rosette { Text("\u{2605} \(r.title)").font(SK.font(11, .black)).resultProbe("rosette").foregroundStyle(Color(hex: 0x2E6B26)).lineLimit(1).fixedSize().padding(.horizontal, 7).padding(.vertical, 5).background(Capsule().fill(Color(hex: 0xE3F4DD))) }
                 }
                 ViewThatFits(in: .horizontal) {          // (one row when they fit, as the board; else they wrap)
                     HStack(spacing: 4) { chips }
@@ -997,7 +996,7 @@ struct ResultsScreen: View {
             HStack(spacing: 10) {
                 Image(systemName: "lightbulb.fill").font(.system(size: 22, weight: .black)).foregroundStyle(SK.honeyDeep)
                 (Text(t.head).font(SK.font(17, .black)) + (t.stars ? Text("\u{2605}\u{2605}\u{2605}").font(SK.font(17, .black)).foregroundColor(ShowUI.goldDeep) : Text("")) + Text(t.tail).font(SK.font(17, .black)))
-                    .foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true).resultProbe("tip").foregroundStyle(SK.ink)
                 Spacer(minLength: 0)
             }
             .frame(minHeight: compact ? 28 : 36)

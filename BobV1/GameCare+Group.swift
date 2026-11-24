@@ -75,6 +75,7 @@ extension GameCare {
                 if groupAge > Self.mealTimeout { noticeAtBob = true; notice = "The table couldn't be set — try again"; noticeSerial += 1; noticeAge = 0 }          // (was silent)
                 groupWanted = nil; groupQueueClear(); return
             }
+            if !ready, groupAge > Self.staleCallAfter, callRunning, let b0 = actors.first(where: { $0.id == 0 })?.brain { _ = clearStaleCall(brain: b0, why: "group serving") }          // (night-meal-r1: a come call nobody is walking must not hold the serving)
             if !ready { traceWaiting(actors) }
             guard ready else { return }
             MealTrace.log("group ready after \(groupAge) s")

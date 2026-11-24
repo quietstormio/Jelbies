@@ -662,6 +662,26 @@ struct GameScreen: View {
             care.syncDecor()
             NSLog("[placesoccer] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
         }
+        // capture aid (toy-audit-r1): -PlaceToys "drum,blocks,..." grants and places the named toys (DecorKind raw values) in that order; logs what stood there before and where each went
+        if let list = d.string(forKey: "PlaceToys"), !list.isEmpty {
+            for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
+            await sleep(2.5)
+            NSLog("[placetoys] before %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
+            for name in list.split(separator: ",") {
+                // "kind" or "kind@x,z" (the second puts it there when the spot is valid)
+                let parts = name.split(separator: "@"); let nm = parts[0].trimmingCharacters(in: .whitespaces)
+                guard let k = DecorKind(rawValue: nm) else { NSLog("[placetoys] unknown %@", String(name)); continue }
+                if !care.store.placedDecor.contains(where: { $0.kind == k }) {
+                    care.store.grant(k.storeID)
+                    if let p = care.store.place(k.storeID), parts.count > 1 {
+                        let xz = parts[1].split(separator: ",").compactMap { Float($0) }
+                        if xz.count == 2 { NSLog("[placetoys] move %@ %@", nm, care.store.move(p.uid, to: SIMD2(xz[0], xz[1])) ? "ok" : "REFUSED") }
+                    }
+                }
+            }
+            care.syncDecor()
+            NSLog("[placetoys] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)#\($0.uid)@\($0.x),\($0.z)" })")
+        }
         // capture aid: -PlayDemo 1 (grant the balls, open Play mode and flick at the middle Jelbie over and over) | 2 (the toy picker, toys owned) | 3 (the picker, nothing owned) | 4 (Play mode, no auto flick)
         if d.integer(forKey: "PlayDemo") > 0 {
             for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
@@ -1145,6 +1165,19 @@ struct GameScreen: View {
             withAnimation(CareMenu.spring) { sel.cancel() }
         }
         #endif
+        // capture aid (night-meal-r1): -FeedAfterHome <s>: once the Show / race welcome home has begun, wait <s>, then Feed, and Water 45 s later (the owner's sequence); logs `[nightmeal]` lines
+        if d.integer(forKey: "FeedAfterHome") != 0 {
+            for _ in 0..<2400 where care.raceBook.returner == nil { await sleep(0.5) }
+            await sleep(Double(d.integer(forKey: "FeedAfterHome")))
+            for (name, act) in [("feed", { care.store.grant("berries"); care.feed("berries") }), ("water", { care.water() })] as [(String, () -> Void)] {
+                NSLog("[nightmeal] %@ tap: callRunning=%d trayOut=%d group=%d", name, care.callRunning ? 1 : 0, care.trayOut ? 1 : 0, care.groupActive ? 1 : 0)
+                act()
+                for i in 0..<40 { await sleep(1); if care.dining.isPresent { NSLog("[nightmeal] %@ tray out after %d s", name, i + 1); break }; if i == 39 { NSLog("[nightmeal] %@ NO TRAY after 40 s callRunning=%d group=%d", name, care.callRunning ? 1 : 0, care.groupActive ? 1 : 0) } }
+                for _ in 0..<150 where care.trayOut { await sleep(1) }
+                NSLog("[nightmeal] %@ over trayOut=%d", name, care.trayOut ? 1 : 0)
+                await sleep(5)
+            }
+        }
         if d.integer(forKey: "GameScript") != 0 {
             await sleep(16)
             await choose { care.feed() }
@@ -1927,8 +1960,8 @@ struct FocusHint: View {
         Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
             .onAppear {
                 guard shown, !Self.suppressed else { return }
-                UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
-                GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky)
+                GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky,
+                                              onShown: { UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key) })          // (a visit counts once the line was on the bar)
             }
             .task {          // sticky (VoiceOver / "Longer hints"): it stays until the first touch or mic use, then goes
                 guard shown, GameMessageCenter.hintsSticky else { return }
