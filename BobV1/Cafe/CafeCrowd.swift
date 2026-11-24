@@ -45,7 +45,7 @@ nonisolated enum CafeTables {
             discs.append(.init(c: origin, r: 1.0))
             for tb in tables { discs.append(.init(c: tb, r: 0.6)) }
             discs = discs.map { d in .init(c: d.c, r: min(d.r, min(simd_distance(d.c, door), simd_distance(d.c, end)) - 0.02)) }
-            return !CafeRoute.path(from: door, to: end, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.9 }).isEmpty
+            return !CafeRoute.path(from: door, to: end, discs: discs, inside: { abs($0.x) <= 7.5 && $0.y > -3.8 && $0.y < 2.9 }).isEmpty
         }
         let near = reachable(stands[1]), far = reachable(stands[0])
         if near && far { return 2 }

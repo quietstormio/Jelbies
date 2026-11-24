@@ -74,6 +74,18 @@ final class CafeBusyTests: XCTestCase {
         XCTAssertGreaterThan(gaps.reduce(0, +) / Float(gaps.count), 25)
     }
 
+    func testTheEntranceIsAWholeBodyPastTheScreensEdgeInBothAspects() {
+        for aspect in [Float(440.0 / 956.0), Float(956.0 / 440.0)] {
+            let saved = GameCamera.aspect; GameCamera.aspect = aspect
+            for z in [Float(-2.4), 1.0, 1.8] {
+                let e = GameCare.crowdEntry(z: z)
+                XCTAssertGreaterThanOrEqual(e.x, GameCamera.visibleHalfWidthAtBody(z: z, aspect: aspect) + 1.29, "aspect \(aspect) z \(z): off screen by a body")
+                XCTAssertEqual(e.y, z)
+            }
+            GameCamera.aspect = saved
+        }
+    }
+
     func testNoEntranceRightAfterAnExit() {
         var c = CafeCrowd(slots: 1, seed: 21)
         _ = c.seatInitial()
@@ -204,7 +216,7 @@ final class CafeBusyTests: XCTestCase {
                         var discs = bodies.map { CafeRoute.Disc(c: $0, r: GameCare.crowdMinGap + 0.1) }
                         discs.append(.init(c: p.centre, r: 1.0)); for tb in all { discs.append(.init(c: tb, r: 0.6)) }
                         discs = discs.map { d in .init(c: d.c, r: min(d.r, min(simd_distance(d.c, door), simd_distance(d.c, end)) - 0.02)) }
-                        let route = CafeRoute.path(from: door, to: end, discs: discs, inside: { abs($0.x) <= 4.6 && $0.y > -3.8 && $0.y < 2.9 })
+                        let route = CafeRoute.path(from: door, to: end, discs: discs, inside: { abs($0.x) <= 7.5 && $0.y > -3.8 && $0.y < 2.9 })
                         var a = door
                         for q in route {
                             let steps = max(1, Int(simd_distance(a, q) / 0.1))
