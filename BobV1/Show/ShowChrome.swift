@@ -950,8 +950,8 @@ struct ResultsScreen: View {
         .accessibilityIdentifier("results-scores")
     }
     private func scoreChip(_ name: String, _ v: Int, _ c: Color) -> some View {
-        HStack(spacing: 6) { Circle().fill(c).frame(width: 11, height: 11); Text("\(name) \(v)").font(SK.font(15, .black)).resultProbe("score\(name)").foregroundStyle(SK.ink) }
-            .padding(.horizontal, 12).padding(.vertical, 6).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SK.cream.opacity(0.96)))
+        HStack(spacing: 6) { Circle().fill(c).frame(width: 11, height: 11); Text("\(name) \(v)").font(SK.font(15, .black)).fixedSize().resultProbe("score\(name)").foregroundStyle(SK.ink) }
+            .padding(.horizontal, 10).padding(.vertical, 6).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SK.cream.opacity(0.96)))
             .accessibilityElement(children: .combine)
     }
 
@@ -968,8 +968,8 @@ struct ResultsScreen: View {
                 HStack(spacing: 10) {
                     Image(systemName: "trophy.fill").font(.system(size: 30, weight: .black)).foregroundStyle(a?.cup == 1 ? ShowUI.goldDeep : a?.cup == 2 ? Color(hex: 0x9AA3B2) : a?.cup == 3 ? Color(hex: 0xC98B55) : SK.muted.opacity(0.35))
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(a?.cup.map { $0 == 1 ? "Gold cup" : $0 == 2 ? "Silver cup" : "Bronze cup" } ?? (show.sim?.playerPlace ?? 4 <= 3 ? "Cup kept" : "No cup this time")).font(SK.font(18, .black)).resultProbe("cup").foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.7)
-                        Text(a?.unlocked.map { "\($0.title) is open!" } ?? (show.rank.above.map { show.progress.requirement($0) ?? "\($0.title) is open" } ?? "Top rank!")).font(SK.font(14, .heavy)).resultProbe("cupDetail").foregroundStyle(ShowUI.brownGold).lineLimit(2).minimumScaleFactor(0.7)
+                        Text(a?.cup.map { $0 == 1 ? "Gold cup" : $0 == 2 ? "Silver cup" : "Bronze cup" } ?? (show.sim?.playerPlace ?? 4 <= 3 ? "Cup kept" : "No cup this time")).font(SK.font(18, .black)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).resultProbe("cup").foregroundStyle(SK.ink)
+                        Text(a?.unlocked.map { "\($0.title) is open!" } ?? (show.rank.above.map { show.progress.requirement($0) ?? "\($0.title) is open" } ?? "Top rank!")).font(SK.font(14, .heavy)).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).resultProbe("cupDetail").foregroundStyle(ShowUI.brownGold)
                     }
                 }
                 .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: compact ? 60 : 72, alignment: .leading).background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(hex: 0xFFE7A8)))
@@ -996,7 +996,7 @@ struct ResultsScreen: View {
             HStack(spacing: 10) {
                 Image(systemName: "lightbulb.fill").font(.system(size: 22, weight: .black)).foregroundStyle(SK.honeyDeep)
                 (Text(t.head).font(SK.font(17, .black)) + (t.stars ? Text("\u{2605}\u{2605}\u{2605}").font(SK.font(17, .black)).foregroundColor(ShowUI.goldDeep) : Text("")) + Text(t.tail).font(SK.font(17, .black)))
-                    .resultProbe("tip").foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true).resultProbe("tip").foregroundStyle(SK.ink)
                 Spacer(minLength: 0)
             }
             .frame(minHeight: compact ? 28 : 36)

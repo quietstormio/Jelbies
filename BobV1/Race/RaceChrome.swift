@@ -30,8 +30,6 @@ private struct RaceChromeLayout: View {
     let padLandscape: Bool
     private var race: RaceFlow { care.race }
     @State private var padH: CGFloat = 0
-    /// iPad: the 1.45x scale does not change layout size, so cap the card's layout height at (screen height minus the top bar band) / 1.45.
-    private var padCardMaxH: CGFloat { padH > 0 ? max(200, (padH - 150) / 1.45) : .infinity }
     private let light = UIImpactFeedbackGenerator(style: .light)
     private let rigid = UIImpactFeedbackGenerator(style: .rigid)
 
@@ -43,7 +41,7 @@ private struct RaceChromeLayout: View {
                 VStack(spacing: 0) {
                     topBar.allowsHitTesting(!race.ui.pull)          // (a pull may start on the title pill)
                     Spacer()
-                    if race.showsCard { PadResultsCardFit(maxH: padCardMaxH) { RacePlacingsCard(race: race) { race.goHome() } }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
+                    if race.showsCard { RacePlacingsCard(race: race, maxHeight: ResultCardMetrics.maxHeight(screenH: padH)) { race.goHome() }.resultCardSlot().transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if race.ui.phase != .results, !compact, hasAssistButtons { footButtons }
                 }
@@ -260,9 +258,11 @@ struct FootButton: View {
     }
 }
 
-/// 1st / 2nd / 3rd with names and times, the Drops earned and "Back home".
+/// 1st / 2nd / 3rd with names and times, the JellyCoins earned and "Back home".
 struct RacePlacingsCard: View {
     let race: RaceFlow
+    /// The tallest the card may be (the chrome measures the screen); taller content scrolls inside it with "Back home" kept in view.
+    var maxHeight: CGFloat = .infinity
     let home: () -> Void
 
     @Environment(\.verticalSizeClass) private var vsc
@@ -272,122 +272,67 @@ struct RacePlacingsCard: View {
         p == 1 ? Color(red: 0.98, green: 0.80, blue: 0.35) : p == 2 ? Color(red: 0.80, green: 0.84, blue: 0.90) : Color(red: 0.90, green: 0.68, blue: 0.52)
     }
 
-    /// A short celebration chip on the results ("New ribbon!", "Trophy! ...").
-    private func celebration(_ text: String, symbol: String, id: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .black))
-            Text(text).playFont(14, .heavy).resultProbe(id)
-        }
-        .foregroundStyle(CareMenu.brown)
-        .padding(.horizontal, 12).padding(.vertical, 5)
-        .background(Capsule().fill(Color(red: 0.98, green: 0.80, blue: 0.35)))
-        .transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier(id)
-    }
+    private var hasSecondary: Bool { true }
 
     var body: some View {
-        VStack(spacing: tight ? 6 : 14) {
+        ResultCardFrame(buttonColor: SK.pinkStrong, homeID: "race-home", maxHeight: maxHeight, hasSecondary: hasSecondary, home: home) {
             Text(race.ui.playerPlace == 1 ? "You won!" : "Finish!")
-                .playFont(tight ? 24 : 30, .heavy)
-                .resultProbe("title")
+                .playFont(tight ? 26 : 30, .heavy)
                 .foregroundStyle(CareMenu.brown)
-            VStack(spacing: tight ? 2 : 8) {
+                .resultText("title").accessibilityAddTraits(.isHeader)
+            VStack(spacing: tight ? 4 : 8) {
                 ForEach(race.ui.placings, id: \.racer) { p in
                     HStack(spacing: 12) {
                         Text(ordinal(p.place))
                             .playFont(17, .heavy)
-                            .resultProbe("place\(p.place)")
                             .foregroundStyle(CareMenu.brown)
+                            .fixedSize().resultProbe("place\(p.place)")
                             .frame(minWidth: 52, minHeight: 34)
                             .background(Capsule().fill(medal(p.place)))
                         Text(p.name)
                             .playFont(20, p.isPlayer ? .heavy : .semibold)
-                            .resultProbe("name\(p.place)")
                             .foregroundStyle(CareMenu.brown)
-                        Spacer()
+                            .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).resultProbe("name\(p.place)")
+                            .layoutPriority(1)
+                        Spacer(minLength: 6)
                         Text(p.time.map { String(format: "%.1f s", $0) } ?? "-")
-                            .playFont(18, .semibold).resultProbe("time\(p.place)").monospacedDigit()
+                            .playFont(18, .semibold).monospacedDigit()
                             .foregroundStyle(CareMenu.brown.opacity(0.85))
+                            .fixedSize().resultProbe("time\(p.place)")
                     }
                     .padding(.horizontal, 10).padding(.vertical, tight ? 2 : 5)
+                    .frame(maxWidth: .infinity)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(p.isPlayer ? FocusStyle.pink.opacity(0.28) : Color.clear))
+                    .accessibilityElement(children: .combine)
                 }
             }
-            HStack(spacing: 8) {
-                JellyCoinIcon(size: 22)
-                Text("+\(race.ui.earned.coinText) JellyCoins")
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                    .playFont(20, .bold).resultProbe("coins")
-                    .foregroundStyle(CareMenu.brown)
-            }
-            if race.assist == .auto {
-                Text("Auto run pays half the JellyCoins")
-                    .playFont(14, .medium).resultProbe("assist")
-                    .foregroundStyle(CareMenu.brown.opacity(0.85))
-                    .accessibilityIdentifier("race-auto-note")
-            }
-            if race.ui.pointsEarned > 0 {
-                HStack(spacing: 8) {
-                    Image(systemName: "star.fill").font(.system(size: 16, weight: .black)).foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.35))
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Jelly Race points  +\(race.ui.pointsEarned)").playFont(16, .bold).resultProbe("points").foregroundStyle(CareMenu.brown)
-                        Text("\(race.ui.playerName) now has \(race.ui.pointsAfter) to spend").playFont(13, .medium).resultProbe("pointsDetail").foregroundStyle(CareMenu.brown.opacity(0.85))
-                    }
+        } secondary: {
+            VStack(spacing: 8) {
+                ResultCoinsLine(coinText: race.ui.earned.coinText)
+                if race.assist == .auto {
+                    Text("Auto run pays half the JellyCoins")
+                        .playFont(14, .medium)
+                        .foregroundStyle(CareMenu.brown.opacity(0.85))
+                        .resultText("assist")
+                        .accessibilityIdentifier("race-auto-note")
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("race-points")
             }
-            if !race.awards.isEmpty {
-                HStack(spacing: 8) {
-                    if race.awards.newRibbon { celebration("New ribbon!", symbol: "rosette", id: "race-new-ribbon") }
-                    if let t = race.awards.trophies.first {
-                        celebration(race.awards.trophies.count > 1 ? "Trophy! \(t.title) +\(race.awards.trophies.count - 1)" : "Trophy! \(t.title)", symbol: "trophy.fill", id: "race-trophy")
-                    }
+            VStack(spacing: 8) {
+                if race.ui.pointsEarned > 0 { ResultPointsRow(title: "Jelly Race points  +\(race.ui.pointsEarned)", detail: "\(race.ui.playerName) now has \(race.ui.pointsAfter) to spend", id: "race-points") }
+                if race.awards.newRibbon { ResultRewardRow(symbol: "rosette", text: "New ribbon!", id: "race-new-ribbon", probe: "ribbon") }
+                if let t = race.awards.trophies.first {
+                    ResultRewardRow(symbol: "trophy.fill", text: race.awards.trophies.count > 1 ? "Trophy! \(t.title) +\(race.awards.trophies.count - 1)" : "Trophy! \(t.title)", id: "race-trophy", probe: "trophy")
                 }
             }
             if let t = race.unlockedNow {
                 Text("\(t.title) course unlocked!")
-                    .playFont(15, .heavy).resultProbe("unlocked")
+                    .playFont(15, .heavy)
                     .foregroundStyle(SK.pinkStrong)
+                    .resultText("unlocked")
                     .accessibilityIdentifier("race-unlocked")
             }
-            Button {
-                UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                home()
-            } label: {
-                Text("Back home")
-                    .playFont(20, .bold).resultProbe("home")
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 30).padding(.vertical, tight ? 8 : 12)
-                    .background(Capsule().fill(SK.pinkStrong).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("race-home")
         }
-        .padding(.horizontal, 22).padding(.vertical, tight ? 10 : 20)
-        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 6, y: 3))
-        .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
-        
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("race-card")
-    }
-}
-
-
-/// iPad results cards are drawn at 1.45x, which does not change layout size: hug the content, and scroll if it is taller than `maxH`. iPhone: the content unchanged.
-struct PadResultsCardFit<Content: View>: View {
-    let maxH: CGFloat
-    @ViewBuilder let content: () -> Content
-    var body: some View {
-        if PadLayout.isPad {
-            ViewThatFits(in: .vertical) {
-                content()
-                ScrollView(.vertical, showsIndicators: false) { content() }.scrollBounceBehavior(.basedOnSize)
-            }
-            .frame(maxHeight: maxH)
-        } else {
-            content()
-        }
     }
 }

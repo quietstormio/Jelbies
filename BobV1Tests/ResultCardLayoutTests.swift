@@ -124,13 +124,19 @@ final class ResultCardLayoutTests: XCTestCase {
         try? data.write(to: URL(fileURLWithPath: "\(dir)/\(comp)_\(phase)_\(name).png"))
     }
 
+    func writeFailures(_ comp: String, _ f: [String]) {
+        guard let dir = stillDir else { return }
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? f.joined(separator: "\n").write(toFile: "\(dir)/failures_\(comp)_\(phase).txt", atomically: true, encoding: .utf8)
+    }
+
     /// Runs every case on every screen at both text sizes; `scrolls` is allowed at the big text size and on the short landscape screens.
-    func sweep<V: View>(_ comp: String, cases: [(String, () -> V)], place: @escaping (V, CGFloat) -> AnyView) {
+    func sweep<V: View>(_ comp: String, cases: [(String, (CGFloat) -> V)]) {
         var failures: [String] = []
         for (cname, make) in cases {
             for s in Self.screens {
                 for ax in [false, true] {
-                    let (infos, img) = host(s, ax: ax) { h in place(make(), h) }
+                    let (infos, img) = host(s, ax: ax) { h in AnyView(make(ResultCardMetrics.maxHeight(screenH: h)).resultCardSlot()) }
                     let tag = "\(cname)_\(s.name)_\(ax ? "ax5" : "default")"
                     save(img, comp, tag)
                     let p = problems(infos, s, scrolls: ax)
@@ -139,6 +145,7 @@ final class ResultCardLayoutTests: XCTestCase {
                 }
             }
         }
+        writeFailures(comp, failures)
         print("RESULTCARD \(comp) failures: \(failures.count)")
         for f in failures { print("RESULTCARD FAIL \(f)") }
         XCTAssertTrue(failures.isEmpty, failures.joined(separator: "\n"))
@@ -159,18 +166,18 @@ final class ResultCardLayoutTests: XCTestCase {
         return f
     }
 
-    private var volleyCases: [(String, () -> VolleyResultsCard)] {
+    private var volleyCases: [(String, (CGFloat) -> VolleyResultsCard)] {
         let long = Trophy.volleyFirst(.tidal)
         return [
-            ("win-ribbon-trophy-points", { VolleyResultsCard(volley: self.volley(won: true, score: [3, 0], coins: 250, pts: 3, after: 2, ribbon: true, trophies: [Trophy.volleyFirst(.sandcastle)]), home: {}) }),
-            ("win-everything-longest", { VolleyResultsCard(volley: self.volley(won: true, score: [3, 2], coins: 12_500, pts: 3, after: 128, ribbon: true, trophies: [long, .volley25], name: "Marshmallow", unlocked: .shore, half: true), home: {}) }),
-            ("win-nothing-new", { VolleyResultsCard(volley: self.volley(won: true, score: [3, 1], coins: 250, pts: 3, after: 17, ribbon: false, trophies: []), home: {}) }),
-            ("loss", { VolleyResultsCard(volley: self.volley(won: false, score: [1, 3], coins: 60, pts: 1, after: 9, ribbon: false, trophies: []), home: {}) }),
+            ("win-ribbon-trophy-points", { h in VolleyResultsCard(volley: self.volley(won: true, score: [3, 0], coins: 250, pts: 3, after: 2, ribbon: true, trophies: [Trophy.volleyFirst(.sandcastle)]), maxHeight: h, home: {}) }),
+            ("win-everything-longest", { h in VolleyResultsCard(volley: self.volley(won: true, score: [3, 2], coins: 12_500, pts: 3, after: 128, ribbon: true, trophies: [long, .volley25], name: "Marshmallow", unlocked: .shore, half: true), maxHeight: h, home: {}) }),
+            ("win-nothing-new", { h in VolleyResultsCard(volley: self.volley(won: true, score: [3, 1], coins: 250, pts: 3, after: 17, ribbon: false, trophies: []), maxHeight: h, home: {}) }),
+            ("loss", { h in VolleyResultsCard(volley: self.volley(won: false, score: [1, 3], coins: 60, pts: 1, after: 9, ribbon: false, trophies: []), maxHeight: h, home: {}) }),
         ]
     }
 
     func testVolleyResultCardLayout() {
-        sweep("volley", cases: volleyCases) { card, h in AnyView(VolleySlot(h: h) { card }) }
+        sweep("volley", cases: volleyCases)
     }
 
     // MARK: Jelly Race
@@ -194,18 +201,18 @@ final class ResultCardLayoutTests: XCTestCase {
         return f
     }
 
-    private var raceCases: [(String, () -> RacePlacingsCard)] {
+    private var raceCases: [(String, (CGFloat) -> RacePlacingsCard)] {
         return [
-            ("win-ribbon-trophy-points", { RacePlacingsCard(race: self.race(place: 1, coins: 250, pts: 3, after: 5, ribbon: true, trophies: [Trophy.firstWin(.puddle)]), home: {}) }),
-            ("win-everything-longest", { RacePlacingsCard(race: self.race(place: 1, coins: 12_500, pts: 3, after: 128, ribbon: true, trophies: [Trophy.firstWin(.tsunami), .champion], name: "Marshmallow", unlocked: .ripple, auto: true), home: {}) }),
-            ("win-nothing-new", { RacePlacingsCard(race: self.race(place: 1, coins: 250, pts: 3, after: 17, ribbon: false, trophies: []), home: {}) }),
-            ("second-place", { RacePlacingsCard(race: self.race(place: 2, coins: 120, pts: 2, after: 9, ribbon: true, trophies: []), home: {}) }),
-            ("fourth-place", { RacePlacingsCard(race: self.race(place: 4, coins: 40, pts: 1, after: 3, ribbon: false, trophies: []), home: {}) }),
+            ("win-ribbon-trophy-points", { h in RacePlacingsCard(race: self.race(place: 1, coins: 250, pts: 3, after: 5, ribbon: true, trophies: [Trophy.firstWin(.puddle)]), maxHeight: h, home: {}) }),
+            ("win-everything-longest", { h in RacePlacingsCard(race: self.race(place: 1, coins: 12_500, pts: 3, after: 128, ribbon: true, trophies: [Trophy.firstWin(.tsunami), .champion], name: "Marshmallow", unlocked: .ripple, auto: true), maxHeight: h, home: {}) }),
+            ("win-nothing-new", { h in RacePlacingsCard(race: self.race(place: 1, coins: 250, pts: 3, after: 17, ribbon: false, trophies: []), maxHeight: h, home: {}) }),
+            ("second-place", { h in RacePlacingsCard(race: self.race(place: 2, coins: 120, pts: 2, after: 9, ribbon: true, trophies: []), maxHeight: h, home: {}) }),
+            ("fourth-place", { h in RacePlacingsCard(race: self.race(place: 4, coins: 40, pts: 1, after: 3, ribbon: false, trophies: []), maxHeight: h, home: {}) }),
         ]
     }
 
     func testRaceResultCardLayout() {
-        sweep("race", cases: raceCases) { card, h in AnyView(RaceSlot(h: h) { card }) }
+        sweep("race", cases: raceCases)
     }
 
     // MARK: Jelly Show
@@ -233,13 +240,13 @@ final class ResultCardLayoutTests: XCTestCase {
         return f
     }
 
-    private var showCases: [(String, () -> ResultsScreen)] {
+    private var showCases: [(String, (CGFloat) -> ResultsScreen)] {
         let rosette = WearTag.allCases.first
         return [
-            ("win-cup-stickers-rosette", { ResultsScreen(show: self.showFlow(place: 1, awards: ShowProgress.Awards(cup: 1, rosette: rosette, stickers: [.firstShow, .perfectDance, .glowBurst, .hatTrick], unlocked: .pond), earned: 12_500, name: "Marshmallow")) }),
-            ("win-cup-only", { ResultsScreen(show: self.showFlow(place: 1, awards: ShowProgress.Awards(cup: 1), earned: 300)) }),
-            ("win-nothing-new", { ResultsScreen(show: self.showFlow(place: 1, awards: ProgressAwardsNone.none, earned: 300)) }),
-            ("fourth-place", { ResultsScreen(show: self.showFlow(place: 4, awards: ProgressAwardsNone.none, earned: 40)) }),
+            ("win-cup-stickers-rosette", { _ in ResultsScreen(show: self.showFlow(place: 1, awards: ShowProgress.Awards(cup: 1, rosette: rosette, stickers: [.firstShow, .perfectDance, .glowBurst, .hatTrick], unlocked: .pond), earned: 12_500, name: "Marshmallow")) }),
+            ("win-cup-only", { _ in ResultsScreen(show: self.showFlow(place: 1, awards: ShowProgress.Awards(cup: 1), earned: 300)) }),
+            ("win-nothing-new", { _ in ResultsScreen(show: self.showFlow(place: 1, awards: ProgressAwardsNone.none, earned: 300)) }),
+            ("fourth-place", { _ in ResultsScreen(show: self.showFlow(place: 4, awards: ProgressAwardsNone.none, earned: 40)) }),
         ]
     }
 
@@ -248,17 +255,19 @@ final class ResultCardLayoutTests: XCTestCase {
         for (cname, make) in showCases {
             for s in Self.screens {
                 for ax in [false, true] {
-                    let (infos, img) = host(s, ax: ax) { _ in make() }
+                    let (infos, img) = host(s, ax: ax) { _ in make(0) }
                     let tag = "\(cname)_\(s.name)_\(ax ? "ax5" : "default")"
                     save(img, "show", tag)
                     // the Show screen is full screen: its own Back / Again buttons are the controls, not a "Back home" text
-                    var p = problems(infos.filter { $0.id != "none" }, s, scrolls: ax)
+                    // (the Show screen sits under the stage creature: on a short phone the lower cards scroll by design)
+                    var p = problems(infos.filter { $0.id != "none" }, s, scrolls: ax || s.h < 700 || (s.landscape && s.h < 500))
                     p.removeAll { $0.hasPrefix("no Back home") }
                     if infos.isEmpty { failures.append("\(tag): no probes (not rendered)") }
                     if !p.isEmpty { failures.append("\(tag): " + p.joined(separator: "; ")) }
                 }
             }
         }
+        writeFailures("show", failures)
         print("RESULTCARD show failures: \(failures.count)")
         for f in failures { print("RESULTCARD FAIL \(f)") }
         XCTAssertTrue(failures.isEmpty, failures.joined(separator: "\n"))
@@ -266,15 +275,3 @@ final class ResultCardLayoutTests: XCTestCase {
 }
 
 enum ProgressAwardsNone { static let none: ShowProgress.Awards? = ShowProgress.Awards() }
-
-// The chromes' own placement of the card (kept in step with VolleyChrome / RaceChrome).
-struct VolleySlot<C: View>: View {
-    let h: CGFloat
-    @ViewBuilder let card: () -> C
-    var body: some View {
-        let padCardMaxH: CGFloat = h > 0 ? max(200, (h - 150) / 1.45) : .infinity
-        PadResultsCardFit(maxH: padCardMaxH) { card() }
-            .frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24)
-    }
-}
-typealias RaceSlot = VolleySlot
