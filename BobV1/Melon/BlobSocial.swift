@@ -324,6 +324,8 @@ extension BlobBrain {
     /// Invited: the wander leg ends a few steps on, straight ahead (a new target on the line he is already walking: no curve, no mid-stride re-aim of the feet).
     @discardableResult
     func socialBeckonStop() -> Bool {
+        if restInvitable { restGetUp(); return true }          // (rest-more-r1: a slot rester gets up first, softly; the move starts when he is free)
+        if restWaking { return true }
         guard case .walk(let t0, _) = script else { return false }
         let here = position
         let w = route.first ?? t0
@@ -453,7 +455,7 @@ extension BlobBrain {
         var cands: [(BlobBrain, Float)] = []
         for p in ps {
             let o = p.b
-            guard !o.meetBusy, o.socialFree || (anticsEnabled && o.socialWandering), (socialBook.pair[p.id] ?? 0) <= 0, (o.socialBook.pair[steerID] ?? 0) <= 0, o.socialBook.cooldown <= 6 else { continue }
+            guard !o.meetBusy, o.socialFree || (anticsEnabled && (o.socialWandering || o.restInvitable)), (socialBook.pair[p.id] ?? 0) <= 0, (o.socialBook.pair[steerID] ?? 0) <= 0, o.socialBook.cooldown <= 6 else { continue }
             if HopscotchTuning.walled, hopCourtBetween(position, p.pos) { continue }          // (park-hopscotch-r1)
             let d = simd_distance(p.pos, position)
             if MoveMix.on, o.mixQuiet || !mixStopOK(p.pos) { continue }          // (MoveMix.swift)
@@ -709,7 +711,7 @@ extension BlobBrain {
         if o.socialFree {
             socialBook.invite = nil
             if !socialStart(inv.kind, with: o, sim) { socialBook.cooldown = max(socialBook.cooldown, 5) }
-        } else if inv.t > SocialTuning.inviteWait || !o.socialWandering {
+        } else if inv.t > SocialTuning.inviteWait || !(o.socialWandering || o.restWaking) {
             socialBook.invite = nil
             socialBook.cooldown = max(socialBook.cooldown, 5)
         }
