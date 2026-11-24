@@ -266,7 +266,7 @@ extension PlayToss {
         bout.on = false; bout.planned = false; bout.receiver = nil; bout.toPlayer = false; bout.endedAt = clock
         setOwn(.none); pendingPasses = 0
         for j in jellies where !j.free { j.brain.tossFaceYaw = nil }
-        for j in jellies where !j.free && !j.brain.tossBusy && Self.canHop(j.brain) && j.brain.idleState.kind == nil { if let h = home[j.id], simd_distance(j.pos, h) > 0.5 { j.brain.requestNow(.goTo(h)); homeT[j.id] = clock } }          // (everybody walks back to the line at once: the next throw finds them at home)
+        for j in jellies where !j.free && !j.brain.tossBusy && Self.canHop(j.brain) && j.brain.idleState.kind == nil { if let h = home[j.id], simd_distance(j.pos, h) > 0.5 { j.brain.requestNow(.goTo(h)) } }          // (everybody walks back to the line at once: the next throw finds them at home)
     }
 
     /// Drops the bout without a result (Done, a new throw, the view turned, the ball went where no bout is).
