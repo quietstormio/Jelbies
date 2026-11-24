@@ -247,7 +247,7 @@ struct ParkChrome: View {
     }
 }
 
-/// A visitor: his name and style, one line about him, how much each of the player's Jelbies and he like each other, and what he says hello with.
+/// A visitor: his name and style, one line about him, and how much each of the player's Jelbies and he like each other.
 struct VisitorCard: View {
     let care: GameCare
     let visitor: ParkVisitor
