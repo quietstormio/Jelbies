@@ -2187,6 +2187,7 @@ final class BlobBrain {
             if scale == 1, Self.beanMorphEase {          // (glitch-hunt-r1: a hop's landing drops the foot 2-3 cm a step: the ball -> boot morph flipped in one step, the toe shot out ~10 cm; now at most `beanMorphStep` a step)
                 let m0 = beanMorphLast[s]
                 mo = m0 + max(-Self.beanMorphStep, min(Self.beanMorphStep, mo - m0))
+                if flipShape { mo = min(mo, Self.forceMorphCap) }          // (a flip's boot cap still wins over the rate limit)
             }
             if scale == 1 { beanMorphLast[s] = mo }
             if mo > 0 {
