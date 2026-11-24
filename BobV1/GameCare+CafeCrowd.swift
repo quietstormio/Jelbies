@@ -125,11 +125,11 @@ extension GameCare {
         if GameCamera.aspect >= 1 {
             var z = max(door.y, 2.0)
             while z < 9, crowdBodyVisible(SIMD2(door.x, z)) { z += 0.1 }
-            return SIMD2(door.x, z + 0.3)
+            return SIMD2(door.x, z + 1.0)          // (a whole body-width of margin: the body check is generous but a walker that waits here for a second must not show a corner)
         }
         var x = max(door.x, 2.5)
         while x < 12, crowdBodyVisible(SIMD2(x, door.y)) { x += 0.1 }
-        return SIMD2(x + 0.3, door.y)
+        return SIMD2(x + 1.0, door.y)
     }
     /// The way in, from the entrance toward the room (a unit vector): west from the right edge in portrait, away from the camera in landscape.
     static func crowdInward() -> SIMD2<Float> { GameCamera.aspect >= 1 ? SIMD2(0, -1) : SIMD2(-1, 0) }
