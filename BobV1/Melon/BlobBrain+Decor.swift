@@ -384,7 +384,7 @@ extension BlobBrain {
             let roundSlide = kind == .decorSlide && f.uid == ParkToys.slideUID          // (the park's slide is a wall on the way to its ladder: legs round it, see slideFirstLeg; the home slide has no room behind it for a gate, it keeps the old walk)
             decorIgnore = (kind == .decorSit || kind == .decorHop || (kind == .decorSlide && !roundSlide) || (kind == .decorHopscotch && HopscotchTuning.guardOn)) ? f.uid : exiting          // (a slide that is not the park's: soft from the start, as before)
             var slideLeg = 0
-            var standSpot = decorStand(kind, f, from: here, seat: seat)
+            var standSpot = kind == .soccerKick && (mix.sessKick != nil || mix.sessDribbleTo != nil || mix.sessFetch || mix.sessShoot) ? soccerStand(f, from: here) : decorStand(kind, f, from: here, seat: seat)          // (soccer-room-r1: a session's directed kick stands exactly where the director planned it: the camera clamp of `decorStand` must not move or refuse it)
             if roundSlide {
                 guard let climb = standSpot, simd_distance(here, climb) > 0.35 || onlyUID != nil, let first = slideFirstLeg(f, climb: climb, from: here) else { decorIgnore = exiting; continue }
                 standSpot = first.0; slideLeg = first.1

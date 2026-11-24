@@ -104,7 +104,7 @@ Competitions are how JellyCoins are earned.
 
 ## Screens
 
-- **Profile** for each Jelmiko: its picture, kind and personality, how it is right now in plain words, its Relationship hearts, favourite food, best friend at the Park, power-ups, trophies, and a short line about what it has been up to lately. Notes about its housemates appear as the game gets to know them.
+- **Profile** for each Jelmiko: its picture, kind and personality, how it is right now in plain words, its Relationship hearts, favourite food, best friend at the Park, power-ups, and trophies. Notes about its housemates appear as the game gets to know them.
 - **Settings:** eight theme colours with matching app icons, music and sound, haptics, a full accessibility page, an option to follow the real clock, and more.
 - **Tips and a first-day tour** introduce each part of the game once.
 
@@ -119,7 +119,7 @@ Competitions are how JellyCoins are earned.
 - **Nothing leaves the device.** The game makes no network requests. There are no accounts, ads, analytics, tracking or in-app purchases.
 - **JellyCoins are earned by playing** and cannot be bought.
 - **Voice is recognised on the device** and is never recorded or sent anywhere.
-- **On-device intelligence, where the device supports it,** helps understand loosely phrased voice requests and can write names and greetings for park visitors, checked and filtered before anything is shown. An optional setting lets it write the short notes on the Profile; that setting is off by default, and pre-written notes are used otherwise.
+- **On-device intelligence, where the device supports it,** helps understand loosely phrased voice requests and can write names and greetings for park visitors, checked and filtered before anything is shown. An optional setting lets it write the short notes about housemates on the Profile; that setting is off by default, and pre-written notes are used otherwise.
 
 See [docs/PRIVACY.md](docs/PRIVACY.md).
 

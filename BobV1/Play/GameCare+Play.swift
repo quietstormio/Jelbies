@@ -138,12 +138,11 @@ extension GameCare {
             hub.play(.sparkle, volume: 0.35)
         case .whiff, .rescue: break
         case .goal:
-            buzz(.medium, 0.9); hub.play(.volleyPoint); hub.play(.cheerSmall, volume: 0.6)          // (play-net-r1: the ball is in the net)
+            buzz(.medium, 0.9); hub.play(.volleyPoint)          // (play-net-r1: the ball is in the net)
         case .netHit(let s):
             buzz(.light, min(0.7, 0.25 + CGFloat(s) * 0.06)); hub.play(.boop, volume: min(0.5, 0.15 + s * 0.05), rate: 1.7)
-        case .caught(let rally):
+        case .caught:
             buzz(.soft, 1.0); hub.play(.squish, volume: 0.6, rate: 0.8)
-            if rally >= 1 { hub.play(.cheerSmall, volume: 0.35) }
         }
     }
 

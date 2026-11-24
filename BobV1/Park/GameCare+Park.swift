@@ -35,6 +35,9 @@ final class ParkWork {
     var hopHost: Float?
     /// The friendly social last paid its start bonus, by Jelbie slot (the session's identity).
     var friendSession: [Int: ObjectIdentifier] = [:]
+    /// best-friend-r1: pairs (home body id * 100 + visitor body id) that have had their first greeting this visit, and seconds into the visit.
+    var bondGreeted: Set<Int> = []
+    var bondT: Float = 0
     /// Shared seesaw rides / hopscotch lines with a visitor (ParkSharedPlay.swift): the visit's awards so far.
     var shared = SharedPlayTracker()
     nonisolated deinit {}
@@ -223,6 +226,7 @@ extension GameCare {
         if park.place == .camp { tickCamp(dt: dt); return }          // (Camp: Park/GameCare+Camp.swift; no friendships, gifts, toys, save or bedtime call)
         tickVisitors(dt: dt)
         tickFriends(actors, dt: dt)
+        tickBestFriendsPark(actors, dt: dt)          // (best-friend-r1)
         tickSharedPlay(actors, dt: dt)
         #if targetEnvironment(simulator)
         if !Self.demoToys.isEmpty, park.phase == .playing {
@@ -449,7 +453,7 @@ extension GameCare {
         let roster = book.roster
         switch dest {
         case .park:
-            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftState = 0; work.saveT = 0; work.friendSession = [:]; work.shared.reset(); work.stayedAsleep = []
+            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftState = 0; work.saveT = 0; work.friendSession = [:]; work.shared.reset(); work.stayedAsleep = []; work.bondGreeted = []; work.bondT = 0
             book.comers = park.picked.filter { roster.indices.contains($0) && $0 < jellies.count }
             if book.comers.isEmpty { book.comers = Array(roster.indices) }
             for a in roster {
@@ -473,6 +477,7 @@ extension GameCare {
             var countRNG = SystemRandomNumberGenerator()
             let n = ParkVisit.visitorCount(playerCount: comers.count, using: &countRNG)
             let characters = comers.compactMap { jelly($0)?.character }
+            devSeedBestFriend()          // (capture aid `-BestFriend v:slot`; dev arguments only)
             var cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970, household: Set((comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { ParkVisitor.kindOfSpecies(JellyRoster.species($0)) }), unlocked: Self.parkUnlockedSpecials(owned: (comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { JellyRoster.species($0) }))
             #if targetEnvironment(simulator)
             // capture aid: `-ParkCast 48,49,50` brings those pool visitors (ids) instead of the draw
@@ -516,6 +521,7 @@ extension GameCare {
         case .home:
             // the visitors go: their looks are put away first (the wardrobe and feature slots are by body id), the Jelbies let go of any play with them
             for a in book.actors { visitorPutAway(a) }
+            clearBestFriends(roster)          // (best-friend-r1)
             for a in roster where !work.stayedAsleep.contains(a.id) && a.brain?.isSleeping != true { a.brain?.abortAll(a.sim, a.skinner); a.brain?.commandedIdle = nil }          // (a sleeper who stayed home is left alone; one who dozed off during the trip keeps his sleep too)
             book.clear?()
             book.actors = []; book.cast = []

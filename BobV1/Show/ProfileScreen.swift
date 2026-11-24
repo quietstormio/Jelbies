@@ -334,14 +334,6 @@ struct ProfileScreen: View {
         guard DevArgs.enabled, let t = UserDefaults.standard.string(forKey: "ProfileTypeSample"), !t.isEmpty else { return nil }
         return t
     }
-    /// The living line about the pet's life (Story/: ONE plain sentence, at most 90 characters and two lines at the narrowest phone; news from today or yesterday first, then favourites and routines).
-    /// Nil = no line (the slot keeps its box). `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
-    private func lately(_ f: Facts) -> StoryBook.Line? {
-        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return StoryBook.Line(text: "Berry plays most with Latte, and an ice pop is her favourite treat.", byModel: false) }
-        guard let sf = f.story else { return nil }
-        return StoryBook.shared.aboutLine(sf)
-    }
-
     var body: some View {
         VStack(spacing: compact ? 8 : 12) {
             ShowHeader(title: "Profile", light: false, backID: "condition-back", back: back) { EmptyView() }
@@ -380,10 +372,10 @@ struct ProfileScreen: View {
             ConditionScreen(care: care, who: $who, back: { stylesOpen = false }, show: { stylesOpen = false; show() }, bath: { stylesOpen = false; bath?() }, feed: feed, drink: drink, sheetMode: true)
                 .presentationDetents([.large]).presentationBackground(ShowUI.sand)
         }
-        .onAppear { StoryAppState.profileAppeared() }          // the model may be asked only a second after a Profile is on screen with its pre-written lines
+        .onAppear { StoryAppState.profileAppeared() }          // the model may be asked only a second after a Profile is on screen with its pre-written notes
         .onDisappear { StoryAppState.profileGone() }
-        .task(id: who) {          // the living line and the notes: asked for fresh text now and then while the Profile is open (StoryBook's schedule decides)
-            var first = true          // (only the first ask after opening may rotate an old line; while the Profile stays open a line changes for a new event or a changed fact only)
+        .task(id: who) {          // the housemate notes: asked for fresh text now and then while the Profile is open (StoryBook's schedule decides)
+            var first = true          // (only the first ask after opening may rotate an old note; while the Profile stays open a note changes for a changed fact only)
             while !Task.isCancelled {
                 let ch = care.jelly(who)?.character ?? who
                 if let sf = StoryFactsBuilder.make(care: care, slot: who, shownParagraph: SkinAbout.text(look: JellyRoster.species(ch), variant: JellyVariants.adopted(ch))) {
@@ -485,17 +477,8 @@ struct ProfileScreen: View {
         ProfileParagraph(text: SkinAbout.hasLook(b.species) ? SkinAbout.text(look: b.species, variant: b.variant) : "").accessibilityIdentifier("profile-about")
     }
 
-    /// The living-line slot: ALWAYS the same box (two lines of space, the sparkle inside it); the tinted bubble is simply not drawn when there is no line.
-    @ViewBuilder private func latelyBubble(_ f: Facts, _ b: WhoBits) -> some View {
-        let _ = storyRev
-        let line = lately(f)
-        StoryLivingBubble(text: line?.text ?? "", byModel: line?.byModel ?? false, tint: b.body)
-            .accessibilityIdentifier("profile-lately")
-            .contextMenu { if line != nil { storyActions(f, nil) } }
-    }
-
-    /// The two long-press actions on a line or a note.
-    @ViewBuilder private func storyActions(_ f: Facts, _ h: StoryFacts.Housemate?) -> some View {
+    /// The two long-press actions on a housemate note.
+    @ViewBuilder private func storyActions(_ f: Facts, _ h: StoryFacts.Housemate) -> some View {
         if let sf = f.story {
             Button { Task { _ = await StoryBook.shared.writeAnother(sf, with: h); storyRev += 1 } } label: { Label("Write another", systemImage: "arrow.triangle.2.circlepath") }
                 .disabled(StoryBook.shared.rewritesLeft(sf, h) == 0)
@@ -528,7 +511,7 @@ struct ProfileScreen: View {
         }
     }
 
-    /// The top card: header row (picture, name, chips, short status), the description paragraph, the living line (when there is one), the Relationship line.
+    /// The top card: header row (picture, name, chips, short status), the description paragraph, the Relationship line.
     private func whoCard(_ f: Facts) -> some View {
         let b = whoBits(f)
         let text = VStack(alignment: .leading, spacing: 8) {          // one rhythm: name, chip row(s), status, 8 pt apart
@@ -536,7 +519,7 @@ struct ProfileScreen: View {
         }
         let pic: CGFloat = compact ? 104 : 128
         return card {
-            VStack(alignment: .leading, spacing: 14) {          // one card rhythm: header, paragraph, living line, Relationship, 14 pt apart
+            VStack(alignment: .leading, spacing: 14) {          // one card rhythm: header, paragraph, Relationship, 14 pt apart
                 if dts.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 8) { whoPicture(b, 104); text }
                 } else {
@@ -547,7 +530,6 @@ struct ProfileScreen: View {
                     }
                 }
                 aboutParagraph(b)
-                latelyBubble(f, b)
                 BondHeartsRow(level: f.bond).frame(maxWidth: .infinity, alignment: .leading).id(who)
             }
         }
@@ -577,9 +559,7 @@ struct ProfileScreen: View {
         let item = snack.flatMap { s in StoreCatalog.items.first { $0.food == s } ?? StoreCatalog.items.first { $0.id == s } }
         let powerUps = f.p?.perks.active ?? []
         let character = f.p?.character ?? who
-        let friend = care.parkBook.visitors.filter { $0.mergedInto == nil }
-            .compactMap { v -> (ParkVisitor, Float)? in let pts = v.friendship["\(character)"] ?? 0; return ParkFriendLevel.of(pts) >= .friend ? (v, pts) : nil }
-            .max { $0.1 < $1.1 }
+        let friend = ParkBestFriend.of(character: character, in: care.parkBook.visitors)          // (the one rule, Park/ParkModels.swift: the game's pairing reads it too)
         return card {
             VStack(alignment: .leading, spacing: 10) {
                 cardTitle("Favourites", icon: "heart.fill", color: SK.pink)

@@ -28,10 +28,13 @@ enum SoccerEvents {
     /// The last few events, newest last (tests; a late subscriber may read them).
     private(set) static var recent: [SoccerEvent] = []
     static let keep = 32
+    /// Events emitted since launch (the room's soccer director reads the new ones).
+    private(set) static var serial = 0
+    static func since(_ n: Int) -> [SoccerEvent] { Array(recent.suffix(min(max(serial - n, 0), recent.count))) }
 
     static func emit(_ e: SoccerEvent) {
         if EmoteSpot.logOn { NSLog("[soccer] ev=%@", String(describing: e)) }          // (move-mix round 3: the soccer moments, counted from the real-app console)
-        recent.append(e)
+        recent.append(e); serial += 1
         if recent.count > keep { recent.removeFirst(recent.count - keep) }
         sink?(e)
     }

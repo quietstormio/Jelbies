@@ -21,7 +21,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     case crunchNugget = "crunch_nugget", crunchFries = "crunch_fries", perkSparkle = "perk_sparkle"
     /// Decor cues (files place_item_N, beanbag_sit_N).
     case placeItem = "place_item", beanbagSit = "beanbag_sit"
-    /// Training cues (files whistle_N, tick_N, good_step_N, perfect_streak_N, stat_up_N, tired_N, cheer_small_N).
+    /// Training cues (files whistle_N, tick_N, good_step_N, perfect_streak_N, stat_up_N, tired_N).
     /// Volleyball cues (volley_bonk_N, volley_spike_N, volley_land_N, volley_point_N).
     case volleyBonk = "volley_bonk", volleySpike = "volley_spike", volleyLand = "volley_land", volleyPoint = "volley_point"
     /// Solo emote cues (files emote_hic_1 ... : one soft clip each, 2026-11-02; BlobBrain+Emotes.swift). Each plays at most once per 10 s.
@@ -34,7 +34,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     case highFiveBoop = "highfive_boop", congaTick = "conga_tick", ringChime = "ring_chime"
     /// Bubble wand (2026-11-02, ElevenLabs, soft): the stream's bloop, a Jelbie's pop, a happy giggle after it (bubblewand_bloop_N / _pop_N / _chirp_N).
     case bubbleBloop = "bubblewand_bloop", bubblePop = "bubblewand_pop", bubbleChirp = "bubblewand_chirp"
-    case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired, cheerSmall = "cheer_small"
+    case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired
 
     /// Number of the first take that may play (files name_N; the pool scans N = firstTake, firstTake+1, ... until a gap).
     /// squish_1 was removed on the owner's word (2026-11-13: "Squish take 1 sound is the one I hate"): only takes 2 and 3 exist and play.
@@ -57,7 +57,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .shoeOn, .unwrap: return 0.45
         case .placeItem: return 0.55
         case .beanbagSit: return 0.5
-        case .whistle, .statUp, .cheerSmall: return 0.6
+        case .whistle, .statUp: return 0.6
         case .tick: return 0.55
         case .goodStep: return 0.5
         case .perfectStreak: return 0.6

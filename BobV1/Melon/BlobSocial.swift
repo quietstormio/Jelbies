@@ -125,6 +125,16 @@ struct SocialBook {
     var started: [SocialKind: Int] = [:]
     /// How close this Jelly is to each other one (by steerID): 1 = housemates; the Park sets 0.55 (stranger) ... 2.1 (best friend). Close friends do the friendly kinds more often.
     var close: [Int: Float] = [:]
+    /// best-friend-r1: the body ids (steerIDs) that are this Jelly's best friend now (Park/ParkModels.swift `ParkBestFriend`; set by the park / guest tick, empty everywhere else). `BondPairing` reads it.
+    var bestFriends: Set<Int> = []
+    /// best-friend-r1 round 4 (BondPairing.swift): the reserved buddy block this body is part of, the next block's time (game time), blocks' kinds started, when this body took its flag / reached its spot, and the housemate preference after a block.
+    var block: BuddyBlock?
+    var bondNextAt: Float = 0, bondMoments = 0, buddyAssigned: Float = 0, buddyArrivedAt: Float = -1
+    var housemates: Set<Int> = [], housemateBoost = false
+    /// Round 6: the parting after a block (BondPairing.swift `partOK`): where the partner stood, the midpoint x, which side this body keeps, until when.
+    var bondPartFrom: SIMD2<Float>?, bondPartMidX: Float = 0, bondPartSide: Float = 0, bondPartUntil: Float = 0
+    /// Friendship points with each best friend present (by body id), for "the closer friends go first".
+    var bestPoints: [Int: Float] = [:]
     var lastKind: SocialKind?
     /// The last 3 pair kinds started with each partner (by steerID), oldest first: the pick drops them (no-repeat per pair).
     var recentWith: [Int: [SocialKind]] = [:]
@@ -286,7 +296,8 @@ extension BlobBrain {
     var scriptIsNone: Bool { if case .none = script { return true }; return false }
 
     /// Free to start / join a social: idle, autonomous, nothing else owns him.
-    var socialFree: Bool {
+    var socialFree: Bool { !mix.sess && socialFreeBase }
+    var socialFreeBase: Bool {
         social == nil && socialBook.enabled && attached && (autonomy || idleForced) && !held && !commanded && pending == nil && job == nil && bubbleLeash == nil
             && commandedIdle == nil && !commandedFlip && !commandedNameHop && !interruptScript && !hurry
             && activity != .touched && activity != .recovering && scriptIsNone && idleState.kind == nil && !onSlideFoot && !onHopCourt          // (park-slide-r4: not on the slide's foot; park-hopscotch-r1: nor on a court with a game on)
@@ -305,7 +316,7 @@ extension BlobBrain {
     }
     /// Out on an ordinary wander leg: autonomous, nothing owns him, no behaviour running. He can be invited to a social (his leg is ended at the next stretch of the walk).
     var socialWandering: Bool {
-        guard social == nil, bubbleLeash == nil, socialBook.enabled, attached, autonomy || idleForced, !held, !commanded, pending == nil, job == nil, commandedIdle == nil,
+        guard social == nil, !mix.sess, bubbleLeash == nil, socialBook.enabled, attached, autonomy || idleForced, !held, !commanded, pending == nil, job == nil, commandedIdle == nil,
               !commandedFlip, !commandedNameHop, !interruptScript, !hurry, !race.active, idleState.kind == nil, activity == .walking, !onSlideFoot, !meetBusy else { return false }
         if case .walk = script { return true }
         return false
@@ -450,7 +461,7 @@ extension BlobBrain {
         }
         if cands.isEmpty { return false }
         guard starved || rand() < SocialTuning.pickChance * (watching ? (MoveMix.on ? MoveMix.watchPairMul : SocialTuning.livelyChance) : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) * parkSocialPickMul else { return false }
-        let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
+        let o = BondPairing.pick(cands.map { $0.0 }, chooser: self, roll: rand())          // (best-friend-r1: a best friend counts 2.4x; every weight 1 = the old uniform index)
         if emotePairDefer(with: o) { return false }          // (EmoteSpot.swift: they stand on a much-used spot: they roam on, the roll comes round again)
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         // 2026-11-06: boop 3 -> 1.5. The user: "they do the hand holding emote a little too much ... not as often" (the standing side-by-side hand-on-arm boop): halved, not replaced.
@@ -533,7 +544,7 @@ extension BlobBrain {
             cands.append(o)
         }
         if cands.isEmpty || rand() > SocialTuning.zoomJoin { return }
-        let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]
+        let o = BondPairing.pick(cands, chooser: self, roll: rand())
         guard let pts = o.zoomLoop(around: idleState.target) else { return }
         _ = newSession(.zoomies, with: o, duration: 22)
         _ = o.socialRunLoop(pts, sim)
@@ -596,6 +607,8 @@ extension BlobBrain {
         if !socialBook.lookPair.isEmpty { for k in socialBook.lookPair.keys { socialBook.lookPair[k]! -= dt } }
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
         socialBook.handWant = nil
+        SoccerSession.shared.tick(by: self, dt)          // (soccer-room-r1: inert without a soccer ball in the room)
+        if mix.sess || mix.order.kind != .none { mixSessionTick(sim) }
 
         if socialBook.stopAll {
             socialBook.stopAll = false
@@ -678,6 +691,7 @@ extension BlobBrain {
             if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
+        if socialBook.block != nil { restTimer = min(restTimer, 0.2) }          // (best-friend-r1: a buddy block chains its next kind at the very next pick)
         if EmoteSpot.logOn, s.kind == .pass { NSLog("[pass] end t=%.1f ids %d,%d kicks=%d how=%@", variety.now, s.idA, s.idB, s.passes, String(describing: s.end)) }
         mixPassEnded(s)
         mixSessionEnded(s, hard: hard || s.end == .aborted || s.end == .stopped)          // (MoveMix.swift: quiet period + a stroll away)
