@@ -266,6 +266,7 @@ struct RacePlacingsCard: View {
     let home: () -> Void
 
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.dynamicTypeSize) private var dts
     private var tight: Bool { vsc == .compact }
     private func ordinal(_ p: Int) -> String { p == 1 ? "1st" : p == 2 ? "2nd" : p == 3 ? "3rd" : "\(p)th" }
     private func medal(_ p: Int) -> Color {
@@ -280,27 +281,34 @@ struct RacePlacingsCard: View {
                 .playFont(tight ? 26 : 30, .heavy)
                 .foregroundStyle(CareMenu.brown)
                 .resultText("title").accessibilityAddTraits(.isHeader)
-            VStack(spacing: tight ? 4 : 8) {
+            VStack(spacing: tight ? 3 : 4) {
                 ForEach(race.ui.placings, id: \.racer) { p in
-                    HStack(spacing: 12) {
-                        Text(ordinal(p.place))
-                            .playFont(17, .heavy)
-                            .foregroundStyle(CareMenu.brown)
-                            .fixedSize().resultProbe("place\(p.place)")
-                            .frame(minWidth: 52, minHeight: 34)
-                            .background(Capsule().fill(medal(p.place)))
-                        Text(p.name)
-                            .playFont(20, p.isPlayer ? .heavy : .semibold)
-                            .foregroundStyle(CareMenu.brown)
-                            .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).resultProbe("name\(p.place)")
-                            .layoutPriority(1)
-                        Spacer(minLength: 6)
-                        Text(p.time.map { String(format: "%.1f s", $0) } ?? "-")
-                            .playFont(18, .semibold).monospacedDigit()
-                            .foregroundStyle(CareMenu.brown.opacity(0.85))
-                            .fixedSize().resultProbe("time\(p.place)")
+                    let place = Text(ordinal(p.place))
+                        .playFont(17, .heavy)
+                        .foregroundStyle(CareMenu.brown)
+                        .fixedSize().resultProbe("place\(p.place)")
+                        .frame(minWidth: 52, minHeight: 34)
+                        .background(Capsule().fill(medal(p.place)))
+                    let name = Text(p.name)
+                        .playFont(20, p.isPlayer ? .heavy : .semibold)
+                        .foregroundStyle(CareMenu.brown)
+                        .multilineTextAlignment(.leading).lineLimit(2).minimumScaleFactor(0.6).fixedSize(horizontal: false, vertical: true).resultProbe("name\(p.place)")
+                    let time = Text(p.time.map { String(format: "%.1f s", $0) } ?? "-")
+                        .playFont(18, .semibold).monospacedDigit()
+                        .foregroundStyle(CareMenu.brown.opacity(0.85))
+                        .fixedSize().resultProbe("time\(p.place)")
+                    Group {
+                        if dts.isAccessibilitySize {
+                            // the largest text sizes: the place and the time on one line, the name under them (nothing side by side to squeeze)
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack { place; Spacer(minLength: 6); time }
+                                name
+                            }
+                        } else {
+                            HStack(spacing: 12) { place; name.layoutPriority(1); Spacer(minLength: 6); time }
+                        }
                     }
-                    .padding(.horizontal, 10).padding(.vertical, tight ? 2 : 5)
+                    .padding(.horizontal, 10).padding(.vertical, tight ? 2 : 3)
                     .frame(maxWidth: .infinity)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(p.isPlayer ? FocusStyle.pink.opacity(0.28) : Color.clear))
                     .accessibilityElement(children: .combine)

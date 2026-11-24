@@ -43,7 +43,7 @@ struct ResultCardFrame<Primary: View, Secondary: View>: View {
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.dynamicTypeSize) private var dts
     private var tight: Bool { vsc == .compact }
-    private var gap: CGFloat { tight ? 8 : 16 }
+    private var gap: CGFloat { tight ? 8 : 12 }
 
     @ViewBuilder private var content: some View {
         if tight && hasSecondary && !dts.isAccessibilitySize {
@@ -59,13 +59,13 @@ struct ResultCardFrame<Primary: View, Secondary: View>: View {
     private var button: some View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); home() } label: {
             Text("Back home").playFont(20, .bold).foregroundStyle(.white).resultText("home")
-                .padding(.horizontal, 32).padding(.vertical, tight ? 9 : 13)
+                .padding(.horizontal, 32).padding(.vertical, tight ? 9 : 12)
                 .background(Capsule().fill(buttonColor).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))
         }.buttonStyle(.plain).accessibilityIdentifier(homeID)
     }
 
     private func card(scrolling: Bool) -> some View {
-        VStack(spacing: tight ? 12 : 24) {
+        VStack(spacing: tight ? 12 : 20) {
             if scrolling {
                 ScrollView(.vertical, showsIndicators: false) { content }.scrollBounceBehavior(.basedOnSize)
             } else {
@@ -73,7 +73,7 @@ struct ResultCardFrame<Primary: View, Secondary: View>: View {
             }
             button
         }
-        .padding(.horizontal, tight ? 20 : 24).padding(.top, tight ? 16 : 26).padding(.bottom, tight ? 16 : 24)
+        .padding(.horizontal, tight ? 20 : 24).padding(.top, tight ? 16 : 22).padding(.bottom, tight ? 16 : 22)
         .frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 6, y: 3))
         .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
@@ -113,7 +113,7 @@ struct ResultRow<Text1: View>: View {
                 .frame(width: 26, alignment: .center).padding(.top, 1)
             text().frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
+        .padding(.horizontal, 14).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(fill))
         .accessibilityElement(children: .combine)

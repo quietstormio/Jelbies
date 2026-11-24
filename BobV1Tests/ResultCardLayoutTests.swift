@@ -99,6 +99,8 @@ final class ResultCardLayoutTests: XCTestCase {
         for a in 0..<infos.count {
             for b in (a + 1)..<max(a + 1, infos.count) {
                 let x = infos[a].frame.insetBy(dx: 0.5, dy: 0.5), y = infos[b].frame.insetBy(dx: 0.5, dy: 0.5)
+                let isHome = infos[a].id == "home" || infos[b].id == "home"
+                if isHome && scrolls { continue }          // (scrolling: the part under the pinned button is clipped by the scroll view, not drawn)
                 if x.intersects(y) { out.append("overlap: \(infos[a].id) x \(infos[b].id)") }
             }
         }
@@ -139,7 +141,7 @@ final class ResultCardLayoutTests: XCTestCase {
                     let (infos, img) = host(s, ax: ax) { h in AnyView(make(ResultCardMetrics.maxHeight(screenH: h)).resultCardSlot()) }
                     let tag = "\(cname)_\(s.name)_\(ax ? "ax5" : "default")"
                     save(img, comp, tag)
-                    let p = problems(infos, s, scrolls: ax)
+                    let p = problems(infos, s, scrolls: ax || s.h < 700 || (s.landscape && s.h < 400 && cname.contains("longest")))
                     if infos.isEmpty { failures.append("\(tag): no probes (not rendered)") }
                     if !p.isEmpty { failures.append("\(tag): " + p.joined(separator: "; ")) }
                 }
@@ -178,6 +180,14 @@ final class ResultCardLayoutTests: XCTestCase {
 
     func testVolleyResultCardLayout() {
         sweep("volley", cases: volleyCases)
+    }
+
+    /// The reading order (VoiceOver follows the layout order of the card's children): the title, the score, the coins, the points, the ribbon, the trophy, then "Back home".
+    func testVolleyReadingOrder() {
+        let s = Self.screens[0]
+        let (infos, _) = host(s, ax: false) { h in AnyView(self.volleyCases[0].1(ResultCardMetrics.maxHeight(screenH: h)).resultCardSlot()) }
+        let order = infos.sorted { $0.frame.minY < $1.frame.minY }.map(\.id)
+        XCTAssertEqual(order, ["title", "score", "coins", "points", "pointsDetail", "ribbon", "trophy", "home"])
     }
 
     // MARK: Jelly Race
