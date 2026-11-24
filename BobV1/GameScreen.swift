@@ -1947,8 +1947,8 @@ struct FocusHint: View {
         Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
             .onAppear {
                 guard shown, !Self.suppressed else { return }
-                UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
-                GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky)
+                GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky,
+                                              onShown: { UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key) })          // (a visit counts once the line was on the bar)
             }
             .task {          // sticky (VoiceOver / "Longer hints"): it stays until the first touch or mic use, then goes
                 guard shown, GameMessageCenter.hintsSticky else { return }
