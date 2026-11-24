@@ -44,6 +44,8 @@ enum GameMessageLayout {
 @Observable
 final class GameMessageCenter {
     static let shared = GameMessageCenter()
+    /// Counts every posted line (the dev stuck detector's "a tap was answered", Dev/StuckDetector.swift). Not observed.
+    @ObservationIgnored var stuckSerial = 0
 
     /// Higher replaces lower. `caption` = a sound caption (never queues), `chatty` = what was heard / a visitor's small talk, `normal` = most lines, `important` = a refusal or error.
     enum Priority: Int, Comparable, Sendable {
@@ -102,6 +104,7 @@ final class GameMessageCenter {
     func post(_ text: String, icon: String? = nil, priority: Priority = .normal, scope: Scope = .none, identifier: String = "game-message", announce: Bool = true, sticky: Bool = false, onShown: (() -> Void)? = nil, now: Date = Date()) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        stuckSerial &+= 1          // (no-stuck-r1: the dev stuck detector reads "the game said something")
         tick(now: now)
         if priority == .caption {
             if caption?.text == text { return }

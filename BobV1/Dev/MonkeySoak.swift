@@ -1,0 +1,187 @@
+//
+//  MonkeySoak.swift
+//  no-stuck-r1. DEV BUILDS ONLY (compiled out of the App Store archive). A seeded "monkey" that plays the game with random but legal input for long soaks, with the
+//  stuck detector (Dev/StuckDetector.swift) watching:
+//      -Monkey <seed>  [-MonkeyMinutes <wall minutes, default 60>]  [-MonkeyGap <mean s between actions, default 6>]
+//      -MonkeyScript "comeall;wait:2.5;cancel;wait:60"   runs those steps instead (a case found by a soak, replayed for a video)
+//  Each step is logged `[monkey] n=<n> act=<name> sim=<game s>`. The same seed gives the same sequence of choices (the game's own timing may differ).
+//  Background / foreground is driven from the shell (simctl), the rest from here. `-FreezeFix 0` / `-MealUnstickOff 1` switch the old bugs back on (baselines).
+//
+
+#if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+import SwiftUI
+import UIKit
+import simd
+
+@MainActor
+enum MonkeySoak {
+    struct LCG { var s: UInt64; mutating func next(_ n: Int) -> Int { s = s &* 6364136223846793005 &+ 1442695040888963407; return Int((s >> 33) % UInt64(max(n, 1))) }
+        mutating func unit() -> Double { Double(next(1_000_000)) / 1_000_000 } }
+
+    struct Bindings { let open: Binding<Bool>; let roster: Binding<Bool>; let picker: Binding<ConsumableKind?>; let book: Binding<Bool>; let goOut: Binding<TownScreen?> }
+
+    /// (name, weight): the soak's menu of actions.
+    static let menu: [(String, Int)] = [
+        ("comecancel", 12), ("welcomeplayfeed", 6), ("feed", 8), ("water", 8), ("feedone", 4), ("drinkone", 4), ("come", 4), ("comeall", 3), ("cuddle", 6),
+        ("wash", 4), ("play", 8), ("menu", 6), ("picker", 4), ("roster", 2), ("book", 2), ("town", 5), ("park", 3), ("cafe", 3), ("groom", 2), ("show", 2),
+        ("race", 2), ("volley", 2), ("music", 3), ("rotate", 3), ("idle", 10), ("cancel", 3), ("release", 3),
+    ]
+
+    static func run(care: GameCare, ui: Bindings) async {
+        guard DevArgs.enabled else { return }
+        let d = UserDefaults.standard
+        func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(max(0, s) * 1e9)) }
+        for _ in 0..<900 where LaunchGate.shared.visible || care.lastBrain == nil { await sleep(0.1) }
+        if d.object(forKey: "FreezeFix") != nil, d.integer(forKey: "FreezeFix") == 0 { FocusGroup.handBackFix = false; FocusGroup.netEnabled = false; NSLog("[freeze] FIX OFF (hand-back and safety net)") }
+        if !GameCare.unstickOn { NSLog("[mealunstick] UNSTICK OFF") }
+        StuckDetector.on = true
+        await sleep(3)
+        let seed = UInt64(max(1, d.integer(forKey: "Monkey")))
+        var g = LCG(s: seed &* 2654435761)
+        var n = 0
+        func sim() -> Float { StuckDetector.shared.simTime }
+        func say(_ a: String) { n += 1; NSLog("[monkey] n=%d act=%@ sim=%.0f", n, a, sim()) }
+
+        if let script = d.string(forKey: "MonkeyScript") {
+            NSLog("[monkey] script %@", script)
+            for step in script.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }) where !step.isEmpty {
+                let kv = step.split(separator: ":", maxSplits: 1).map(String.init)
+                if kv[0] == "wait" { await sleep(Double(kv.count > 1 ? kv[1] : "1") ?? 1); continue }
+                say(step)
+                await act(kv[0], arg: kv.count > 1 ? Int(kv[1]) : nil, care: care, ui: ui, g: &g, sleep: sleep)
+            }
+            NSLog("[monkey] done script")
+            return
+        }
+        let minutes = d.double(forKey: "MonkeyMinutes") > 0 ? d.double(forKey: "MonkeyMinutes") : 60
+        let gap = d.double(forKey: "MonkeyGap") > 0 ? d.double(forKey: "MonkeyGap") : 6
+        let end = Date().addingTimeInterval(minutes * 60)
+        let total = menu.reduce(0) { $0 + $1.1 }
+        NSLog("[monkey] start seed=%llu minutes=%.0f gap=%.1f", seed, minutes, gap)
+        while Date() < end {
+            var r = g.next(total), pick = menu[0].0
+            for (name, w) in menu { if r < w { pick = name; break }; r -= w }
+            // legal input only: at home with no trip on, the home buttons; during a trip the monkey waits for it (its own trip step brings it home)
+            if care.tripActive || care.raceBusy {
+                await sleep(2); continue
+            }
+            say(pick)
+            await act(pick, arg: nil, care: care, ui: ui, g: &g, sleep: sleep)
+            await sleep(gap * (0.3 + 1.4 * g.unit()))
+        }
+        NSLog("[monkey] done seed=%llu steps=%d sim=%.0f", seed, n, sim())
+    }
+
+    private static func someJelly(_ care: GameCare, _ g: inout LCG) -> Int { g.next(max(care.jellies.count, 1)) }
+    private static func hungry(_ care: GameCare) { for j in care.jellies { care.needs(for: j.id).set(.hunger, 0.15); care.needs(for: j.id).set(.thirst, 0.15) } }
+
+    static func act(_ a: String, arg: Int?, care: GameCare, ui: Bindings, g: inout LCG, sleep: (Double) async -> Void) async {
+        let j = arg ?? someJelly(care, &g)
+        switch a {
+        case "feed": hungry(care); care.feed()
+        case "water": hungry(care); care.water()
+        case "feedone": hungry(care); care.feed(jelly: j)
+        case "drinkone": hungry(care); care.drink(jelly: j)
+        case "come": care.comeHere(jelly: j)
+        case "comeall": care.comeHereEveryone()
+        case "cancel": care.cancelGroupAction()
+        case "release": withAnimation(CareMenu.spring) { care.release() }
+        case "comecancel":
+            if g.next(2) == 0 { care.comeHereEveryone() } else { care.comeHere(jelly: j) }
+            await sleep(0.5 + 5.5 * g.unit())
+            if g.next(3) == 0 { withAnimation(CareMenu.spring) { care.release() } } else { care.cancelGroupAction() }
+        case "cuddle":
+            care.comeHere(jelly: j)
+            for _ in 0..<120 where !care.focus.isFocused { await sleep(0.1) }
+            await sleep(2 + 8 * g.unit())
+            withAnimation(CareMenu.spring) { care.release() }
+        case "welcomeplayfeed":          // the night-meal path: a welcome home, Play, then Feed / Water
+            care.showWelcomeHome(j, won: g.next(2) == 0, again: false)
+            await sleep(1 + 3 * g.unit())
+            care.store.grant(DecorKind.ball.storeID); care.beginPlay(ball: .ball)
+            await sleep(2 + 4 * g.unit())
+            if g.next(2) == 0 { care.endPlay() }
+            hungry(care)
+            if g.next(2) == 0 { care.feed() } else { care.water() }
+        case "wash":
+            care.bath.grime.dirt = 0.5; care.bath.demo = true
+            care.clean(jelly: 0)
+            await sleep(3 + 20 * g.unit())
+            if g.next(3) == 0 { care.cancelClean() }
+        case "play":
+            let kinds: [DecorKind] = [.ball, .soccerball, .beachball]
+            let k = kinds[g.next(kinds.count)]
+            care.store.grant(k.storeID); care.beginPlay(ball: k)
+            for _ in 0..<(2 + g.next(5)) {
+                await sleep(1.5 + 3 * g.unit())
+                if care.play.phase == .inHand, let size = screenSize() {
+                    care.play.viewSize = size
+                    care.play.flick(from: CGPoint(x: size.width * (0.3 + 0.4 * g.unit()), y: size.height * 0.82), velocity: CGVector(dx: (g.unit() - 0.5) * size.width, dy: -size.height * (1.2 + g.unit())))
+                }
+            }
+            if g.next(4) != 0 { care.endPlay() }
+        case "menu":
+            withAnimation(CareMenu.spring) { ui.open.wrappedValue = true }; await sleep(0.3 + 2 * g.unit())
+            withAnimation(CareMenu.spring) { ui.open.wrappedValue = false }
+        case "picker":
+            ui.picker.wrappedValue = g.next(2) == 0 ? .food : .drink; await sleep(0.5 + 2 * g.unit()); ui.picker.wrappedValue = nil
+        case "roster": ui.roster.wrappedValue = true; await sleep(0.5 + 2 * g.unit()); ui.roster.wrappedValue = false
+        case "book": ui.book.wrappedValue = true; await sleep(0.5 + 2 * g.unit()); ui.book.wrappedValue = false
+        case "town":
+            let s: [TownScreen] = [.town, .shop, .track, .studio, .condition, .friends, .volley]
+            withAnimation(.easeInOut(duration: 0.25)) { ui.goOut.wrappedValue = s[g.next(s.count)] }
+            await sleep(1 + 3 * g.unit())
+            withAnimation(.easeInOut(duration: 0.25)) { ui.goOut.wrappedValue = nil }
+        case "park":
+            care.requestPark()
+            await sleep(1)
+            if care.park.picking { care.startPark() }
+            await sleep(20 + 60 * g.unit())
+            if care.park.active { care.park.goHome() }
+            for _ in 0..<600 where care.park.active { await sleep(0.2) }
+        case "cafe":
+            care.bath.wallet.add(60, silent: true)
+            care.requestCafe()
+            for _ in 0..<300 where !care.cafe.menuOpen && care.cafe.active { await sleep(0.1) }
+            if care.cafe.menuOpen {
+                await sleep(1 + 2 * g.unit())
+                let menu: [CafeTreatID] = [.swirl, .juice, .latte, .cocoa, .pancakes]
+                _ = care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: care.cafeDinerIDs.map { ($0, care.cafeCanEat($0) ? menu[g.next(menu.count)] : .juice) })))
+            }
+            await sleep(30 + 60 * g.unit())
+            if care.cafe.active { care.cafe.goHome() }
+            for _ in 0..<600 where care.cafe.active { await sleep(0.2) }
+        case "groom":
+            care.bath.wallet.add(40, silent: true)
+            care.requestGroom()
+            await sleep(1)
+            care.startGroom(.quick)
+            for _ in 0..<900 where care.groom.active { await sleep(0.2) }
+        case "show":
+            care.show.auto = true; care.show.autoHomeAfter = 3
+            care.startShow(jelly: j)
+            for _ in 0..<1800 where care.show.active { await sleep(0.2) }
+        case "race":
+            care.race.autoRate = 4; care.race.autoReturnAfter = 7
+            care.startRace(jelly: j)
+            for _ in 0..<1500 where care.race.active { await sleep(0.2) }
+        case "volley":
+            care.startVolley(jelly: j, mode: .match(.sandcastle))
+            await sleep(25 + 40 * g.unit())
+            if care.volley.active { care.volley.goHome() }
+            for _ in 0..<600 where care.volley.active { await sleep(0.2) }
+        case "music":
+            AudioHub.shared.settings.musicOn.toggle()
+            await sleep(2 + 6 * g.unit())
+            if !AudioHub.shared.settings.musicOn || g.next(2) == 0 { AudioHub.shared.settings.musicOn = true }
+        case "rotate":
+            let masks: [UIInterfaceOrientationMask] = [.portrait, .landscapeLeft, .landscapeRight]
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene { scene.requestGeometryUpdate(.iOS(interfaceOrientations: masks[g.next(masks.count)])) { _ in } }
+        case "idle": await sleep(5 + 25 * g.unit())
+        default: NSLog("[monkey] unknown step %@", a)
+        }
+    }
+
+    private static func screenSize() -> CGSize? { (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.size }
+}
+#endif

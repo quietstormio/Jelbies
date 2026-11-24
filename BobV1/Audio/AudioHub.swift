@@ -411,6 +411,12 @@ final class AudioHub {
         return (expected, advancing)
     }
     var _musicLevelNow: Float { musicLevelNow }
+    /// no-stuck-r1 (dev builds' stuck detector, Dev/StuckDetector.swift): music that should be heard (started, in front, not muted, music on, not in a gap between songs, no mic) and whether any of it is playing.
+    var stuckMusicProbe: (wanted: Bool, playing: Bool, why: String) {
+        let wanted = started && active && !muted && musicLevelNow > 0.01 && director.gapLeft == nil && !micSession && !otherAudioPlaying
+        let scenePlays = director.sceneTrack.map { scene?.isPlaying($0) ?? false } ?? false
+        return (wanted, deckPlaying || scenePlays, "scene=\(director.scene) sceneTrack=\(director.sceneTrack?.rawValue ?? "-") decks=\(decks.count) deckPlaying=\(deckPlaying) scenePlays=\(scenePlays) level=\(musicLevelNow)")
+    }
     func _setOtherAudio(_ on: Bool) { otherAudioPlaying = on; applyLevels(); refreshNowPlaying() }
     var _sceneEngine: SceneMusicEngine? { scene }
     /// Test seam: each live deck's effective volume (fader x main gain).

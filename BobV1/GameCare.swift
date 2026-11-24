@@ -588,7 +588,12 @@ final class GameCare {
     @ObservationIgnored weak var lastSim: SoftBody?
     /// "Come here": calls him to the front spot, then focus mode starts (camera close-up, actions dock, release button).
     /// A meal in progress is dropped first: the tray poofs, the piece he held goes with it.
-    func comeHere(jelly: Int? = nil) { beginFocus(ids: [jelly ?? targetJelly]) }       // GameCare+Focus.swift
+    func comeHere(jelly: Int? = nil) {
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        StuckDetector.shared.noteTap("come", care: self)          // (no-stuck-r1)
+        #endif
+        beginFocus(ids: [jelly ?? targetJelly])       // GameCare+Focus.swift
+    }
     /// Old name of `comeHere()` (the menu and the capture scripts).
     func call(jelly: Int? = nil) { comeHere(jelly: jelly) }
 
@@ -607,6 +612,9 @@ final class GameCare {
             if focus.isActive { afterRelease = c; pendingJelly = jelly; return }
         }
         mealUnstick(why: c.kind == .drink ? "drink tap" : "food tap")          // (night-meal-r1: a leftover lock is cleared before the tap is judged)
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        StuckDetector.shared.noteTap(c.kind == .drink ? "water" : "feed", care: self)          // (no-stuck-r1: dev builds' stuck detector)
+        #endif
         if let why = orderBlocker(c) { tapRefused(why); return }          // (said out loud: GameCare+MealFeedback.swift)
         if jelly == nil, jellies.count > 1, let full = fullLine(c, jelly: jelly) { tapRefused(full) }          // a group serving has no label of its own: the tray still comes out and they shake their heads, the line says why (a single Jelbie shows "Not hungry" over his head)
         if jelly == nil, jellies.count > 1 {         // the group serving: started by `tickGroup` (it has every brain)
@@ -1052,6 +1060,9 @@ final class GameCare {
         if !out, servingKind != nil { servingKind = nil }
         if bath.targetID == 0 { bath.tick(brain: brain, sim: sim, play: touchPlay, dt: dt) }         // another Jelly's clean-up ticks in tickOthers
         if !bath.active, !tripActive { voice.tick(care: self, brain: brain, sim: sim, dt: dt) }
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        if !isPreview { StuckDetector.shared.tick(care: self, dt: dt) }          // (no-stuck-r1: dev builds only, `-StuckProbe 1`)
+        #endif
     }
 }
 
