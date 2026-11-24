@@ -129,24 +129,26 @@ extension ParkScenery {
         }
     }
 
-    /// A slatted timber bench on cast-iron frames (the exact footprint of the old one: x +-1.28, z -4.78 ... -4.22).
-    static func bench(_ b: RoomMeshBuilder) {
-        let cx = benchX
+    /// A slatted timber bench on cast-iron frames (the exact footprint of the old one: x +-1.28, z -4.78 ... -4.22 at its old spot). park-open-r1: placed at (x, z) with its seat facing `+z` (toward the camera: the old bench,
+    /// centre (benchX, -4.55)) or `-z` (`faceAway`: its back to the lawn, looking out at the hills: the mirror image about its centre).
+    static func bench(_ b: RoomMeshBuilder, x cx: Float = benchX, z zc: Float = -4.55, faceAway: Bool = false) {
         let iron = S.srgb(0.13, 0.16, 0.15)
+        let f: Float = faceAway ? -1 : 1
+        func zz(_ o: Float) -> Float { zc + f * o }          // (o = the offset from the bench's centre, seat side positive)
         for (i, dz) in ([-0.225, -0.075, 0.075, 0.225] as [Float]).enumerated() {
             let k = 0.94 + 0.1 * Float(i % 3) / 2
-            b.roundedBox(centre: V3(cx, 0.50, -4.48 + dz), half: V3(1.28, 0.05, 0.066), radius: 0.02, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
+            b.roundedBox(centre: V3(cx, 0.50, zz(0.07 + dz)), half: V3(1.28, 0.05, 0.066), radius: 0.02, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
         }
         for (i, y) in ([0.74, 0.87, 1.0] as [Float]).enumerated() {
             let k = 0.96 + 0.08 * Float(i % 2)
-            b.roundedBox(centre: V3(cx, y, -4.80), half: V3(1.28, 0.052, 0.04), radius: 0.018, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
+            b.roundedBox(centre: V3(cx, y, zz(-0.25)), half: V3(1.28, 0.052, 0.04), radius: 0.018, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
         }
         for sx: Float in [-1.1, 1.1] {
-            b.roundedBox(centre: V3(cx + sx, 0.23, -4.30), half: V3(0.04, 0.23, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
-            b.roundedBox(centre: V3(cx + sx, 0.52, -4.80), half: V3(0.04, 0.52, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
-            b.roundedBox(centre: V3(cx + sx, 0.40, -4.55), half: V3(0.035, 0.035, 0.27), radius: 0.015, segments: 2, aoFloor: false, color: iron)
-            b.roundedBox(centre: V3(cx + sx * 1.07, 0.76, -4.55), half: V3(0.05, 0.03, 0.28), radius: 0.02, segments: 2, aoFloor: false, color: iron)          // armrest
-            b.roundedBox(centre: V3(cx + sx * 1.07, 0.60, -4.30), half: V3(0.03, 0.17, 0.03), radius: 0.015, segments: 2, aoFloor: false, color: iron)
+            b.roundedBox(centre: V3(cx + sx, 0.23, zz(0.25)), half: V3(0.04, 0.23, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
+            b.roundedBox(centre: V3(cx + sx, 0.52, zz(-0.25)), half: V3(0.04, 0.52, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
+            b.roundedBox(centre: V3(cx + sx, 0.40, zz(0)), half: V3(0.035, 0.035, 0.27), radius: 0.015, segments: 2, aoFloor: false, color: iron)
+            b.roundedBox(centre: V3(cx + sx * 1.07, 0.76, zz(0)), half: V3(0.05, 0.03, 0.28), radius: 0.02, segments: 2, aoFloor: false, color: iron)          // armrest
+            b.roundedBox(centre: V3(cx + sx * 1.07, 0.60, zz(0.25)), half: V3(0.03, 0.17, 0.03), radius: 0.015, segments: 2, aoFloor: false, color: iron)
         }
     }
 

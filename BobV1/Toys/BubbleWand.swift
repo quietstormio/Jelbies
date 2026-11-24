@@ -273,7 +273,7 @@ final class BubbleWand: PlayToy {
         if s > 0.05 {
             let rate = BubbleTuning.spawnPerSecond.lowerBound + (BubbleTuning.spawnPerSecond.upperBound - BubbleTuning.spawnPerSecond.lowerBound) * s
             spawnAcc += rate * dt
-            while spawnAcc >= 1 { spawnAcc -= 1; field.spawn(strength: s, at: mouth) }
+            while spawnAcc >= 1 { spawnAcc -= 1; field.spawn(strength: s, at: mouth, spread: ParkOpen.old ? 1 : (ParkWand.on ? ParkOpen.wandSpread : 1)) }
             if clock - bloopAt > 0.45 { bloopAt = clock; AudioHub.shared.play(.bubbleBloop, x: 0, volume: 0.6 + 0.4 * s) }
         } else { spawnAcc = 0 }
         // 3. they float; the ones that run out of time pop alone (softer, no sparkle credit)
@@ -615,6 +615,7 @@ final class BubbleWand: PlayToy {
             guard b.pos.y < BubbleTuning.chaseMaxY, b.pos.y > BubbleTuning.hopMinY - 0.25, b.age > 0.6, inArea(fp), simd_distance(clampToArea(rest), rest) < 0.25 else { continue }
             let d = simd_distance(fp, p)
             guard d < 4.5, simd_distance(j.brain.fixed(fp), fp) < 0.45 else { continue }
+            if ParkWand.on, js.contains(where: { $0.id != j.id && simd_distance($0.brain.position, fp) < ParkOpen.standApart }) { continue }          // (park-open-r1: nobody goes where another body stands within 2.0 of the spot)
             let tArrive = d / BubbleTuning.walkSpeed + 1.0
             guard tArrive <= b.life - b.age + 2.0 else { continue }          // (a claimed bubble waits: up to 3 s more life, 2 of them counted)
             let predY = b.pos.y < 1.0 ? min(1.5, b.pos.y + 0.3 * tArrive) : b.pos.y
@@ -677,13 +678,13 @@ final class BubbleWand: PlayToy {
         let land = size.width > size.height
         let xl: CGFloat = land ? 0.24 : 0.17, xr = 1 - xl
         let yTop: CGFloat = 0.40, yBot: CGFloat = land ? 0.68 : 0.70
-        guard let back = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yTop), size: size),
+        guard let back = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * (ParkWand.on ? ParkWand.topFraction : yTop)), size: size),          // (park-open-r1: in the park the area reaches further back, Toys/ParkWandSpots.swift)
               let front = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yBot), size: size),
               let l = GameCamera.floorPoint(screen: CGPoint(x: size.width * xl, y: size.height * yBot), size: size),
               let r = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) else { return nil }
         var hx = max(min(abs(l.x), abs(r.x)) - 0.8, 1.2)          // (a body's half width inside the near edge)
         var zHi = min(front.y, GameCamera.roamMaxZ - 0.1)
-        var zLo = max(back.y, GameCamera.parkRoamMaxZ != nil ? GameCamera.roamRect.min.y : RoomLayout.minZ + 1.6)          // (the park: its roam rect's back edge)
+        var zLo = max(back.y, GameCamera.parkRoamMaxZ != nil ? GameCamera.roamRect.min.y + (ParkWand.on ? ParkWand.backMargin : 0) : RoomLayout.minZ + 1.6)          // (the park: its roam rect's back edge)
         if GameCamera.playFrame, !PlayTuning.old, let rf = GameCamera.roamFloor {          // play-frame-r1: never outside the floor the play camera shows (whole bodies in frame)
             zLo = max(zLo, rf.minZ); zHi = min(zHi, rf.maxZ)
             hx = min(hx, max(min(rf.halfWidth(at: zLo), rf.halfWidth(at: zHi)), 0.6))
@@ -704,6 +705,7 @@ final class BubbleWand: PlayToy {
         if zHi - zLo < 1.6 { zLo = zHi - 1.6 }
         zHi = max(zHi, zLo + 0.5)
         areaCache = (size, SIMD2(-hx, zLo), SIMD2(hx, zHi))
+        if GameCamera.parkRoamMaxZ != nil, Self.logOn { NSLog("[wandarea] park=%d x %.2f..%.2f z %.2f..%.2f", ParkWand.on ? 1 : 0, -hx, hx, zLo, zHi) }
         return (SIMD2(-hx, zLo), SIMD2(hx, zHi))
     }
     private func inArea(_ p: SIMD2<Float>) -> Bool {
@@ -716,7 +718,16 @@ final class BubbleWand: PlayToy {
     }
 
     /// His spots: one each, abreast across the area (the middle one of three a step further back so nobody hides anybody), left to right by where they stand now.
-    private func assignSlots(_ awake: [BubbleJelly], _ a: (lo: SIMD2<Float>, hi: SIMD2<Float>)) {
+    private func assignSlots(_ awake: [BubbleJelly], _ a: (lo: SIMD2<Float>, hi: SIMD2<Float>), others: [SIMD2<Float>] = []) {
+        if ParkWand.on {          // (park-open-r1: scattered over the open floor, never one row; the home room's row below is untouched)
+            let pts = ParkWand.scatter(count: awake.count, lo: a.lo, hi: a.hi, others: others)
+            if pts.count == awake.count {
+                slots = [:]
+                for (j, p) in zip(awake.sorted(by: { $0.brain.position.x < $1.brain.position.x }), pts.sorted(by: { $0.x < $1.x })) { slots[j.id] = p }
+                if Self.logOn { NSLog("[wandslots] %@", awake.map { "\($0.id)=(\(String(format: "%.2f,%.2f", slots[$0.id]?.x ?? 0, slots[$0.id]?.y ?? 0)))" }.joined(separator: " ")) }
+                return
+            }
+        }
         let hx = a.hi.x, span = a.hi.y - a.lo.y
         let front = a.lo.y + 0.72 * span, back = a.lo.y + 0.38 * span, mid = a.lo.y + 0.58 * span
         let spots: [SIMD2<Float>]
@@ -738,7 +749,7 @@ final class BubbleWand: PlayToy {
         let awake = js.filter { !$0.free && !$0.brain.isSleeping && !$0.brain.isNapping && $0.brain.enabled }
         let key = awake.map(\.id).sorted()
         let gather = key != slotKey || slotSize != viewSize
-        if gather { slotKey = key; slotSize = viewSize; assignSlots(awake, a) }
+        if gather { slotKey = key; slotSize = viewSize; assignSlots(awake, a, others: ParkWand.on ? js.filter { $0.free }.map { $0.brain.position } : []) }
         let m = mouth, look = SIMD2(m.x, m.z)
         for j in awake {
             guard let slot = slots[j.id] else { continue }
