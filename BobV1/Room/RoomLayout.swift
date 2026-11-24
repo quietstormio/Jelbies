@@ -109,6 +109,15 @@ enum RoomLayout {
         return d
     }
 
+    /// no-clip-r1: how much further from a piece a walking body's root is kept than its footprint: the walking arms swing 10-25 cm past the footprint (measured with ClipProbe: arms inside the sofa, the table, the shelf,
+    /// the slide's walls), so the footprint's rule alone let them through the prop. Applied to the decor pieces and the room's fixed furniture, not to walls.
+    nonisolated(unsafe) static var armPad: Float = {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "ArmPad") != nil { return UserDefaults.standard.float(forKey: "ArmPad") }
+        #endif
+        return 0.14
+    }()
+
     /// Pushes a sphere (centre, radius) out of walls, sofa and props; returns the corrected centre (y untouched).
     static func resolve(position p0: SIMD3<Float>, radius: Float, lowPropScale: Float = 1, ignoreDecor: Int? = nil) -> SIMD3<Float> {
         var p = p0
@@ -123,18 +132,18 @@ enum RoomLayout {
                 guard p.y - radius < box.centre.y + box.halfExtents.y else { continue }
                 let xz = SIMD2(p.x, p.z)
                 let sd = boxDistance(xz, box)
-                if sd < radius {
+                if sd < radius + armPad {
                     let e: Float = 1e-3
                     var g = SIMD2(boxDistance(xz + SIMD2(e, 0), box) - boxDistance(xz - SIMD2(e, 0), box),
                                   boxDistance(xz + SIMD2(0, e), box) - boxDistance(xz - SIMD2(0, e), box))
                     g = simd_length(g) > 1e-6 ? simd_normalize(g) : SIMD2(0, 1)
-                    let push = g * (radius - sd)
+                    let push = g * (radius + armPad - sd)
                     p.x += push.x; p.z += push.y
                 }
             }
             for c in cylinders where p.y - radius < floorY + c.height {
                 let d = SIMD2(p.x, p.z) - c.centre
-                let len = simd_length(d), need = c.radius + radius
+                let len = simd_length(d), need = c.radius + radius + armPad
                 if len < need {
                     let dir = len > 1e-6 ? d / len : SIMD2(0, 1)
                     p.x = c.centre.x + dir.x * need; p.z = c.centre.y + dir.y * need
@@ -142,7 +151,7 @@ enum RoomLayout {
             }
             for b in dynamicBoxes { pushOut(&p, radius: radius * lowPropScale, box: b) }
             for b in tableBoxes.values { pushOut(&p, radius: radius * lowPropScale, box: b) }
-            for f in decorFeet where f.spec.solid && f.uid != ignoreDecor { pushOut(&p, radius: radius * f.spec.reach, box: f.box) }
+            for f in decorFeet where f.spec.solid && f.uid != ignoreDecor { pushOut(&p, radius: radius * f.spec.reach + armPad, box: f.box) }
             if !ballSpheres.isEmpty { pushOutOfBalls(&p, radius: radius, ignore: ignoreDecor) }
         }
         return p

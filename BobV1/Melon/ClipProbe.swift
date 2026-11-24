@@ -206,7 +206,7 @@ enum ClipProbe {
     // MARK: the run
 
     struct Key: Hashable { var id: Int; var prop: String; var part: UInt8 }
-    struct Ep { var t0: Double; var maxD: Float; var frames: Int; var clear: Int; var doing: String; var at: SIMD2<Float>; var stage: Int }
+    struct Ep { var t0: Double; var maxD: Float; var frames: Int; var clear: Int; var doing: String; var at: SIMD2<Float>; var stage: Int; var pt = V3.zero, cen = V3.zero }
     nonisolated(unsafe) static var eps: [Key: Ep] = [:]
     struct Agg { var episodes = 0, frames = 0, over1 = 0, maxD: Float = 0 }
     nonisolated(unsafe) static var agg: [String: Agg] = [:]
@@ -240,8 +240,8 @@ enum ClipProbe {
             for pr in plist {
                 if hi.x < pr.lo.x || lo.x > pr.hi.x || hi.y < pr.lo.y || lo.y > pr.hi.y || hi.z < pr.lo.z || lo.z > pr.hi.z { continue }
                 if pr.uid >= 0, pr.name != "slide", let b = brain, DecorField.shared.occupant[pr.uid] == b.steerID { continue }          // (he is using it: sitting on it, in it, at it)
-                var m: [Float] = [0, 0, 0]
-                for s in sm { let d = pr.depth(s.p); if d > m[Int(s.part)] { m[Int(s.part)] = d } }
+                var m: [Float] = [0, 0, 0], at = [V3](repeating: .zero, count: 3)
+                for s in sm { let d = pr.depth(s.p); if d > m[Int(s.part)] { m[Int(s.part)] = d; at[Int(s.part)] = s.p } }
                 // the pass-through: how much of an arm's axis (root to tip) lies inside the prop, and of a line from the egg's centre to each egg vertex (a thin wall reads only half its thickness by vertex depth)
                 for (a0, a1) in body.axes {
                     var inside: Float = 0
@@ -264,7 +264,7 @@ enum ClipProbe {
                     let stg = brain.map { $0.idleState.kind == .decorSlide ? $0.idleState.slideStage : -9 } ?? -9
                     var e = eps[k] ?? Ep(t0: t, maxD: 0, frames: 0, clear: 0, doing: doing(brain), at: brain?.position ?? .zero, stage: stg)
                     if eps[k] == nil { agg[pr.name + "/" + partName[part], default: Agg()].episodes += 1 }
-                    if m[part] > e.maxD { e.maxD = m[part]; e.stage = stg }
+                    if m[part] > e.maxD { e.maxD = m[part]; e.stage = stg; e.pt = at[part]; e.cen = body.centre }
                     e.frames += 1; e.clear = 0
                     eps[k] = e
                     var a = agg[pr.name + "/" + partName[part]] ?? Agg()
@@ -277,7 +277,7 @@ enum ClipProbe {
             e.clear += 1
             if e.clear >= 5 {
                 eps[k] = nil
-                NSLog("[clip] ep t=%.1f body=%d prop=%@ part=%@ maxDepth=%.1fcm frames=%d slideStage@max=%d doing [%@] at (%.2f,%.2f)", e.t0, k.id, k.prop, partName[Int(k.part)], e.maxD * 100, e.frames, e.stage, e.doing, e.at.x, e.at.y)
+                NSLog("[clip] ep t=%.1f body=%d prop=%@ part=%@ maxDepth=%.1fcm frames=%d slideStage@max=%d deepestPt=(%.2f,%.2f,%.2f) bodyCentre=(%.2f,%.2f,%.2f) doing [%@] at (%.2f,%.2f)", e.t0, k.id, k.prop, partName[Int(k.part)], e.maxD * 100, e.frames, e.stage, e.pt.x, e.pt.y, e.pt.z, e.cen.x, e.cen.y, e.cen.z, e.doing, e.at.x, e.at.y)
             } else { eps[k] = e }
         }
         // two drawn skins sunk into each other while the Spa door is open
