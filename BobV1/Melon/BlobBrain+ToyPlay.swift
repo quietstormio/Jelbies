@@ -327,7 +327,7 @@ extension BlobBrain {
             ranked.sort { simd_distance($0.position, c) < simd_distance($1.position, c) }
             let taken = toyPeers.filter { $0.toy.audUID == uid }.count
             guard let i = ranked.firstIndex(where: { $0 === self }), i + taken < Self.audienceLimit(foot.kind) else { continue }
-            guard rand() < Self.audienceChance(foot.kind) * (idleMood == .grumpy ? ToyTuning.grumpyShare : 1) else { continue }
+            guard rand() < Self.audienceChance(foot.kind) * (idleMood == .grumpy ? (ToyTuning.grumpyPlay ? 0.5 : 0) : 1) else { continue }
             // he stays where he is until the player has ARRIVED at the toy (stage 3): then the spot is chosen against where everybody really stands and he walks there (stage 1): two walkers never cross on the way in
             toy.joined += 1; toy.audUID = uid; toy.audBy = show.by; toy.audStage = 3; toy.audUntil = clock + 14
             toy.audNext = clock; toy.audReacted = false; toy.audTurn = false
