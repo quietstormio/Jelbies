@@ -17,7 +17,7 @@ extension BlobBrain {
                                             SIMD2(0.88, 0.264), SIMD2(1.01, 0.214), SIMD2(1.14, 0.174), SIMD2(1.27, 0.145), SIMD2(1.4, 0.13), SIMD2(1.75, 0.0)]
     /// The steps: (z, y) he hops to, then the platform.
     static let slideSteps: [SIMD2<Float>] = slideSteps0.map { $0 * DecorKind.slide.scale }
-    private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.28, 0.22), SIMD2(-1.04, 0.44), SIMD2(-0.4, 0.66)]
+    private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.44, 0.22), SIMD2(-1.2, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the first two hops stand 0.2 further back (was -1.28, -1.04): his belly is 1.1 wide, the steps 0.3 deep, so on the exported spots it sank into the next riser)
     static var slideLength: Float {
         var L: Float = 0
         for i in 1..<slidePath.count { L += simd_length(slidePath[i] - slidePath[i - 1]) }
@@ -86,6 +86,13 @@ extension BlobBrain {
         bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y, apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
     }
 
+    /// no-clip-r1: while he sits, rides and gets up the arms go up in the cheer's own arm pose (`armDirEl` 0.95: the stretch / jacks / win cheer): at his sides they lay in the chute's walls (up to 13 cm).
+    private func slideArmsUp(_ k: Float, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        armWalkWant = 1
+        armDirW = smooth01(k); armDirEl = [0.95, 0.95]; armDirSa = [0.10, 0.10]; armDirOut = 0.07
+        driveArms(sim, skinner, dt)
+    }
+
     /// Stage 0 (turn), 4 (sit down on the platform), 5 (ride), 6 (get up with a squash).
     func runSlide(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let f = DecorField.shared.foot(idleState.decorUID) else { idleFinish(skinner); return }
@@ -118,6 +125,7 @@ extension BlobBrain {
             idleState.k = k
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             sitPose(skinner, k, slump: false)
+            slideArmsUp(k, sim, skinner, dt)
             skinner.setEyeOpenness(1 - 0.1 * k)
         case 5:
             // the ride: 1.6 -> 3 u/s (ease in); he is carried along the path with his feet (they stay under him), the body tilting to the slope
@@ -133,6 +141,7 @@ extension BlobBrain {
             applyBagFloor(sim, skinner)
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             sitPose(skinner, 1, slump: false)
+            slideArmsUp(1, sim, skinner, dt)
             pitch += at.slope * 0.9
             jellyKick = max(jellyKick, 0.5)
             skinner.setEyeOpenness(0.8)
@@ -151,9 +160,11 @@ extension BlobBrain {
             idleState.k = k
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             sitPose(skinner, k, slump: false)
+            slideArmsUp(k, sim, skinner, dt)
             squash *= 1 - 0.14 * sinf(.pi * min(1, phT / 0.4)) * (phT < 0.4 ? 1 : 0)
             if phT >= 1.3 && !feet.active && idleState.steps >= 2 {
                 idleState.k = 0; sitPose(skinner, 0, slump: false)
+                armDirW = 0; armDirOut = 0; armWalkWant = 0
                 currentPose(sim)
                 // the chute ends only ~0.4 beyond the footprint's edge, less than a body: he walks on to the nearest clear floor (the normal gait) instead of standing half inside
                 // the slide for `decorExitCheck` to drag out. Handed over as its own walk-out is (soft to the slide, its timers charged), so it does not cut this walk short.
