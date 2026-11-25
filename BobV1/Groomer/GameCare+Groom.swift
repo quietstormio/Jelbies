@@ -281,6 +281,7 @@ extension GameCare {
     private func groomEnd() {
         AudioHub.shared.stopClip(GroomTuning.clipAmbience, fade: 0.2)
         let book = groomBook
+        let picked = groom.picked
         for a in book.actors {
             guard let b = a.brain, book.autonomy[a.id] != nil else { continue }
             if b.isSleeping { b.autonomy = book.autonomy[a.id] ?? true; b.idleBlocked = false; continue }          // (a sleeper who stayed home, or one who dozed off during the trip: not woken)
@@ -288,6 +289,9 @@ extension GameCare {
             b.autonomy = book.autonomy[a.id] ?? true
             b.idleBlocked = false
             b.restTimer = 1.5
+            // door round 3: after the visit each one walks on to the spot he left from, so the street's last picture is three Jelmiko walking off, not three standing about waiting for autonomy's next roll
+            // (the log of the end state: autonomy on, arms 0, no walls, rest 1.5: only the dice decided who walked within 4 s)
+            if picked.contains(a.id), let h = book.homes[a.id], simd_length(GameCare.floorPos(b, a.sim) - h) > 0.8 { b.requestNow(.goTo(b.fixed(h))) }
         }
         book.autonomy = [:]; book.homes = [:]; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.out = []; book.laneDone = []; book.walkStarted = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
     }
