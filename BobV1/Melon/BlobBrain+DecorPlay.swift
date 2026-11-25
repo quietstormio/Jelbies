@@ -27,16 +27,14 @@ extension BlobBrain {
         #endif
     }()
     static let slideRunOut: Float = 0
-    nonisolated(unsafe) static var slideLeanMul: Float = { #if targetEnvironment(simulator)
-        UserDefaults.standard.object(forKey: "SlideLeanMul") != nil ? UserDefaults.standard.float(forKey: "SlideLeanMul") : 2.5
-        #else
-        2.5
-        #endif }()
-    nonisolated(unsafe) static var slideLandLean: Float = { #if targetEnvironment(simulator)
-        UserDefaults.standard.object(forKey: "SlideLandLean") != nil ? UserDefaults.standard.float(forKey: "SlideLandLean") : 0.3
-        #else
-        0.3
-        #endif }()
+    nonisolated(unsafe) static var slideLeanMul: Float = simFloat("SlideLeanMul", 2.5)
+    nonisolated(unsafe) static var slideLandLean: Float = simFloat("SlideLandLean", 0.3)
+    static func simFloat(_ k: String, _ d: Float) -> Float {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: k) != nil { return UserDefaults.standard.float(forKey: k) }
+        #endif
+        return d
+    }
     /// Off: any 0.2 shift of the landing (the ride's coast, or this skid while squashed) turned ParkSlideRoundTests stand-still / drops red (bisected, round 3). `-SlideSkid 0.2` brings it back for a look.
     nonisolated(unsafe) static var slideSkid: Float = {
         #if targetEnvironment(simulator)
