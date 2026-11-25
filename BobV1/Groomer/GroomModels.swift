@@ -46,7 +46,7 @@ nonisolated enum GroomTuning {
     /// The dryer (steam puffs, "Hair dryer humming") runs from here.
     static let dryerAt: Float = 4.2
     /// How long they hop and cheer at the door, then the fade home. `twirlAt` is the second beat of the cheer.
-    static let cheerSeconds: Float = 10.5, cheerStagger: Float = 0.25, twirlAt: Float = 1.7
+    static let cheerSeconds: Float = 12.5, cheerStagger: Float = 0.25, twirlAt: Float = 1.7
     /// Seconds between one Jelbie and the next stepping out of the door.
     static let exitSpacing: Float = 0.75, exitPatience: Float = 2.0
     /// Where the Jelbies wait (hidden) while inside the shop.
