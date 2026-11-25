@@ -13,6 +13,10 @@ import Foundation
 import QuartzCore
 import simd
 
+#if targetEnvironment(simulator)
+nonisolated(unsafe) private var laneLogN = 0
+#endif
+
 extension GameCare {
     func wireGroom() {
         groom.onSwap = { [weak self] in self?.groomSwap($0) ?? false }
@@ -106,8 +110,8 @@ extension GameCare {
         let mine = actors.filter { picked.contains($0.id) }
         // the door opens, then they come out ONE AT A TIME (spaced GroomTuning.exitSpacing, and the next only once the last is a body-gap clear of the door),
         // each running to its own spot in the line-up, so the paths fan out and never overlap
-        let openAt = GroomTuning.doorOpen          // (no-clip-r1: the leaf is fully open before the first steps out; at 60% it still swept through the spot he stepped onto)
-        if RoomLayout.dynamicBoxes.isEmpty { RoomLayout.dynamicBoxes = [GroomScenery.doorLeafBox] }
+        let openAt = GroomTuning.doorOpen + GroomTuning.doorSettle          // (door round: wide open AND still for a beat before the first walks into the doorway) // (no-clip-r1: the leaf is fully open before the first steps out; at 60% it still swept through the spot he stepped onto)
+        if RoomLayout.dynamicBoxes.isEmpty { RoomLayout.dynamicBoxes = [GroomScenery.doorLeafBox] + GroomScenery.laneWalls }
         if groom.cheerT >= openAt, book.out.count < mine.count {
             let k = book.out.count
             let a = mine[k]
@@ -116,26 +120,51 @@ extension GameCare {
                 let away = simd_length(GameCare.floorPos(pb, mine[k - 1].sim) - GroomScenery.doorStep)
                 if let t0 = book.outAt[mine[k - 1].id] {
                     let waited = groom.cheerT - t0
-                    if waited >= GroomTuning.exitPatience * 3 { return true }          // (never wait forever on a stalled one)
-                    if waited >= GroomTuning.exitPatience, away >= 1.6 { return true }          // (a slow one: the next only once two bodies fit side by side)
+                    if waited >= GroomTuning.exitPatience * 5 { return true }          // (never wait forever on a stalled one)
+                    if waited >= GroomTuning.exitPatience, away >= 2.2 { return true }          // (a slow one: the next only once two bodies fit side by side)
                 }
-                return away >= 2.0          // (no-clip-r1: never two in the doorway; 2.0 so the next one's first steps do not cross the last one's route to the line-up)
+                if !book.laneDone.contains(mine[k - 1].id) { return false }
+                if simd_length(GameCare.floorPos(pb, mine[k - 1].sim) - GroomScenery.laneOut) < 1.9 { return false }          // (the lane's end must be free: with the last one standing near it the walker detours round him, out sideways, into the frame / the planter)          // (door round: the next one starts only when the last has walked clear of the doorway lane: with him still in it the peer steering swerved the new one sideways, into the frame / the planter)
+                return away >= 2.6          // (no-clip-r1: never two in the doorway; 2.0 so the next one's first steps do not cross the last one's route to the line-up)
             }()
             if let b = a.brain, groom.cheerT >= openAt + Float(k) * GroomTuning.exitSpacing, prevClear {
                 book.out.insert(a.id); book.outAt[a.id] = groom.cheerT
-                rehome(a, at: b.fixed(GroomScenery.doorStep))
+                rehome(a, at: b.fixed(GroomScenery.insideSpot))
+                b.route = []          // (a stale waypoint of his last walk (the hidden wait at x 3.5) sent the third one out sideways from the first step)          // (door round: he starts INSIDE the shop, hidden by the wall, and walks out through the open doorway)
                 b.autonomy = false; b.idleBlocked = true
                 b.startTurn(to: 0, sim: a.sim)
                 b.face(.excited, hold: 3)
-                b.postEvent(.joyJump)
-                touchPlay?.spawnHeart(now: CACurrentMediaTime())
-                let spot = GroomScenery.lineUp(index: k, of: mine.count)
-                b.requestNow(.goTo(b.fixed(spot)))
                 if k == 0 { AudioHub.shared.playClip(GroomTuning.clipHarp, volume: 0.6) }          // one soft harp flourish when they first walk out (no crowd "yay")
             }
         }
         for (k, a) in mine.enumerated() {
             guard let b = a.brain, let outAt = book.outAt[a.id] else { continue }
+            #if targetEnvironment(simulator)
+            if ClipProbe.on, !book.laneDone.contains(a.id), k >= 1 {
+                laneLogN += 1
+                if laneLogN % 6 == 0 {
+                    let others = mine.filter { $0.id != a.id }.compactMap { o -> String? in o.brain.map { String(format: "%d@(%.2f,%.2f)", o.id, GameCare.floorPos($0, o.sim).x, GameCare.floorPos($0, o.sim).y) } }
+                    NSLog("[lane] id=%d t=%.2f root=(%.2f,%.2f) floor=(%.2f,%.2f) act=%@ others %@", a.id, groom.cheerT - outAt, b.px, b.pz, GameCare.floorPos(b, a.sim).x, GameCare.floorPos(b, a.sim).y, "\(b.activity)", others.joined(separator: " "))
+                }
+            }
+            #endif
+            // the doorway: arms forward while he is in or near the frame (the opening is 1.40, his belly 1.17, the arms stick out another 0.4); on the pavement he is sent on to his spot
+            let fy = GameCare.floorPos(b, a.sim).y, zf = GroomScenery.frontZ
+            if !book.walkStarted.contains(a.id), b.scriptIsNone || groom.cheerT - outAt > 1.6 {
+                book.walkStarted.insert(a.id)
+                b.requestNow(.goTo(b.fixed(GroomScenery.laneOut)))          // (first the doorway's centre line, then his own street spot: only once he faces the street, so the curved walk does not arc out sideways from his old heading)
+            }
+            let inDoor = fy > zf - 1.0 && fy < zf + 2.5 && !book.laneDone.contains(a.id)
+            if inDoor, fy < zf + 0.7 {          // (door round: a lane magnet: the doorway is 1.56 wide for a 1.17 belly, so he is drawn onto the centre line while he is in and just before the frame; the peer steering sometimes swerved the third one 0.5 sideways into the frame / the planter)
+                let dx = (GroomScenery.doorX - b.px) * min(1, 8 * dt)
+                b.px += dx; b.feet.pos[0].x += dx; b.feet.pos[1].x += dx
+            }
+            if inDoor { b.armDirW = 1; b.armDirEl = [0.35, 0.35]; b.armDirSa = [1.25, 1.25]; b.armDirOut = 0 }
+            else if b.armDirW > 0, book.arrivedAt[a.id] == nil { b.armDirW = 0; b.armDirOut = 0 }
+            if !book.laneDone.contains(a.id), fy > zf + 2.5 || groom.cheerT - outAt > 6 {
+                book.laneDone.insert(a.id)          // (no joy jump here: it held him standing in front of the door for a second, with the next one's lane goal right beside him)
+                b.requestNow(.goTo(b.fixed(GroomScenery.lineUp(index: k, of: mine.count))))
+            }
             // the cheer starts when he has ARRIVED at his spot (a cheer's abort must not stop the walk-out half way and leave him in the next one's way)
             if book.arrivedAt[a.id] == nil {
                 let spot = b.fixed(GroomScenery.lineUp(index: k, of: mine.count))
@@ -172,7 +201,7 @@ extension GameCare {
         let total = tier.total(count: ids.count)
         guard !ids.isEmpty, bath.wallet.spend(total) else { return false }
         let book = groomBook
-        book.charged = total; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
+        book.charged = total; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.laneDone = []; book.walkStarted = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         AudioHub.shared.playClip(GroomTuning.clipBell)
         CaptionCenter.shared.post("Shop bell")
         AudioHub.shared.playClip(GroomTuning.clipAmbience, volume: 0.9)
@@ -202,7 +231,7 @@ extension GameCare {
         #endif
         for a in book.actors where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }          // (the room's small arena would pin the door step at z = -2.6: he could never leave the door)
         // everybody is inside the shop (not drawn): wait off to the right, so the room's spots do not become bodies in the street that block the door's walk-out (the peer steering sees them)
-        for (i, a) in book.actors.enumerated() { if let b = a.brain, !book.stayedAsleep.contains(a.id) { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.doorStep.y - 0.1 + 1.4 * Float(i % 4)))) } }
+        for (i, a) in book.actors.enumerated() { if let b = a.brain, !book.stayedAsleep.contains(a.id) { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.laneOut.y - 0.1 + 1.4 * Float(i % 4)))) } }
         syncDecor()
         if select.phase != .none { select.cancel() }
         return true
@@ -210,7 +239,7 @@ extension GameCare {
 
     private func groomToHome() {
         let book = groomBook
-        book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
+        book.out = []; book.laneDone = []; book.walkStarted = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         RoomLayout.dynamicBoxes = []          // (the door leaf's)
         RoomLayout.apply(RoomCatalog.def(store.currentRoom))
         GameCamera.endGroom(count: max(jellies.count, 1))
@@ -252,6 +281,7 @@ extension GameCare {
     private func groomEnd() {
         AudioHub.shared.stopClip(GroomTuning.clipAmbience, fade: 0.2)
         let book = groomBook
+        let picked = groom.picked
         for a in book.actors {
             guard let b = a.brain, book.autonomy[a.id] != nil else { continue }
             if b.isSleeping { b.autonomy = book.autonomy[a.id] ?? true; b.idleBlocked = false; continue }          // (a sleeper who stayed home, or one who dozed off during the trip: not woken)
@@ -259,8 +289,11 @@ extension GameCare {
             b.autonomy = book.autonomy[a.id] ?? true
             b.idleBlocked = false
             b.restTimer = 1.5
+            // door round 3: after the visit each one walks on to the spot he left from, so the street's last picture is three Jelmiko walking off, not three standing about waiting for autonomy's next roll
+            // (the log of the end state: autonomy on, arms 0, no walls, rest 1.5: only the dice decided who walked within 4 s)
+            if picked.contains(a.id), let h = book.homes[a.id], simd_length(GameCare.floorPos(b, a.sim) - h) > 0.8 { b.requestNow(.goTo(b.fixed(h))) }
         }
-        book.autonomy = [:]; book.homes = [:]; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
+        book.autonomy = [:]; book.homes = [:]; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.out = []; book.laneDone = []; book.walkStarted = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
     }
 
     // MARK: the street's animated bits

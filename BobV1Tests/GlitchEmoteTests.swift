@@ -17,7 +17,8 @@ final class GlitchEmoteTests: XCTestCase {
 
     /// Runs `kind` on a fresh rig for `seconds` (plus 1.5 s after it ends) and counts the pops over `bar` cm per step.
     func pops(_ kind: IdleKind, seconds: Float = 8, bar: Float = 3, dumpWindow: ClosedRange<Float> = 99...99, label: String? = nil,
-              start: ((MotionRig) -> Void)? = nil, isOn: ((MotionRig) -> Bool)? = nil, each: ((MotionRig, Float) -> Void)? = nil, dumpEnd: Bool = false) -> Pops {
+              start: ((MotionRig) -> Void)? = nil, isOn: ((MotionRig) -> Bool)? = nil, each: ((MotionRig, Float) -> Void)? = nil, dumpEnd: Bool = false,
+              onPop: (((part: String, cm: Float, hop: Bool), Float) -> Void)? = nil) -> Pops {
         let r = MotionRig(game: true)
         var core = GlitchCore(); core.bars.poseCm = bar
         var out = Pops()
@@ -58,6 +59,7 @@ final class GlitchEmoteTests: XCTestCase {
                 out.byPart[part, default: 0] += 1
                 out.max[part] = Swift.max(out.max[part] ?? 0, e.perStep)
                 out.events.append((part, e.perStep, r.brain.gait.isBusy))
+                onPop?((part, e.perStep, r.brain.gait.isBusy), Float(i) / 60)
                 if dumpEnd, e.perStep >= 4, let vi = Int32(e.detail.components(separatedBy: "vi=").last ?? "") {
                     let sk = r.skinner, fs = r.brain.footSkin
                     let member = "retract=\(sk.retractVertices.contains(vi)) armRetract=\(sk.armRetractVertices.contains(vi)) override=\(sk.overrideVertices.contains(vi)) extra=\(sk.extraVertices.contains(vi)) footSkin=\(fs.verts.indices.map { fs.verts[$0].contains(vi) }) skinVerts=\(sk.skinVerts.contains(vi))"
@@ -157,6 +159,140 @@ final class GlitchEmoteTests: XCTestCase {
         MotionLog.write("GLITCH nap: pops >= 5 cm snap \(off.pops.count) (max \(off.pops.max() ?? 0)), eased \(on.pops.count) (max \(on.pops.max() ?? 0)); largest anchor step snap \(off.step), eased \(on.step)")
         XCTAssertLessThan(on.step, 0.05, "no anchor step of 5 cm or more")
         XCTAssertLessThanOrEqual(on.pops.count, off.pops.count)
+    }
+
+    /// glitch-hunt-r4: a hop's touchdown: the fit gate eased (BlobBrain.fitGateEase) and the rigid morph slower (BlobBrain.beanMorphSlow). Foot pops while hopping, jacks + bounce + hopscotch + joy.
+    func testHopTouchdownFeet() {
+        let sg = BlobBrain.fitGateEase, sm = BlobBrain.beanMorphSlow
+        defer { BlobBrain.fitGateEase = sg; BlobBrain.beanMorphSlow = sm }
+        func run(_ g: Bool, _ m: Bool) -> [Float] {
+            BlobBrain.fitGateEase = g; BlobBrain.beanMorphSlow = m
+            var a: [Float] = []
+            for k in [IdleKind.jacks, .bounce, .hopscotch, .joy] { a += pops(k).events.filter { $0.hop && $0.part == "foot" }.map(\.cm) }
+            return a
+        }
+        let off = run(false, false), gate = run(true, false), morph = run(false, true), both = run(true, true)
+        func d(_ a: [Float]) -> String { "\(a.count) (>= 6 cm \(a.filter { $0 >= 6 }.count), max \(String(format: "%.1f", a.max() ?? 0)))" }
+        MotionLog.write("GLITCH touchdown foot pops: off \(d(off)), gate \(d(gate)), morph \(d(morph)), both \(d(both))")
+        XCTAssertLessThan(both.filter { $0 >= 6 }.count, Swift.max(1, off.filter { $0 >= 6 }.count))
+    }
+
+    /// glitch-hunt-r5: the hop's first crouch takes the anchor / rotation over from the standing pose (GaitDriver.hopStartEase): no anchor step at a hop's start
+    /// (it stepped 4.4 cm in one step: the feet slid in the crouch). The hop-start ARM pop (8.6 cm) is a different cause and is only logged here.
+    func testHopStartAnchorLog() {
+        let saved = GaitDriver.hopStartEase
+        defer { GaitDriver.hopStartEase = saved }
+        func run(_ on: Bool) -> (step: Float, arms: [Float]) {
+            GaitDriver.hopStartEase = on
+            var step: Float = 0, arms: [Float] = []
+            for k in [IdleKind.jacks, .bounce, .joy, .hopscotch, .skipHop] {
+                var last: SIMD3<Float>? = nil
+                arms += pops(k, each: { r, _ in
+                    let a = r.sim.attractor.anchor
+                    if r.brain.gait.phase == .crouch, let l = last { step = Swift.max(step, simd_length(a - l)) }
+                    last = a
+                }).events.filter { $0.hop && $0.part == "arm" }.map(\.cm)
+            }
+            return (step, arms)
+        }
+        let off = run(false), on = run(true)
+        MotionLog.write("GLITCH hop start: largest crouch anchor step \(off.step * 100) -> \(on.step * 100) cm; arm pops \(off.arms.count) (max \(off.arms.max() ?? 0)) -> \(on.arms.count) (max \(on.arms.max() ?? 0))")
+        // (log only: the largest step over a whole crouch, 8.0 cm both ways, is not the first-crouch step this fix removes (4.4 -> 0.3 cm in GLITCH_ARM's dump);
+        //  the in-app jacks A/B is the measure: crouch foot slides 426 -> 5)
+        _ = (off, on)
+    }
+
+    /// glitch-hunt-r6: hop() no longer drops the attention pitch for one step before the crouch (GaitDriver.hopStartRotKeep): no hop-start arm pop.
+    func testHopStartArmPitch() {
+        let saved = GaitDriver.hopStartRotKeep
+        defer { GaitDriver.hopStartRotKeep = saved }
+        func run(_ on: Bool) -> [Float] {
+            GaitDriver.hopStartRotKeep = on
+            var a: [Float] = []
+            for k in [IdleKind.jacks, .bounce, .joy, .hopscotch, .skipHop] { a += pops(k).events.filter { $0.hop && $0.part == "arm" }.map(\.cm) }
+            return a
+        }
+        let off = run(false), on = run(true)
+        func d(_ a: [Float]) -> String { "\(a.count) (>= 6 cm \(a.filter { $0 >= 6 }.count), max \(String(format: "%.1f", a.max() ?? 0)))" }
+        MotionLog.write("GLITCH hop arm pops: pitch dropped \(d(off)), kept \(d(on))")
+        XCTAssertLessThan(on.max() ?? 0, 6, "no arm pop of 6 cm or more in a hop")
+    }
+
+    /// Log only (GLITCH_ARM2=1): the jacks' first crouch, per step: the attractor (arm root), the fitted body, the capsule target and the drawn vertex of the arm that pops.
+    func testDumpHopStartArm() throws {
+        guard ProcessInfo.processInfo.environment["GLITCH_ARM2"] == "1" else { throw XCTSkip("GLITCH_ARM2=1 runs it") }
+        var popped: [Int32] = []
+        // pass 1: find the popping vertex
+        _ = pops(.jacks, seconds: 1.2, onPop: { _, _ in })
+        let p1 = pops(.jacks, seconds: 1.2)
+        for l in p1.lines where l.contains(" arm ") { if let v = Int32(l.components(separatedBy: "vi=").last?.split(separator: " ").first ?? "") { popped.append(v) } }
+        let vi = popped.first ?? 17574
+        MotionLog.write("GLITCH arm2 vertex \(vi)")
+        _ = pops(.jacks, seconds: 1.2, each: { r, t in
+            guard t >= 0.48 && t <= 0.64 else { return }
+            r.render()
+            let a = r.sim.attractor, f = r.sim.bodyPose(iterations: 8), sk = r.skinner
+            func ang(_ q: simd_quatf) -> String { let e = q.act(SIMD3<Float>(0, 0, 1)), u = q.act(SIMD3<Float>(0, 1, 0)); return String(format: "yaw=%.2f pitch=%.2f roll=%.2f", atan2f(e.x, e.z) * 180 / .pi, asinf(-e.y) * 180 / .pi, atan2f(u.x, u.y) * 180 / .pi) }
+            let o = 6 * Int(vi), w = SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]), l = f.rotation.inverse.act(w - f.centroid)
+            var tgt = SIMD3<Float>(repeating: .nan), st = tgt
+            if sk.armFirst.count == 2 { for s in 0..<2 { let k = Int(vi) - sk.armFirst[s]; if k >= 0, k < sk.armPos[s].count { tgt = sk.armPos[s][k]; st = sk.armStart[s][k] } } }
+            MotionLog.write(String(format: "GLITCH arm2 t=%.3f gait=%@ k=%.0f att(%@ anchor=%.3f,%.3f,%.3f sq=%.3f) fit(%@ c=%.3f,%.3f,%.3f) drawn=(%.3f,%.3f,%.3f) local=(%.3f,%.3f,%.3f) tgt=(%.3f,%.3f,%.3f) start=(%.3f,%.3f,%.3f) blend=%.2f lift=%.2f dirW=%.2f drawnW=%.2f short=%.2f",
+                t, "\(r.brain.gait.phase)", a.strength, ang(a.rotation), a.anchor.x, a.anchor.y, a.anchor.z, a.squash, ang(f.rotation), f.centroid.x, f.centroid.y, f.centroid.z,
+                w.x, w.y, w.z, l.x, l.y, l.z, tgt.x, tgt.y, tgt.z, st.x, st.y, st.z, sk.armBlend, r.brain.armLiftNow, r.brain.armDirW, r.brain.armDirDrawn, r.brain.armShortW))
+        })
+    }
+
+    /// Log only (GLITCH_ARM=1): jumping jacks, every arm pop with the arm state of the 6 steps before and 3 after.
+    func testDumpJacksArm() throws {
+        guard ProcessInfo.processInfo.environment["GLITCH_ARM"] == "1" else { throw XCTSkip("GLITCH_ARM=1 runs the arm dump") }
+        var ring: [String] = [], tail = 0
+        let p = pops(.jacks, seconds: 6, label: "jacksarm", each: { r, t in
+            let b = r.brain, a = r.sim.attractor
+            let line = String(format: "GLITCH arm t=%.3f gait=%@ act=%@ hop=%d jackA=%.2f dirW=%.2f drawn=%.2f lift=%.2f liftV=%.2f armG=%.2f blend=%.2f short=%.2f walkWant=%.1f S=%.1f k=%.0f squash=%.3f anchorY=%.3f tip0=(%.3f,%.3f,%.3f)",
+                t, "\(b.gait.phase)", "\(b.activity)", b.idleState.hop, b.idleState.jackA, b.armDirW, b.armDirDrawn, b.armLiftNow, b.armLiftV, b.armG, r.skinner.armBlend, b.armShortW, b.armWalkWant, b.armLastS[0], a.strength, a.squash, a.anchor.y,
+                b.armLastGeom[0].b.x, b.armLastGeom[0].b.y, b.armLastGeom[0].b.z)
+            if tail > 0 { MotionLog.write(line); tail -= 1 } else { ring.append(line); if ring.count > 6 { ring.removeFirst() } }
+        }, onPop: { e, t in
+            guard e.part == "arm" else { return }
+            MotionLog.write(String(format: "GLITCH armpop t=%.3f %.1f cm hop=%d", t, e.cm, e.hop ? 1 : 0))
+            for l in ring { MotionLog.write(l) }; ring = []; tail = 3
+        })
+        MotionLog.write("GLITCH jacks arm pops: \(p.events.filter { $0.part == "arm" }.count)")
+    }
+
+    /// Log only (GLITCH_FOOT=1): one jumping-jacks run, every foot pop while hopping with the foot state of the 6 steps before and 3 after:
+    /// the brain's target (skinner.beanPos), the start shape (beanStart), the DRAWN piece (after the skin's join / weld / guard), morph, blend, clearance, the skin's pulls.
+    func testDumpJacksFoot() throws {
+        guard ProcessInfo.processInfo.environment["GLITCH_FOOT"] == "1" else { throw XCTSkip("GLITCH_FOOT=1 runs the foot dump") }
+        var ring: [String] = [], tail = 0
+        var lastW: [[SIMD3<Float>]] = [[], []], lastL: [[SIMD3<Float>]] = [[], []]
+        let p = pops(.jacks, seconds: 6, label: "jacksfoot", each: { r, t in
+            let b = r.brain, sk = r.skinner, pose = r.sim.bodyPose(iterations: 8), inv = pose.rotation.inverse
+            func loc(_ w: SIMD3<Float>) -> SIMD3<Float> { inv.act(w - pose.centroid) }
+            var line = String(format: "GLITCH foot t=%.3f gait=%@ k=%.0f squash=%.3f tuck=%.3f blend=%.2f fit=%d", t, "\(b.gait.phase)", r.sim.attractor.strength, r.sim.attractor.squash, b.gait.tuck, sk.beanBlend, b.beanFitUsed != nil ? 1 : 0)
+            r.render()
+            for s in 0..<2 where sk.beanFirst.count == 2 && sk.beanPos[s].count == FootBean.vertexCount {
+                let f = sk.beanFirst[s], n = FootBean.vertexCount
+                var dc = SIMD3<Float>.zero, dmin: Float = 9, tc = SIMD3<Float>.zero, tmin: Float = 9
+                for i in 0..<n { let o = 6 * (f + i); let w = SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]); dc += loc(w); dmin = min(dmin, w.y); tc += loc(sk.beanPos[s][i]); tmin = min(tmin, sk.beanPos[s][i].y) }
+                dc /= Float(n); tc /= Float(n)
+                // per-vertex step of the drawn piece: in the WORLD (what the eye sees of a foot on the floor) and in the body's frame (what the probe measures)
+                var w: [SIMD3<Float>] = [], l: [SIMD3<Float>] = []
+                for i in 0..<n { let o = 6 * (f + i); let v = SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]); w.append(v); l.append(loc(v)) }
+                var mw: Float = 0, ml: Float = 0
+                if lastW[s].count == n { for i in 0..<n { mw = max(mw, simd_distance(w[i], lastW[s][i])); ml = max(ml, simd_distance(l[i], lastL[s][i])) } }
+                lastW[s] = w; lastL[s] = l
+                line += String(format: " | %@ stepW=%.1f stepL=%.1f", s == 0 ? "L" : "R", mw * 100, ml * 100)
+                line += String(format: " | %@ morph=%.2f clr=%.3f tgt=(%.3f,%.3f,%.3f) drawn=(%.3f,%.3f,%.3f) d-t=%.1fcm leash=%.1f weld=%.1f pre=%.2f",
+                               s == 0 ? "L" : "R", b.beanMorphLast[s], tmin - r.sim.floorY, tc.x, tc.y, tc.z, dc.x, dc.y, dc.z, simd_distance(dc, tc) * 100, sk.joinLeash[s] * 100, sk.weldPull[s] * 100, sk.leashPre[s])
+            }
+            if tail > 0 { MotionLog.write(line); tail -= 1 } else { ring.append(line); if ring.count > 6 { ring.removeFirst() } }
+        }, onPop: { e, t in
+            guard e.part == "foot", e.hop else { return }
+            MotionLog.write(String(format: "GLITCH footpop t=%.3f %.1f cm", t, e.cm))
+            for l in ring { MotionLog.write(l) }; ring = []; tail = 3
+        })
+        MotionLog.write("GLITCH jacks foot pops: \(p.events.filter { $0.part == "foot" && $0.hop }.count)")
     }
 
     /// Log only (GLITCH_DUMP=1): the ends of a bounce and a jacks, a wave, a nap and its wake, with the brain / attractor state around each end and every pop.

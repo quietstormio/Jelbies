@@ -46,12 +46,12 @@ nonisolated enum GroomTuning {
     /// The dryer (steam puffs, "Hair dryer humming") runs from here.
     static let dryerAt: Float = 4.2
     /// How long they hop and cheer at the door, then the fade home. `twirlAt` is the second beat of the cheer.
-    static let cheerSeconds: Float = 8.0, cheerStagger: Float = 0.25, twirlAt: Float = 1.7
+    static let cheerSeconds: Float = 12.5, cheerStagger: Float = 0.25, twirlAt: Float = 1.7
     /// Seconds between one Jelbie and the next stepping out of the door.
     static let exitSpacing: Float = 0.75, exitPatience: Float = 2.0
     /// Where the Jelbies wait (hidden) while inside the shop.
     static let waitX: Float = 3.5
-    static let doorOpen: Float = 0.55, walkOut: Float = 1.4
+    static let doorOpen: Float = 0.55, doorSettle: Float = 0.3, walkOut: Float = 3.4
     static let toastSeconds: Float = 2.5
     static let lineSpacing: Float = 1.5
     /// no-clip-r1: the line-up on the street is wider (two walkers' arms overlapped 4-12 cm on their way to neighbouring spots); the home line-up keeps `lineSpacing`.
@@ -162,6 +162,10 @@ final class GroomBook {
     var emoted: Set<Int> = [], twirled: Set<Int> = []
     /// Who has hopped out of the door (the others are not drawn).
     var out: Set<Int> = []
+    /// Who has walked out of the doorway onto the pavement and been sent on to the street spot.
+    var laneDone: Set<Int> = []
+    /// Who has been sent into the doorway lane (after turning to face the street, hidden behind the wall: a walk started at once arcs out sideways from the old heading).
+    var walkStarted: Set<Int> = []
     /// The emote each one does at the line-up (all different).
     var emote: [Int: IdleKind] = [:]
     /// The cheer clock (`cheerT`) at which each one stepped out of the door.

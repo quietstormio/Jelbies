@@ -1320,7 +1320,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             for a in parkActors { if let d = dst[ObjectIdentifier(a.skinner)] { bodies.append((1000 + a.id, a, d)) } }
             if game {          // glitch-hunt-r2: the props (a held / tossed food piece, the play ball) for the probe's `prop` kind
                 var props: [(key: String, pos: SIMD3<Float>)] = []
-                for a in actors { if let b = a.brain, case .dine = b.script, b.dine.holding { props.append(("food\(a.id)", b.heldPointWorld(a.sim))) } }
+                for a in actors { if let b = a.brain, case .dine = b.script, b.dine.holding, let p = b.heldDrawnPos { props.append(("food\(a.id)", p)) } }          // (r3: the DRAWN piece, the toss arc included)
                 if model.care.play.phase != .off { props.append(("ball", model.care.play.ball.pos)) }
                 GlitchProbe.shared.recordProps(props, steps: smoothSteps, scene: sceneName, wipe: model.care.glitchWipe)
             }

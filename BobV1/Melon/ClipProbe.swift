@@ -105,6 +105,8 @@ enum ClipProbe {
     }
     nonisolated(unsafe) static var fields: [DecorKind: Field] = [:]
     nonisolated(unsafe) static var slideLogged = Set<Int>()
+    nonisolated(unsafe) static var hiddenPrev: [Int: Bool] = [:]
+    nonisolated(unsafe) static var popCount = 0
     static func field(_ k: DecorKind) -> Field? {
         if let f = fields[k] { return f }
         guard let a = DecorMeshes.loaded[k] else { return nil }
@@ -177,7 +179,14 @@ enum ClipProbe {
         }
         if care.groom.inScene {
             let Z = GroomScenery.frontZ, dx = GroomScenery.doorX, dw = GroomScenery.doorW
-            out.append(boxProp("groom:shopfront", lo: V3(-12, 0, -12), hi: V3(12, 6, Z)))
+            // the shop front: bodies start INSIDE the building (behind this plane) by design; what must not happen is a body straddling the plane outside the doorway, or any part inside the frame
+            out.append(Prop(name: "groom:shopfront", uid: -1, depth: { p in
+                guard p.z > Z - 0.3, p.z < Z, p.y < 5.5, abs(p.x - dx) > dw + 0.1 else { return 0 }
+                return min(p.z - (Z - 0.3), Z - p.z)
+            }, lo: V3(-12, 0, Z - 0.3), hi: V3(12, 6, Z)))
+            out.append(boxProp("groom:jambL", lo: V3(dx - dw - 0.1, 0.1, Z - 0.1), hi: V3(dx - dw, 2.4, Z + 0.06)))
+            out.append(boxProp("groom:jambR", lo: V3(dx + dw, 0.1, Z - 0.1), hi: V3(dx + dw + 0.1, 2.4, Z + 0.06)))
+            out.append(boxProp("groom:lintel", lo: V3(dx - dw, 2.25, Z - 0.1), hi: V3(dx + dw, 2.45, Z + 0.06)))
             let open = care.groom.doorOpen
             let ang = open * open * (3 - 2 * open) * 1.75
             let hinge = SIMD2<Float>(dx - dw, Z + 0.07)
@@ -198,7 +207,7 @@ enum ClipProbe {
                 for x in [Float(-3.3), 3.5] { m = max(m, 0.42 - hypotf(p.x - x, p.z - (Z + 0.8))) }
                 return m
             }, lo: V3(-4, 0, Z), hi: V3(4, 1, Z + 1.5)))
-            out.append(boxProp("groom:step", lo: V3(dx - 0.95, 0.1, Z), hi: V3(dx + 0.95, 0.26, Z + 0.9)))
+            out.append(boxProp("groom:step", lo: V3(dx - 0.95, 0.0, Z), hi: V3(dx + 0.95, 0.024, Z + 0.9)))
             out.append(boxProp("groom:sandwichboard", lo: V3(0.0, 0.16, Z + 0.55), hi: V3(0.6, 1.0, Z + 0.78)))
             out.append(boxProp("groom:flowerbox", lo: V3(-2.4, 0.1, Z + 0.36), hi: V3(-0.7, 0.42, Z + 0.64)))
             out.append(boxProp("groom:bench", lo: V3(-5.2, 0.2, Z + 0.1), hi: V3(-3.9, 1.0, Z + 0.55)))
@@ -240,6 +249,15 @@ enum ClipProbe {
             var lo = V3(repeating: .infinity), hi = V3(repeating: -.infinity)
             for s in sm { lo = simd_min(lo, s.p); hi = simd_max(hi, s.p) }
             let brain = byID[j.id]?.brain
+            if care.groom.inScene {
+                let isOut = care.groomBook.out.contains(j.id)
+                if isOut, hiddenPrev[j.id] != false {
+                    let pop = lo.z > GroomScenery.frontZ - 0.05
+                    NSLog("[clip] %@ id=%d first visible t=%.1f skinMinZ=%.2f skinMaxZ=%.2f (shop front z=%.2f)", pop ? "POP" : "visible-behind-wall", j.id, t, lo.z, hi.z, GroomScenery.frontZ)
+                    if pop { popCount += 1 }
+                }
+                hiddenPrev[j.id] = !isOut
+            } else { hiddenPrev[j.id] = nil }
             for pr in plist {
                 if hi.x < pr.lo.x || lo.x > pr.hi.x || hi.y < pr.lo.y || lo.y > pr.hi.y || hi.z < pr.lo.z || lo.z > pr.hi.z { continue }
                 if pr.uid >= 0, pr.name != "slide", let b = brain, DecorField.shared.occupant[pr.uid] == b.steerID { continue }          // (he is using it: sitting on it, in it, at it)
@@ -300,6 +318,7 @@ enum ClipProbe {
         if now - lastSum >= 20 {
             lastSum = now
             for (k, a) in agg.sorted(by: { $0.key < $1.key }) { NSLog("[clip] sum %@ episodes=%d frames=%d over1cm=%d maxDepth=%.1fcm", k, a.episodes, a.frames, a.over1, a.maxD * 100) }
+            NSLog("[clip] sum pops=%d", popCount)
             NSLog("[clip] sum pairs(door) episodes=%d frames=%d maxSunk=%.1fcm frames-total=%d", pairAgg.episodes, pairAgg.frames, pairAgg.maxD * 100, frame)
         }
     }

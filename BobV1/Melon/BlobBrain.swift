@@ -198,6 +198,10 @@ final class BlobBrain {
     var emoteSpot = EmoteSpotState()
     /// move-mix-r1 (Melon/MoveMix.swift): what the last pick was, the no-social wait, a stroll that is due.
     var mix = MixBook()
+    /// move-crowd-r1 (Melon/MoveCrowd.swift): the waypoint-leg look-ahead clock.
+    var crowd = CrowdBook()
+    /// move-crowd-r2 (BlobBrain+WalkEnd.swift): the eased hand-off from a walk to the stand.
+    var walkEnd = WalkEndState()
     var napWhy = "table"          // (round 2b: which roll started the last sleep: the logger counts nap causes)
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
@@ -375,6 +379,7 @@ final class BlobBrain {
     var runAir: Float = 0            // the run's airborne rise (world units) this tick: the planted bean tucks up with it, so both feet leave the floor
     var runDt: Float = 1.0 / 60, runSpring: Float = 0, runSpringV: Float = 0, runYawPrev: Float = 0, runYawRate: Float = 0
     var runArmS: [Float] = [0, 0], runArmV: [Float] = [0, 0]
+    var wp = WalkPolishState()          // walk-polish-r1: the polished walk's own state (BlobBrain+WalkPolish.swift); never the run's
     var runFalling = false           // the run blend is ramping out (the skid-stop)
     var pitchBase: Float = 0
     var chat = ChatOverlay()             // cafe-talk-r1: the café table talk's nod / lean / look / arms / mouth, additive and never moving the feet or `yaw` (BlobBrain+ChatOverlay.swift)
@@ -399,6 +404,7 @@ final class BlobBrain {
     var beanCorr: [SIMD3<Float>] = [.zero, .zero]      // the eased post-step correction applied to each world-placed bean (refitBeans)
     var beanFitUsed: BodyPose? = nil     // the fitted body pose the beans were last placed on (nil = placed on the attractor): the post-step refit carries them onto the pose the body reaches after the step
     var beanSplay: Float = 0              // 0...1: how far the legs are splayed in a V (flip flight)
+    var beanFitW: Float = 0              // glitch-hunt-r4: the fitted pose's eased share of the rigid feet (`fitGateEase`)
     var beanFitHold = 0                  // steps left of the post-spin hold: feet stay on the fitted pose, keep their shape
     var beanForceLast = false            // the last driveBeansRigid call was a flip's (the post-step refit keeps the foot's shape then)
     var beanForce = false                // a spin move (flip) owns the beans: out for the whole flight, placed on the FITTED pose
@@ -731,6 +737,12 @@ final class BlobBrain {
         return true
     }
 
+    /// The locked walk / run gait is driving him (tag walk-lock-2026-11-23): a walk or a come-walk, a turn, a step in place, a step in progress or any run weight. The glitch-hunt eases stay out of it.
+    var walkGaitNow: Bool {
+        switch script { case .walk, .turn, .stepInPlace: return true; default: break }          // (by the script, not the activity: a come-here WAVE reads .coming but is not the walk)
+        return feet.active || runW > 0
+    }
+
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
         releaseInterruptedWave(sim, skinner)
@@ -738,6 +750,7 @@ final class BlobBrain {
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
+        defer { skinner.collarEdgeAllowed = !walkGaitNow }          // (walk-lock: the glitch-hunt collar fade never touches the locked walk / run; Skinning.swift)
         defer { if EmoteSpot.logOn { emoteSpotLog(dt) }; var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) }; storySample(dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
@@ -1073,6 +1086,7 @@ final class BlobBrain {
         let centreBias = min(1, centreDwell / IdleTuning.centreDwellFull)
         var best: (SIMD2<Float>, Float)?
         var valid = 0
+        let crowdGoal = MoveCrowd.goalOn && crowdLive          // (move-crowd-r1; read once)
         let mixTries = MoveMix.on ? 2 : 1
         for attempt in 0..<mixTries {
         if attempt == 1 { if best != nil { break }; lo = zone != nil ? 2.5 : 1.5; guard maxL > lo else { break }; valid = 0 }
@@ -1082,6 +1096,7 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
+            if crowdGoal, simd_length(cand - raw) < 0.15, d > lo, d < maxL, !crowdGoalFree(cand) || (attempt == 0 && MoveCrowd.legOn && !crowdLegFree(from: here, to: cand)) { continue }          // (move-crowd-r1 goal / leg: cheap, so before the floor and route checks; nobody stands at or walks to within the gap of it, and the leg keeps the gap from the others' walks)
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             if attempt == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
             var nearest: Float = 5
@@ -1456,6 +1471,7 @@ final class BlobBrain {
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
             else if roomWaypointWait(root, w) { return nil }          // (the 11-15 room round, T5: nothing looked ahead on a waypoint leg; the one who gets there second stands a beat)
+            else if let r = crowdWaypointLook(root, w) { return r }          // (move-crowd-r1 look: a walker on a waypoint leg looks ahead too, MoveCrowd.swift)
             else if legClear(root, w, margin: steerMargin) { return w }
             else { route = [] }
         }
@@ -1675,7 +1691,9 @@ final class BlobBrain {
                 return
             }
             // a requested walk (come, the meal, a stand at a piece) that has made no progress for 3 s plans its route afresh (round whatever blocks it)
-            if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; steerWait = 0; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
+            // (move-crowd-r1: while a PEER holds the leg (`heldByPeer`) the re-plan keeps `steerWait`: resetting it every 3 s meant the 6 s standing patience of `steerTarget` never ran out and the walker
+            //  stood forever beside a body inside the leg's margin; now the patience ends and the walk goes on, the stander asked aside by makeRoom / the spring. `-MoveCrowd 0` = the old reset.)
+            if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; if !(MoveCrowd.on && heldByPeer && crowdStandOffKeep) { steerWait = 0 }; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
             if !feet.active {
                 if walkFinal { walkFinal = false; step(after: then, sim); return }
                 let pF = PerfProbe.begin(); let fl = flourishMaybe(sim, skinner, target: target); PerfProbe.end("rs.flourishMaybe", pF)
@@ -1683,7 +1701,7 @@ final class BlobBrain {
                 let pS = PerfProbe.begin(); let effOpt = steerTarget(to: target); PerfProbe.end("rs.steerTarget", pS)
                 if board != nil { publishToBoard(pos: position) }          // (the walk-board: once per step, after the route is settled; nothing reads it)
                 guard let eff = effOpt else {
-                    steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
+                    steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); if Self.walkPolish != 0 { walkPolishPose(amplitude) }; armWalkWant = 1
                     if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; MoveLog.note(.pinned); step(after: .none, sim, giveUp: true); restTimer = 0.25 }
                     else if steerWait > 0.25, heldByPeer, slideFootHoldStands { steerWait = 0; slideFootStand(sim) }          // (park-slide-r4: held on the slide's foot, he stands and waits: no walk on the spot)
                     return
@@ -1698,6 +1716,7 @@ final class BlobBrain {
                 }
             }
             gaitPose(sway: waddleRoll, bob: 0.12)
+            if Self.walkPolish != 0 { walkPolishPose(amplitude) }          // (walk-polish-r1: pose-only, off at level 0)
             armWalkWant = 1
 
         case .turn(let to, let then):
@@ -1838,7 +1857,8 @@ final class BlobBrain {
         // pitch outermost, roll innermost: rolling no longer turns the face (pitch * roll coupling was -3.9 deg in the game)
         let q = yawQuat(yaw + twist + chat.twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch + ears.pitch + storm.pitch + chat.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll + expr.roll + ears.roll + storm.roll + chat.roll, axis: SIMD3(0, 0, 1))
         sim.attractor.rotation = q
-        let sq = squash * touchSquash * socialBook.squash * ears.squash * storm.squash
+        var sq = squash * touchSquash * socialBook.squash * ears.squash * storm.squash
+        if Self.walkEndSettle { sq = walkEndSquash(sq, dt) }          // (move-crowd-r2: the stand's squash eased in after a walk, BlobBrain+WalkEnd.swift)
         sim.attractor.squash = sq
         if geom.valid {
             // pivot on his feet: the middle of both soles (or one foot, for the wave's lean) stays on the floor at its world spot
@@ -1855,6 +1875,7 @@ final class BlobBrain {
             else { m = geom.mid; w = SIMD2(px, pz) + rotXZ(geom.midOff, yaw) }
             var a = sim.pivotAnchor(rotation: q, squash: sq, pivot: m, world: SIMD3(w.x, sim.floorY + m.y, w.y))
             a.y += lift
+            if Self.walkEndSettle { a = walkEndAnchor(a) }          // (move-crowd-r2: the pivot moves from the stance foot to both feet without a jump)
             sim.attractor.anchor = a
         } else {
             sim.attractor.anchor = SIMD3(px, sim.groundedAnchorY(rotation: q, squash: sq) + lift, pz)
@@ -2001,6 +2022,8 @@ final class BlobBrain {
         } }
         return (worst, dir)
     }
+    /// glitch-hunt-r3: where `sendHeld` last drew the held / tossed food piece (dev glitch probe only; nil when nothing is held).
+    var heldDrawnPos: SIMD3<Float>?
     func attachBean(_ sim: SoftBody, _ pose: BodyPose, lifted: Bool, _ v: inout [SIMD3<Float>]) {
         let c0 = sim.restCentroid
         let fp = (centroid: pose.centroid, rotation: pose.rotation, restCentroid: c0)
@@ -2162,8 +2185,16 @@ final class BlobBrain {
         } else if scale != 1 { splay = 0 }
         let hopping = raceHopFitted || volleyFitted || scooterHopFitted          // the whole race jump (crouch / flight / landing) on the fitted pose: no switch to the attractor pose at the 0.1 m / 0.12 gates (a 4-5 cm flicker of the soles in the landing)
         let useFit = beanForce || beanFitHold > 0 || fitNeeded || hopping
-        let fitted: BodyPose? = useFit ? fit : nil
-        if scale == 1 { beanFitUsed = fitted }
+        // glitch-hunt-r4: the 0.1 u / 0.12 gate (`fitNeeded`) flips for single steps at a hop's landing (jacks: fit 0 -> 1 -> 0), and each flip moved the whole foot
+        // 6-8 cm in the world in one step. With `fitGateEase` a switch that only the gate asks for is blended over `fitGateSteps` steps; a spin, the post-spin hold and the
+        // fitted hops (race, volleyball, scooter) still switch at once. `-FitGateEase 0` (env FITGATE_OFF=1) = as before.
+        var fitW: Float = useFit ? 1 : 0
+        if scale == 1 {
+            let forced = walkGaitNow || beanForce || beanFitHold > 0 || hopping || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.3          // (held / thrown / far off the attractor: the fitted pose at once, as before)
+            if Self.fitGateEase && !forced { beanFitW += max(-1 / Self.fitGateSteps, min(1 / Self.fitGateSteps, fitW - beanFitW)); fitW = beanFitW } else { beanFitW = fitW }
+        } else if Self.fitGateEase && !(walkGaitNow || beanForce || beanFitHold > 0 || hopping || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.3) { fitW = beanFitW }
+        let fitted: BodyPose? = fitW > 0 ? fit : nil
+        if scale == 1 { beanFitUsed = fitW >= 0.5 ? fit : nil }
         for s in 0..<2 {
             let c = geom.contact[s]
             let sxs: Float = c.x < 0 ? -1 : 1
@@ -2178,7 +2209,11 @@ final class BlobBrain {
                     l = Self.splayHip + d
                 }
                 let r = SIMD3(c.x + l.x, c.y + l.y, c.z + l.z)
-                return fitted.map { $0.centroid + $0.rotation.act(r - sim.restCentroid) } ?? bodyRigid(sim, r)
+                guard let f = fitted else { return bodyRigid(sim, r) }
+                let pf = f.centroid + f.rotation.act(r - sim.restCentroid)
+                if fitW >= 1 { return pf }
+                let pa = bodyRigid(sim, r)
+                return pa + (pf - pa) * fitW
             }
             // 2026-10-28 (legs stay legs): in a flip (`beanForce`) the foot keeps its boot shape (`forceMorphCap`: no round bun pressed on the body) and a landing
             // squash that drives the fitted bean below the floor LIFTS the whole bean onto the floor instead of clamping every vertex to it (which flattened the foot into a
@@ -2223,7 +2258,11 @@ final class BlobBrain {
     var volleyFitted: Bool { Self.onePieceVolley && volley.active && volley.phase != .ground }
     /// glitch-hunt-r1: the body-rigid feet (hops, jacks, emotes; not the walk) change their ball / boot morph by at most `beanMorphStep` per step. `-BeanMorphEase 0` (env BEANMORPH_OFF=1) = as before.
     nonisolated(unsafe) static var beanMorphEase = ProcessInfo.processInfo.environment["BEANMORPH_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "BeanMorphEase") != nil && UserDefaults.standard.integer(forKey: "BeanMorphEase") == 0)
-    static let beanMorphStep: Float = 0.25
+    static var beanMorphStep: Float { beanMorphSlow ? 0.1 : 0.25 }
+    /// glitch-hunt-r4: the rigid feet's ball -> boot morph at most 0.1 a step (was 0.25: the toe still swung 8.6 cm in the step the foot met the floor). `-BeanMorphSlow 0` (env BEANMORPHSLOW_OFF=1) = 0.25.
+    nonisolated(unsafe) static var beanMorphSlow = ProcessInfo.processInfo.environment["BEANMORPHSLOW_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "BeanMorphSlow") != nil && UserDefaults.standard.integer(forKey: "BeanMorphSlow") == 0)
+    nonisolated(unsafe) static var fitGateEase = ProcessInfo.processInfo.environment["FITGATE_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "FitGateEase") != nil && UserDefaults.standard.integer(forKey: "FitGateEase") == 0)
+    static let fitGateSteps: Float = 6
     nonisolated(unsafe) static var raceHopFeet = true          // (false = the old race jump feet: before / after captures)
     /// The planted soles' pop at take-off: the drawn beans stood on the world-planted soles (ahead of / behind the body by up to a stride), the hop's first frame draws them body-rigid
     /// under the body. `raceCarry` is that horizontal offset per foot, eased out over the crouch (`raceCarryT` seconds left of `raceCarryTime`).
@@ -2600,7 +2639,7 @@ final class BlobBrain {
                     runArmV[si] += ((tgt - runArmS[si]) * 700 - runArmV[si] * 22) * dt
                     runArmS[si] += runArmV[si] * dt
                     tgt += (runArmS[si] - tgt) * min(1, runW)
-                } else { runArmS[si] = tgt; runArmV[si] = 0 }
+                } else { runArmS[si] = tgt; runArmV[si] = 0; if Self.walkPolish >= 2 { tgt = walkPolishArm(si, tgt, dt) } }
                 armLastS[si] = tgt
             }
             nubPhi[si] = (armLastS[si] - ArmPath.armWalkCentreDeg) / 33
@@ -3052,6 +3091,7 @@ final class BlobBrain {
         var k: Float = 1
         if dine.flying { let u = min(1, max(0, (dine.t - Self.tossFlick) / (Self.tossLand - Self.tossFlick))); k = 1 - 0.6 * smooth01((u - 0.8) / 0.2) }
         let m = simd_float4x4(columns: (SIMD4(k, 0, 0, 0), SIMD4(0, k, 0, 0), SIMD4(0, 0, k, 0), SIMD4(p.x, p.y, p.z, 1)))
+        heldDrawnPos = p          // (glitch-hunt-r3: where the held / tossed piece was drawn, for the dev glitch probe)
         if dine.mode == .fork { h.holdBite(m) } else { h.hold(m) }
     }
 

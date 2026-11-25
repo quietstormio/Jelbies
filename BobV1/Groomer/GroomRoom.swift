@@ -43,12 +43,13 @@ extension GameCamera {
     static func configureGroom() {
         roamFloor = nil; RoomLayout.setFront(z: RoomLayout.maxZ)
         roomWideScale = 1; roomWideLift = 0
-        walkMinZ = GroomScenery.doorStep.y - 0.2; walkMaxZ = GroomScenery.curbZ - 0.8; arenaCenter = SIMD2(0, 0); arenaRadius = 80
-        roamRect = (SIMD2(-4.0, -4.9), SIMD2(4.0, GroomScenery.curbZ - 0.8)); roamRectWide = roamRect
+        walkMinZ = GroomScenery.frontZ - 3.0; walkMaxZ = GroomScenery.curbZ - 0.8; arenaCenter = SIMD2(0, 0); arenaRadius = 80
+        roamRect = (SIMD2(-4.0, GroomScenery.frontZ - 3.0), SIMD2(4.0, GroomScenery.curbZ - 0.8)); roamRectWide = roamRect
+        RoomLayout.backOverride = GroomScenery.frontZ - 4.0; RoomLayout.setFront(z: RoomLayout.maxZ)          // (the home room's back wall is at z -5: the ones who start INSIDE the shop would stand against it, 0.3 behind the doorway; here the shop's inside is open floor)
         groomOn = true
     }
     static func endGroom(count: Int) {
-        groomOn = false; walkMinZ = -2.6
+        groomOn = false; walkMinZ = -2.6; RoomLayout.backOverride = nil
         configureRoom(count: count)
     }
 }
@@ -60,12 +61,24 @@ enum GroomScenery {
 
     static let frontZ: Float = -4.7
     static let curbZ: Float = 2.4
-    static let doorX: Float = 1.7, doorW: Float = 0.62, doorH: Float = 1.05, doorY: Float = 1.2
+    static let doorX: Float = 1.7, doorW: Float = 0.78, doorH: Float = 1.05, doorY: Float = 1.2
     static let windowC = V3(-1.55, 1.3, frontZ + 0.03), windowR: Float = 0.72
     /// Where the Jelbies step out (just in front of the door) and the line-up in front of the shop.
-    static let doorStep = SIMD2<Float>(doorX + 0.1, frontZ + 1.5)          // (no-clip-r1: clear of the stone step (its front edge is frontZ + 0.9) by a body's depth, and of the open door leaf (x <= 1.12): he steps out in front of the door, never into it)
+    /// Round door: where each one STARTS: inside the shop, 1.1 behind the shop front, so the whole body is hidden by the wall; and where he walks to first: out through the doorway's centre line to the pavement.
+    static let insideSpot = SIMD2<Float>(doorX, frontZ - 1.1)
+    static let laneOut = SIMD2<Float>(doorX, frontZ + 2.9)
+    static let doorStep = insideSpot          // (the release distance is measured from here)
+    /// The doorway: opening half width `doorW` (0.78: 1.56 wide for a 1.17 belly; arms are tucked forward inside the frame), the frame ring 0.10 beyond.
     /// The open door leaf as a floor obstacle (a thin wall from the hinge out toward the street), for the walk resolver while the door stands open.
-    static let doorLeafBox = RoomLayout.FlatBox(centre: SIMD2(0.95, frontZ + 0.85), half: SIMD2(0.21, 0.85), height: 2.0, radius: 0.04)
+    static let doorLeafBox = RoomLayout.FlatBox(centre: SIMD2(doorX - doorW - 0.1, frontZ + 0.85), half: SIMD2(0.2, 0.85), height: 2.0, radius: 0.04)
+    /// The doorway lane as two invisible walls (inside the shop and through the frame, z up to 0.2 past the shop front): the floor rules keep a walker's centre within 0.19 of the lane's centre line
+    /// (opening half width 0.78, belly 0.585, floor-rule radius 0.28 for a low box): however the walk is planned or steered, he goes through the doorway, not into the frame or along the wall.
+    static var laneWalls: [RoomLayout.FlatBox] {
+        let edge: Float = (doorW - 0.585) + 0.28          // (the walls' inner faces stand this far from the lane's centre line: free strip for a centre +-0.195)
+        let zc = frontZ - 1.65, hz: Float = 1.85
+        return [RoomLayout.FlatBox(centre: SIMD2(doorX - edge - 0.6, zc), half: SIMD2(0.6, hz), height: 2.0, radius: 0.04),
+                RoomLayout.FlatBox(centre: SIMD2(doorX + edge + 0.6, zc), half: SIMD2(0.6, hz), height: 2.0, radius: 0.04)]
+    }
     static func lineUp(index k: Int, of n: Int) -> SIMD2<Float> {
         SIMD2((Float(k) - Float(n - 1) / 2) * GroomTuning.streetSpacing, -1.2)
     }
@@ -242,7 +255,7 @@ enum GroomScenery {
         b.material = .glow
         box(b, V3(doorX, doorY, Z + 0.025), V3(doorW, doorH, 0.02), r: 0.3, color: warm * 0.92, seg: 4)
         b.material = .plain
-        box(b, V3(doorX, 0.18, Z + 0.45), V3(0.95, 0.08, 0.45), r: 0.05, color: stoneDark)
+        box(b, V3(doorX, 0.012, Z + 0.45), V3(0.95, 0.012, 0.45), r: 0.01, color: stoneDark)          // (door round: a flat stone threshold, not a 0.26 step: the ones who walk out of the shop have their feet on the pavement)
 
         // a wall lamp (brass) beside the door
         box(b, V3(2.75, 1.85, Z + 0.1), V3(0.03, 0.14, 0.03), r: 0.02, color: brass, seg: 1)

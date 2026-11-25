@@ -69,7 +69,9 @@ extension BlobBrain {
         let dir = d / L, right = SIMD2(dir.y, -dir.x)
         let clear = peerGap * 0.97
         let live = roomTraffic          // (the 11-15 room round, step 1: RoomRoam+Traffic.swift; read once)
-        let vSelf = live && RoomTraffic.realSpeed ? roomWalkSpeed : ContactTuning.walkerSpeed          // (T1: the speed he really walks at)
+        let crowd = crowdLive          // (move-crowd-r1, MoveCrowd.swift; read once)
+        let cGap = crowd && MoveCrowd.gapOn          // (gap: trigger and detour at one clearance just outside the push radius)
+        let vSelf = (live && RoomTraffic.realSpeed) || (crowd && MoveCrowd.speedOn) ? roomWalkSpeed : ContactTuning.walkerSpeed          // (T1: the speed he really walks at; move-crowd-r1 speed: the 0.8 u/s guess put the predicted meeting of two walkers in the wrong place)
         let horizon = min(L / vSelf, ContactTuning.lookTime)
         struct Hit { var tc: Float; var pos: SIMD2<Float>; var vel: SIMD2<Float>; var id: Int; var walking: Bool; var dmin: Float }
         var hit: Hit?
@@ -86,7 +88,7 @@ extension BlobBrain {
             guard closing > 0.05 else { continue }          // (not closing in: behind me, or walking off faster than I come)
             let tc = min(max(closing / vv, 0), horizon)
             let dmin = simd_length(rel - vrel * tc)
-            guard dmin < clear * 0.85 else { continue }
+            guard dmin < (cGap ? MoveCrowd.gap : clear * 0.85) else { continue }
             if !moving { guard simd_dot(rel, dir) < min(L, ContactTuning.lookDistance) else { continue } }
             if hit == nil || tc < hit!.tc { hit = Hit(tc: tc, pos: p.pos, vel: moving ? vel : .zero, id: p.id, walking: moving, dmin: dmin) }
         }
@@ -98,7 +100,16 @@ extension BlobBrain {
             let cosA = simd_dot(dir, h.vel / speed)
             var iYield = steerID < h.id
             if live { (iYield, behind) = roomCross(idYield: iYield, cosA: cosA, his: h.id, at: h.pos, vel: h.vel, root: root, dir: dir, right: right, vSelf: vSelf) }          // (T2: at a crossing the one who gets there second gives way)
-            if abs(cosA) < 0.6 {          // crossing: the lower id swings out well, the other only when it is about to touch
+            if crowd && MoveCrowd.yieldOn {          // (yield: symmetric duty: the one second to the meeting, then the one with less far to go, gives way, not always the lower id)
+                iYield = crowdGiveWay(his: h.id, at: h.pos, vel: h.vel, root: root, dir: dir, vSelf: vSelf, myLeft: L)
+                if abs(cosA) < 0.6 { behind = iYield ? (simd_dot(h.vel, right) > 0 ? -1 : 1) : nil }
+            }
+            if cGap {          // (gap: the one who gives way clears the other's predicted spot by the whole gap ALONE; the other walks on (crossing) or keeps a small veer to his right (head on))
+                if abs(cosA) < 0.6 { if !iYield { return .clear } }
+                else if cosA < 0 { share = iYield ? 1.0 : MoveCrowd.headOnKeep }
+                else if !iYield { return .clear }          // (same way: only the one behind goes round; the one ahead walks on)
+                else { share = 1.0 }
+            } else if abs(cosA) < 0.6 {          // crossing: the lower id swings out well, the other only when it is about to touch
                 if !iYield { if h.tc < 1.2 && h.dmin < clear * 0.75 { share = 0.6 } else { return .clear } }
             } else if cosA < 0 { share = iYield ? 0.85 : 0.55 }          // head on
             else if !iYield || h.dmin > clear * 0.6 { share = 0.8 }          // overtaking
@@ -106,7 +117,26 @@ extension BlobBrain {
         let q = h.pos + h.vel * h.tc          // where he is when we are closest
         let m = root + dir * (vSelf * h.tc)
         let side = simd_dot(q - m, right)
-        let first: Float = behind ?? (side > 0.12 ? -1 : (side < -0.12 ? 1 : 1))          // away from him; dead ahead: my right (T2: behind a crossing walker I give way to)
+        var first: Float = behind ?? (side > 0.12 ? -1 : (side < -0.12 ? 1 : 1))          // away from him; dead ahead: my right (T2: behind a crossing walker I give way to)
+        if cGap, h.walking, behind == nil, simd_dot(dir, h.vel / max(speed, 1e-3)) < -0.6 { first = 1 }          // (gap, head on: always my own right, so the two never pick the same side)
+        if cGap {          // (gap: the detour point clears his predicted spot by `gap` x share on its own; the narrow-floor fallback keeps 0.8 of it)
+            let cg = MoveCrowd.gap * share
+            for scale: Float in [1.0, 0.8] {
+                for sgn in [first, -first] {
+                    for k: Float in [1.0, 1.15, 0.9] {
+                        let w0 = q + right * (sgn * cg * k * scale)
+                        let w = fixed(w0)
+                        guard simd_distance(w, q) >= cg * 0.92 * scale, abs(simd_dot(w - q, right)) >= cg * 0.7 * scale else { continue }
+                        guard intrusion(w, margin: steerMargin) < 0.01, scale >= 1 ? legClear(root, w, margin: steerMargin) : softLegClear(root, w, r: peerGap * 0.8) else { continue }
+                        if MoveCrowd.allOn, !crowdDetourFree(w, root: root, vSelf: vSelf, except: h.id) { continue }          // (all: the detour point is clear of EVERY other body, now and where it will be - the leg checks only see higher ids)
+                        yieldT = max(0, yieldT - runDt)
+                        return .via(w)
+                    }
+                }
+            }
+            if h.walking, yieldT < ContactTuning.yieldMax { yieldT += runDt; return .wait }
+            return .clear
+        }
         // the floor is narrow (a phone in portrait): a waypoint past the wall is pulled back onto the floor, and the swing may shrink, as long as it still clears him by most of the gap
         // (a narrow floor: when no waypoint clears him by the whole gap, one that clears him by 0.8 of it - the steering floor of `keepApart` - is taken)
         let gap0 = peerGap
