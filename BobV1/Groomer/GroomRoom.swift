@@ -220,8 +220,17 @@ enum GroomScenery {
         }
 
         // the shop: a clean plaster block, a low flat roof with a slim wood-and-sage cap, a stone plinth
-        box(b, V3(0, 2.2, -6.5), V3(3.1, 2.2, 1.8), r: 0.3, color: plaster)
-        box(b, V3(0, 0.12, -6.4), V3(3.2, 0.12, 1.9), r: 0.08, color: stone)
+        // (spa-door-r1: the block is cut at the doorway so the shop has an inside: a lintel band over the full width, a block either side of the opening that reaches below the street so the
+        //  rounded bottom edges never show on the door jambs, plaster fills over the rounded jamb edges, and the plinth split at the door)
+        let jambL = doorX - doorW, jambR = doorX + doorW, lintelY = doorY + doorH
+        box(b, V3(0, (lintelY + 4.4) / 2, -6.5), V3(3.1, (4.4 - lintelY) / 2, 1.8), r: 0.3, color: plaster)
+        box(b, V3((-3.1 + jambL) / 2, (-0.5 + 3.0) / 2, -6.5), V3((jambL + 3.1) / 2, 1.75, 1.8), r: 0.3, color: plaster)
+        box(b, V3((jambR + 3.1) / 2, (-0.5 + 3.0) / 2, -6.5), V3((3.1 - jambR) / 2, 1.75, 1.8), r: 0.3, color: plaster)
+        box(b, V3(jambL - 0.15, 1.3, Z - 0.15), V3(0.15, 1.3 + 0.1, 0.15), r: 0.02, color: plaster, seg: 1)
+        box(b, V3(jambR + 0.16, 1.3, Z - 0.15), V3(0.16, 1.3 + 0.1, 0.15), r: 0.02, color: plaster, seg: 1)
+        box(b, V3(doorX, lintelY + 0.15, Z - 0.15), V3(doorW, 0.15, 0.15), r: 0.02, color: plaster, seg: 1)
+        box(b, V3((-3.2 + jambL) / 2, 0.12, -6.4), V3((jambL + 3.2) / 2, 0.12, 1.9), r: 0.08, color: stone)
+        box(b, V3((jambR + 3.2) / 2, 0.12, -6.4), V3((3.2 - jambR) / 2, 0.12, 1.9), r: 0.08, color: stone)
         box(b, V3(0, 4.5, -6.4), V3(3.3, 0.2, 2.0), r: 0.16, color: sageDeep)
         box(b, V3(0, 4.76, -6.3), V3(3.0, 0.08, 1.8), r: 0.06, color: plaster)
         ParkShapes.cylinder(b, x: 2.1, z: -6.0, r: 0.3, y0: 4.8, y1: 5.5, color: plaster)
@@ -250,12 +259,12 @@ enum GroomScenery {
         box(b, V3(wc.x, wc.y, wc.z + 0.04), V3(windowR, 0.02, 0.02), r: 0.015, color: wood, seg: 1)            // a slim mullion
         box(b, V3(wc.x, 0.2, Z + 0.1), V3(windowR + 0.3, 0.1, 0.12), r: 0.06, color: stone)                      // a stone sill
 
-        // the door: a light wood frame, the warm hall behind it (the door itself swings in the animated mesh), a stone step
-        box(b, V3(doorX, doorY, Z - 0.02), V3(doorW + 0.1, doorH + 0.08, 0.08), r: 0.3, color: wood)
-        b.material = .glow
-        box(b, V3(doorX, doorY, Z + 0.025), V3(doorW, doorH, 0.02), r: 0.3, color: warm * 0.92, seg: 4)
-        b.material = .plain
-        box(b, V3(doorX, 0.012, Z + 0.45), V3(0.95, 0.012, 0.45), r: 0.01, color: stoneDark)          // (door round: a flat stone threshold, not a 0.26 step: the ones who walk out of the shop have their feet on the pavement)
+        // the door: a light wood frame round an OPEN doorway (the door itself swings in the animated mesh), the lit shop behind it, a stone threshold
+        box(b, V3(jambL - 0.05, doorY, Z - 0.02), V3(0.05, doorH + 0.08, 0.08), r: 0.04, color: wood)
+        box(b, V3(jambR + 0.05, doorY, Z - 0.02), V3(0.05, doorH + 0.08, 0.08), r: 0.04, color: wood)
+        box(b, V3(doorX, lintelY + 0.04, Z - 0.02), V3(doorW + 0.1, 0.04, 0.08), r: 0.035, color: wood)
+        shopInside(b)
+        box(b, V3(doorX, 0.09, Z - 0.02), V3(doorW, 0.015, 0.2), r: 0.012, color: stoneDark, seg: 1)          // (the sill the walk-out steps over; its top is the pavement's)
 
         // a wall lamp (brass) beside the door
         box(b, V3(2.75, 1.85, Z + 0.1), V3(0.03, 0.14, 0.03), r: 0.02, color: brass, seg: 1)
@@ -279,6 +288,71 @@ enum GroomScenery {
         return b.mesh
     }
 
+
+
+    // MARK: the shop's inside (seen through the open door)
+
+    /// A short lit room behind the doorway: warm tiled floor, cream walls over a sage wainscot, a ceiling light, a reception counter with towels, a plant and a round mirror.
+    /// Glow material throughout (flat baked colours, brighter near the lamp), so it reads as lit at any hour; nothing here stands where a Jelmiko walks (the lane is x = doorX +- 0.2, from the inside spot out).
+    static func shopInside(_ b: RoomMeshBuilder) {
+        let Z = frontZ, x0 = doorX - doorW, x1 = doorX + doorW, yF: Float = 0.102, yT = doorY + doorH - 0.01, zB = Z - 2.75
+        let n = V3(0, 0, 1)
+        func c(_ r: Float, _ g: Float, _ bl: Float) -> V3 { GroomScenery.c(r, g, bl) * 0.95 }          // (the glow material brightens its albedo by up to ~1.9: scaled down it reads as a softly lit room)
+        b.material = .glow
+        func lit(_ col: V3, _ k: Float) -> V3 { col * k }
+        // floor: soft cream and sage tiles, 0.52 square, a warm pool of light on the middle
+        let tile: Float = 0.52, cols = Int(ceilf((x1 - x0) / tile)), rows = Int(ceilf((Z - zB) / tile))
+        for i in 0..<cols { for j in 0..<rows {
+            let xa = x0 + Float(i) * tile, xb = min(xa + tile, x1), za = Z - Float(j) * tile, zb = max(za - tile, zB)
+            let base = (i + j) % 2 == 0 ? c(0.80, 0.73, 0.60) : c(0.68, 0.73, 0.62)
+            let pool = { (x: Float, z: Float) -> Float in 0.62 + 0.38 * expf(-((x - doorX) * (x - doorX) * 0.5 + (z - (Z - 1.2)) * (z - (Z - 1.2)) * 0.12)) }
+            b.flatQuad(V3(xa, yF, za), V3(xb, yF, za), V3(xb, yF, zb), V3(xa, yF, zb), normal: V3(0, 1, 0),
+                       colors: [lit(base, pool(xa, za)), lit(base, pool(xb, za)), lit(base, pool(xb, zb)), lit(base, pool(xa, zb))])
+        } }
+        // walls: sage wainscot to 0.75, warm cream above it, darker toward the corners and the floor
+        let wain: Float = 0.75
+        let cream = c(0.96, 0.85, 0.68), sageW = c(0.66, 0.76, 0.66)
+        func wall(_ pA: V3, _ pB: V3, normal nn: V3, k: Float) {          // pA -> pB along the wall's run, floor to ceiling
+            let up = V3(0, 1, 0)
+            func at(_ p: V3, _ y: Float) -> V3 { V3(p.x, y, p.z) }
+            b.flatQuad(at(pA, yF), at(pB, yF), at(pB, yF + wain), at(pA, yF + wain), normal: nn, colors: [lit(sageW, 0.7 * k), lit(sageW, 0.7 * k), lit(sageW, 0.85 * k), lit(sageW, 0.85 * k)])
+            b.flatQuad(at(pA, yF + wain), at(pB, yF + wain), at(pB, yT), at(pA, yT), normal: nn, colors: [lit(cream, 0.9 * k), lit(cream, 0.9 * k), lit(cream, 1.0 * k), lit(cream, 1.0 * k)])
+            _ = up
+            // a slim wood rail where they meet
+            b.flatQuad(at(pA, yF + wain - 0.03), at(pB, yF + wain - 0.03), at(pB, yF + wain + 0.03), at(pA, yF + wain + 0.03), normal: nn, colors: Array(repeating: lit(wood, 0.95 * k), count: 4))
+        }
+        wall(V3(x1, 0, zB), V3(x0, 0, zB), normal: n, k: 1.0)                                          // the back wall
+        wall(V3(x0 + 0.003, 0, Z), V3(x0 + 0.003, 0, zB), normal: V3(1, 0, 0), k: 0.92)                // the left wall
+        wall(V3(x1 - 0.003, 0, zB), V3(x1 - 0.003, 0, Z), normal: V3(-1, 0, 0), k: 0.92)               // the right wall
+        // ceiling with a warm light panel
+        b.flatQuad(V3(x0, yT, Z), V3(x1, yT, Z), V3(x1, yT, zB), V3(x0, yT, zB), normal: V3(0, -1, 0), colors: Array(repeating: c(0.90, 0.82, 0.68) * 0.8, count: 4))
+        b.flatQuad(V3(doorX - 0.45, yT - 0.004, Z - 1.4), V3(doorX + 0.45, yT - 0.004, Z - 1.4), V3(doorX + 0.45, yT - 0.004, Z - 2.2), V3(doorX - 0.45, yT - 0.004, Z - 2.2), normal: V3(0, -1, 0), colors: Array(repeating: c(1.0, 0.92, 0.72) * 1.1, count: 4))
+        // a round mirror on the back wall (the window's round motif): wood ring, pale glass
+        let mc = V3(doorX + 0.1, 1.45, zB + 0.01)
+        ringZ(b, mc, rm: 0.4, s: 0.04, color: lit(wood, 0.95))
+        discZ(b, mc + V3(0, 0, 0.002), 0.4, color: c(0.84, 0.90, 0.88) * 0.9)
+        // the reception counter along the back wall: wood top, sage front, a pair of towels and a bowl of pebbles on it
+        func gbox(_ ctr: V3, _ h: V3, top: V3, front: V3, side: V3) {
+            let (cx, cy, cz) = (ctr.x, ctr.y, ctr.z)
+            b.flatQuad(V3(cx - h.x, cy + h.y, cz + h.z), V3(cx + h.x, cy + h.y, cz + h.z), V3(cx + h.x, cy + h.y, cz - h.z), V3(cx - h.x, cy + h.y, cz - h.z), normal: V3(0, 1, 0), colors: Array(repeating: top, count: 4))
+            b.flatQuad(V3(cx - h.x, cy - h.y, cz + h.z), V3(cx + h.x, cy - h.y, cz + h.z), V3(cx + h.x, cy + h.y, cz + h.z), V3(cx - h.x, cy + h.y, cz + h.z), normal: n, colors: Array(repeating: front, count: 4))
+            for sx in [Float(-1), 1] {
+                b.flatQuad(V3(cx + sx * h.x, cy - h.y, cz + h.z), V3(cx + sx * h.x, cy - h.y, cz - h.z), V3(cx + sx * h.x, cy + h.y, cz - h.z), V3(cx + sx * h.x, cy + h.y, cz + h.z), normal: V3(sx, 0, 0), colors: Array(repeating: side, count: 4))
+            }
+        }
+        let cz = zB + 0.4
+        gbox(V3(doorX - 0.2, yF + 0.36, cz), V3(0.62, 0.36, 0.3), top: c(0.84, 0.70, 0.48), front: c(0.55, 0.67, 0.56), side: c(0.46, 0.57, 0.48))
+        gbox(V3(doorX - 0.55, yF + 0.78 + 0.07, cz), V3(0.2, 0.07, 0.14), top: c(1.0, 0.98, 0.94), front: c(0.90, 0.88, 0.84), side: c(0.82, 0.80, 0.76))
+        gbox(V3(doorX - 0.55, yF + 0.78 + 0.21, cz), V3(0.18, 0.07, 0.13), top: c(0.82, 0.76, 0.92), front: c(0.70, 0.64, 0.82), side: c(0.62, 0.56, 0.74))
+        ParkScenery.blob(b, V3(doorX + 0.25, yF + 0.78 + 0.08, cz), rx: 0.16, ry: 0.07, rz: 0.12, color: c(0.80, 0.84, 0.82), segments: 10, rings: 4)
+        // a potted plant in the right front corner of the room
+        let px = x1 - 0.2, pz = Z - 2.0
+        gbox(V3(px, yF + 0.2, pz), V3(0.16, 0.2, 0.16), top: c(0.55, 0.40, 0.30), front: c(0.84, 0.74, 0.62), side: c(0.72, 0.62, 0.52))
+        for (dx, dy, r) in [(Float(0), Float(0.75), Float(0.3)), (-0.12, 0.5, 0.2), (0.1, 0.55, 0.2)] {
+            ParkScenery.blob(b, V3(px + dx, yF + dy, pz), rx: r, ry: r * 0.85, rz: r, color: dy > 0.7 ? c(0.46, 0.62, 0.45) : c(0.40, 0.56, 0.40), segments: 12, rings: 5)
+        }
+        b.material = .plain
+    }
 
     // MARK: the street
 
