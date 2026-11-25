@@ -111,7 +111,7 @@ extension GameCare {
         // the door opens, then they come out ONE AT A TIME (spaced GroomTuning.exitSpacing, and the next only once the last is a body-gap clear of the door),
         // each running to its own spot in the line-up, so the paths fan out and never overlap
         let openAt = GroomTuning.doorOpen + GroomTuning.doorSettle          // (door round: wide open AND still for a beat before the first walks into the doorway) // (no-clip-r1: the leaf is fully open before the first steps out; at 60% it still swept through the spot he stepped onto)
-        if RoomLayout.dynamicBoxes.isEmpty { RoomLayout.dynamicBoxes = [GroomScenery.doorLeafBox] }
+        if RoomLayout.dynamicBoxes.isEmpty { RoomLayout.dynamicBoxes = [GroomScenery.doorLeafBox] + GroomScenery.laneWalls }
         if groom.cheerT >= openAt, book.out.count < mine.count {
             let k = book.out.count
             let a = mine[k]

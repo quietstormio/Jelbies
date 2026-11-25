@@ -71,6 +71,14 @@ enum GroomScenery {
     /// The doorway: opening half width `doorW` (0.78: 1.56 wide for a 1.17 belly; arms are tucked forward inside the frame), the frame ring 0.10 beyond.
     /// The open door leaf as a floor obstacle (a thin wall from the hinge out toward the street), for the walk resolver while the door stands open.
     static let doorLeafBox = RoomLayout.FlatBox(centre: SIMD2(doorX - doorW - 0.1, frontZ + 0.85), half: SIMD2(0.2, 0.85), height: 2.0, radius: 0.04)
+    /// The doorway lane as two invisible walls (inside the shop and through the frame, z up to 0.2 past the shop front): the floor rules keep a walker's centre within 0.19 of the lane's centre line
+    /// (opening half width 0.78, belly 0.585, floor-rule radius 0.28 for a low box): however the walk is planned or steered, he goes through the doorway, not into the frame or along the wall.
+    static var laneWalls: [RoomLayout.FlatBox] {
+        let edge: Float = (doorW - 0.585) + 0.28          // (the walls' inner faces stand this far from the lane's centre line: free strip for a centre +-0.195)
+        let zc = frontZ - 1.65, hz: Float = 1.85
+        return [RoomLayout.FlatBox(centre: SIMD2(doorX - edge - 0.6, zc), half: SIMD2(0.6, hz), height: 2.0, radius: 0.04),
+                RoomLayout.FlatBox(centre: SIMD2(doorX + edge + 0.6, zc), half: SIMD2(0.6, hz), height: 2.0, radius: 0.04)]
+    }
     static func lineUp(index k: Int, of n: Int) -> SIMD2<Float> {
         SIMD2((Float(k) - Float(n - 1) / 2) * GroomTuning.streetSpacing, -1.2)
     }
