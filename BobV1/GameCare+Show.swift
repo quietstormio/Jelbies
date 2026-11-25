@@ -53,6 +53,9 @@ final class ShowBook {
     var pendingWalks: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
     /// When a walker who stopped short was last asked again (CACurrentMediaTime), by actor id.
     var retryAt: [Int: Double] = [:]
+    /// move-crowd-r2: the show's own game clock (s) for `retryAt`: the retries used the WALL clock, so how often a stopped walker was asked again depended on the machine's speed (a headless run faster than real time
+    /// asked rarely: ShowLineTests' 21 s return; a loaded one often), and the real app on a slow frame waited longer.
+    var gameClock: Double = 0
     /// Bodies that are on their way to the middle (a turn's walk), with the seconds walked so far and the allowance: the walk's length at the stage pace + 1.5 s.
     var heading: [Int: (age: Float, limit: Float)] = [:]
     /// Second legs of walks through the gate: actor id -> where he goes on to.
@@ -408,6 +411,11 @@ extension GameCare {
         } }
         return best?.0
     }
+    nonisolated(unsafe) static var showGameClockOn: Bool = {
+        if let e = ProcessInfo.processInfo.environment["SHOWGAMECLOCK"] { return e != "0" }
+        if DevArgs.enabled, UserDefaults.standard.object(forKey: "ShowGameClock") != nil { return UserDefaults.standard.integer(forKey: "ShowGameClock") != 0 }
+        return true
+    }()
     nonisolated(unsafe) static var seatWayOn: Bool = {
         if let e = ProcessInfo.processInfo.environment["SHOWSEATWAY"] { return e != "0" }
         if DevArgs.enabled, UserDefaults.standard.object(forKey: "ShowSeatWay") != nil { return UserDefaults.standard.integer(forKey: "ShowSeatWay") != 0 }
@@ -594,7 +602,7 @@ extension GameCare {
             if b.pending != nil { return false }
             if case .walk = b.script { return false }          // (still stepping; the turn to the camera after the walk is not waited for: it can take seconds)
             if simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.arriveRadius { book.goals[a.id] = nil; book.heading[a.id] = nil; showArrivedLog(a, "middle", c); return true }
-            let now = CACurrentMediaTime()          // she stopped short (held back by the one leaving, or pushed off it): ask again, at most every 0.6 s
+            let now = Self.showGameClockOn ? showBook.gameClock : CACurrentMediaTime()          // she stopped short (held back by the one leaving, or pushed off it): ask again, at most every 0.6 s
             if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showRoute(a, to: ShowStage.playerSpot) }
             return false
         }
@@ -602,7 +610,7 @@ extension GameCare {
         if b.pending != nil { return false }
         if case .walk = b.script { return false }
         if simd_distance(SIMD2(c.x, c.z), g) < Self.arriveRadius { book.goals[a.id] = nil; showArrivedLog(a, "mark", c); return true }
-        let now = CACurrentMediaTime()
+        let now = Self.showGameClockOn ? showBook.gameClock : CACurrentMediaTime()
         if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; if Self.seatWayOn, book.via[a.id] == nil { showRoute(a, to: g) } else { showWalk(a, to: g) } }          // (move-crowd-r2: the retry goes round a body too)
         return false
     }
@@ -736,6 +744,7 @@ extension GameCare {
     #endif
 
     func tickShow(_ actors: [JellyActor], dt: Float) {
+        showBook.gameClock += Double(dt)
         showBook.actors = actors
         #if targetEnvironment(simulator)
         startShowCaptureAid(actors)
