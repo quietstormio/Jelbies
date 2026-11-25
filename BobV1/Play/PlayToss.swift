@@ -428,6 +428,7 @@ final class PlayToss {
         }
         guard active else { return }
         jellies = js
+        PlayMeasure.tick(self, dt: dt)          // (capture aid, log only)
         if GameCamera.playFrame, abs(viewAspect - frameAspect) > 0.005 { reframe() }          // (the phone was turned: the frame is the new view's)
         switch phase {
         case .inHand:
@@ -571,6 +572,7 @@ final class PlayToss {
     /// Capture aid (`-PlayDemo`): one line per strike with the striker's visible facing error toward the player (the hand), its lift and the screen points for cutting pictures.
     func touchLog(_ kind: String, _ j: PlayJelly) {
         netNoteToucher(j.id)          // (play-net-r1: the last one to touch it is the scorer)
+        PlayMeasure.touch(self, kind, j)          // (capture aid, log only)
         guard UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
         let hand = handWorld()
         let toHand = SIMD2(hand.x - j.pos.x, hand.z - j.pos.y)

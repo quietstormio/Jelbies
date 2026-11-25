@@ -723,7 +723,22 @@ struct GameScreen: View {
                         // alternate the aim a little: the middle, then a bit to either side
                         let dx: CGFloat = [0, -0.18, 0.2, 0.05][round % 4] * sz.width
                         NSLog("[playtoss] demo throw %d", round)
-                        care.play.flick(from: CGPoint(x: sz.width * 0.5, y: sz.height * 0.83), velocity: CGVector(dx: dx * 2, dy: -sz.height * speed))
+                        var vel = CGVector(dx: dx * 2, dy: -sz.height * speed)
+                        // capture aid (play-spread-r1): -PlayDemoAim 1 = the flick is aimed at one Jelmiko's head, picked by (round, seed), like a real player's: the same picks in the base and the candidate
+                        if d.integer(forKey: "PlayDemoAim") != 0 {
+                            let line = care.play.jellies.filter { !$0.free }
+                            if !line.isEmpty {
+                                let h = UInt64(truncatingIfNeeded: round &+ 1) &* 0x9E3779B97F4A7C15 &+ UInt64(truncatingIfNeeded: d.integer(forKey: "PlayDemoSeed")) &* 0xBF58476D1CE4E5B9
+                                let who = line[Int((h >> 33) % UInt64(line.count))]
+                                if let head = GameCamera.screenPoint(floor: who.pos, y: who.headTop, size: sz) {
+                                    let from = CGPoint(x: sz.width * 0.5, y: sz.height * 0.83)
+                                    let ddx = head.x - from.x, ddy = head.y - from.y, L = hypot(ddx, ddy)
+                                    if L > 20 { let spd = (L / sz.height) / CGFloat(TossAim.reach); vel = CGVector(dx: ddx / L * spd * sz.height, dy: ddy / L * spd * sz.height) }
+                                }
+                                NSLog("[playtoss] demo aim at %d", who.id)
+                            }
+                        }
+                        care.play.flick(from: CGPoint(x: sz.width * 0.5, y: sz.height * 0.83), velocity: vel)
                         var waited = 0.0
                         // capture aid (play-ball-s3): -PlayDemoRecall 1 presses "Pass it back" 0.3 to 2.0 s after the Jelmiko start keeping the ball
                         var keptFor = 0.0, recalled = false

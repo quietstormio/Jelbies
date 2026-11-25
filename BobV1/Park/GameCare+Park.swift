@@ -249,9 +249,20 @@ extension GameCare {
             Self.demoPlayFrames += 1
             if m != "wand", play.active, play.phase == .inHand, play.camBlend > 0.95, Self.demoPlayFrames > 420, Self.demoPlayFrames % 240 == 0 {          // (a flick at the middle every 4 s: the ball flies, a Jelbie heads / kicks it back)
                 let sz = play.viewSize, dx: CGFloat = [0, -0.18, 0.2, 0.05][(Self.demoPlayFrames / 240) % 4] * sz.width
-                play.flick(from: CGPoint(x: sz.width * 0.5, y: sz.height * 0.83), velocity: CGVector(dx: dx * 2, dy: -sz.height * 1.8))
+                var vel = CGVector(dx: dx * 2, dy: -sz.height * 1.8)
+                if UserDefaults.standard.integer(forKey: "PlayDemoAim") != 0 {          // (play-spread-r3 capture aid: aimed at one Jelmiko's head, like a real flick)
+                    let line = play.jellies
+                    if !line.isEmpty {
+                        let who = line[(Self.demoPlayFrames / 240) % line.count]
+                        if let head = GameCamera.screenPoint(floor: who.pos, y: who.headTop, size: sz) {
+                            let from = CGPoint(x: sz.width * 0.5, y: sz.height * 0.83), ddx = head.x - from.x, ddy = head.y - from.y, L = hypot(ddx, ddy)
+                            if L > 20 { let spd = (L / sz.height) / CGFloat(TossAim.reach); vel = CGVector(dx: ddx / L * spd * sz.height, dy: ddy / L * spd * sz.height) }
+                        }
+                    }
+                }
+                play.flick(from: CGPoint(x: sz.width * 0.5, y: sz.height * 0.83), velocity: vel)
             }
-            if Self.demoPlayFrames == 300 { if m == "wand" { beginPlay(wand: BubbleWand.shared); BubbleWand.shared.startDemo(mode: 2, care: self) } else { beginPlay(ball: .ball) } }
+            if Self.demoPlayFrames == 300 { if m == "wand" { beginPlay(wand: BubbleWand.shared); BubbleWand.shared.startDemo(mode: 2, care: self) } else { beginPlay(ball: m == "beach" ? .beachball : (m == "soccer" ? .soccerball : .ball)) } }          // (play-spread-r3 capture aid: -StartParkPlay beach | soccer)
         }
         #endif
         if park.phase == .playing, let t = work.hopHost {          // the first hopscotch turn: a visitor who is free goes (the line's invitation brings the others)
