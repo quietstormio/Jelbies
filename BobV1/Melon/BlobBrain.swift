@@ -2000,6 +2000,8 @@ final class BlobBrain {
         } }
         return (worst, dir)
     }
+    /// glitch-hunt-r3: where `sendHeld` last drew the held / tossed food piece (dev glitch probe only; nil when nothing is held).
+    var heldDrawnPos: SIMD3<Float>?
     func attachBean(_ sim: SoftBody, _ pose: BodyPose, lifted: Bool, _ v: inout [SIMD3<Float>]) {
         let c0 = sim.restCentroid
         let fp = (centroid: pose.centroid, rotation: pose.rotation, restCentroid: c0)
@@ -3051,6 +3053,7 @@ final class BlobBrain {
         var k: Float = 1
         if dine.flying { let u = min(1, max(0, (dine.t - Self.tossFlick) / (Self.tossLand - Self.tossFlick))); k = 1 - 0.6 * smooth01((u - 0.8) / 0.2) }
         let m = simd_float4x4(columns: (SIMD4(k, 0, 0, 0), SIMD4(0, k, 0, 0), SIMD4(0, 0, k, 0), SIMD4(p.x, p.y, p.z, 1)))
+        heldDrawnPos = p          // (glitch-hunt-r3: where the held / tossed piece was drawn, for the dev glitch probe)
         if dine.mode == .fork { h.holdBite(m) } else { h.hold(m) }
     }
 
