@@ -110,6 +110,7 @@ struct GaitDriver {
     /// blends from the standing anchor / rotation over `startEaseTime`. `-HopStartEase 0` (env HOPSTART_OFF=1) = the step.
     nonisolated(unsafe) static var hopStartEase = ProcessInfo.processInfo.environment["HOPSTART_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "HopStartEase") != nil && UserDefaults.standard.integer(forKey: "HopStartEase") == 0)
     static let startEaseTime: Float = 0.12
+    nonisolated(unsafe) static var hopStartRotKeep = ProcessInfo.processInfo.environment["HOPSTARTROT_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "HopStartRotKeep") != nil && UserDefaults.standard.integer(forKey: "HopStartRotKeep") == 0)
     private var crouchA0 = SIMD3<Float>.zero, crouchQ0 = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), crouchEaseOK = false
 
     var isBusy: Bool { phase != .idle }
@@ -226,7 +227,10 @@ struct GaitDriver {
         crouchK0 = Self.hopEase ? sim.attractor.strength : 0; crouchSy0 = sim.attractor.squash          // (glitch-hunt-r1: the hold and squash he had are handed over, not dropped)
         groundFrom = sim.floorY; groundTo = hopToGround ?? sim.floorY; hopToGround = nil
         self.chained = chained
-        sim.attractor.rotation = yawQ(yaw0)
+        // glitch-hunt-r6: hop() set the rotation to yaw only for the one step before the crouch's first tick (that tick blends from the standing rotation again: `hopStartEase`);
+        // the attention pitch (~16 deg) vanished for exactly one step and the arm capsules riding the attractor swung ~10 cm down and back (the hop-start arm pop, 8.6 cm).
+        // With `hopStartRotKeep` the standing rotation is left for that step. `-HopStartRotKeep 0` (env HOPSTARTROT_OFF=1) = as before.
+        if !(Self.hopStartRotKeep && Self.hopStartEase && crouchEaseOK) { sim.attractor.rotation = yawQ(yaw0) }
     }
 
     /// Fling: the body gets `velocity` (and a rolling spin), the attractor stays off for `freeTime`, then he rights
