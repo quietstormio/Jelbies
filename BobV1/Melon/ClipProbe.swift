@@ -207,7 +207,7 @@ enum ClipProbe {
                 for x in [Float(-3.3), 3.5] { m = max(m, 0.42 - hypotf(p.x - x, p.z - (Z + 0.8))) }
                 return m
             }, lo: V3(-4, 0, Z), hi: V3(4, 1, Z + 1.5)))
-            out.append(boxProp("groom:step", lo: V3(dx - 0.95, 0.0, Z), hi: V3(dx + 0.95, 0.06, Z + 0.9)))
+            out.append(boxProp("groom:step", lo: V3(dx - 0.95, 0.0, Z), hi: V3(dx + 0.95, 0.024, Z + 0.9)))
             out.append(boxProp("groom:sandwichboard", lo: V3(0.0, 0.16, Z + 0.55), hi: V3(0.6, 1.0, Z + 0.78)))
             out.append(boxProp("groom:flowerbox", lo: V3(-2.4, 0.1, Z + 0.36), hi: V3(-0.7, 0.42, Z + 0.64)))
             out.append(boxProp("groom:bench", lo: V3(-5.2, 0.2, Z + 0.1), hi: V3(-3.9, 1.0, Z + 0.55)))
