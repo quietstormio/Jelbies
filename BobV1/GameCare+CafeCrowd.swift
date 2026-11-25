@@ -462,7 +462,7 @@ extension GameCare {
                 // a waypoint that is not the last is taken while he is still walking (0.6 u before it): the next leg starts without a stop
                 if let wp = m.path.first, m.path.count > 1, simd_distance(pos, wp) < 0.8 {
                     m.path.removeFirst()
-                    if let n = m.path.first { m.reqWp = n; m.reqT = 0; b.requestNow(.goTo(n)) }
+                    if let n = m.path.first { m.reqWp = n; m.reqT = 0; crowdRetarget(b, n) }
                     continue
                 }
                 guard idleNow else { continue }
@@ -503,8 +503,27 @@ extension GameCare {
         }
     }
 
+    /// move-crowd-r2 (café corners): the next leg of a customer's path. Asked with `requestNow` every corner was the end of one walk (an abort, the momentum dropped) and the start of the next from a stand
+    /// (a turn on the spot for anything over 29 degrees): a visible stop at every corner. Now the running walk is re-aimed in place (same job, same step), and the customer's goTo may curve, so the corner is
+    /// walked round. Anything else (no walk running, a request pending) asks as before. Switch: env CAFECORNER=0 / `-CafeCorner 0` = the old ask.
+    private func crowdRetarget(_ b: BlobBrain, _ n: SIMD2<Float>) {
+        if Self.cafeCornerOn, b.pending == nil, case .walk(_, let then) = b.script, case .goTo? = b.job {
+            b.crowd.cafeCurve = true
+            b.job = .goTo(n); b.script = .walk(target: n, then: then)
+            b.route = []; b.stuckT = 0; b.bestDist = .infinity; b.steerStall = 0; b.steerWait = 0
+            return
+        }
+        b.requestNow(.goTo(n))
+    }
+    nonisolated(unsafe) static var cafeCornerOn: Bool = {
+        if let e = ProcessInfo.processInfo.environment["CAFECORNER"] { return e != "0" }
+        if DevArgs.enabled, UserDefaults.standard.object(forKey: "CafeCorner") != nil { return UserDefaults.standard.integer(forKey: "CafeCorner") != 0 }
+        return true
+    }()
+
     private func crowdArrived(_ g: CafeLiveGroup, _ m: CafeMember, landscape: Bool) {
         guard let b = m.actor.brain else { return }
+        b.crowd.cafeCurve = false
         let cs = cafeBook.crowd
         crowdClose(m)
         if g.phase == .leaving {

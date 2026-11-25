@@ -200,6 +200,8 @@ final class BlobBrain {
     var mix = MixBook()
     /// move-crowd-r1 (Melon/MoveCrowd.swift): the waypoint-leg look-ahead clock.
     var crowd = CrowdBook()
+    /// move-crowd-r2 (BlobBrain+WalkEnd.swift): the eased hand-off from a walk to the stand.
+    var walkEnd = WalkEndState()
     var napWhy = "table"          // (round 2b: which roll started the last sleep: the logger counts nap causes)
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
@@ -1848,7 +1850,8 @@ final class BlobBrain {
         // pitch outermost, roll innermost: rolling no longer turns the face (pitch * roll coupling was -3.9 deg in the game)
         let q = yawQuat(yaw + twist + chat.twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch + ears.pitch + storm.pitch + chat.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll + expr.roll + ears.roll + storm.roll + chat.roll, axis: SIMD3(0, 0, 1))
         sim.attractor.rotation = q
-        let sq = squash * touchSquash * socialBook.squash * ears.squash * storm.squash
+        var sq = squash * touchSquash * socialBook.squash * ears.squash * storm.squash
+        if Self.walkEndSettle { sq = walkEndSquash(sq, dt) }          // (move-crowd-r2: the stand's squash eased in after a walk, BlobBrain+WalkEnd.swift)
         sim.attractor.squash = sq
         if geom.valid {
             // pivot on his feet: the middle of both soles (or one foot, for the wave's lean) stays on the floor at its world spot
@@ -1865,6 +1868,7 @@ final class BlobBrain {
             else { m = geom.mid; w = SIMD2(px, pz) + rotXZ(geom.midOff, yaw) }
             var a = sim.pivotAnchor(rotation: q, squash: sq, pivot: m, world: SIMD3(w.x, sim.floorY + m.y, w.y))
             a.y += lift
+            if Self.walkEndSettle { a = walkEndAnchor(a) }          // (move-crowd-r2: the pivot moves from the stance foot to both feet without a jump)
             sim.attractor.anchor = a
         } else {
             sim.attractor.anchor = SIMD3(px, sim.groundedAnchorY(rotation: q, squash: sq) + lift, pz)
