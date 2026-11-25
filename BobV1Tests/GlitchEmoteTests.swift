@@ -16,11 +16,15 @@ final class GlitchEmoteTests: XCTestCase {
     struct Pops { var byPart: [String: Int] = [:]; var max: [String: Float] = [:]; var lines: [String] = []; var diag = ""; var events: [(part: String, cm: Float, hop: Bool)] = [] }
 
     /// Runs `kind` on a fresh rig for `seconds` (plus 1.5 s after it ends) and counts the pops over `bar` cm per step.
-    func pops(_ kind: IdleKind, seconds: Float = 8, bar: Float = 3, dumpWindow: ClosedRange<Float> = 99...99) -> Pops {
+    func pops(_ kind: IdleKind, seconds: Float = 8, bar: Float = 3, dumpWindow: ClosedRange<Float> = 99...99, label: String? = nil,
+              start: ((MotionRig) -> Void)? = nil, isOn: ((MotionRig) -> Bool)? = nil, each: ((MotionRig, Float) -> Void)? = nil, dumpEnd: Bool = false) -> Pops {
         let r = MotionRig(game: true)
         var core = GlitchCore(); core.bars.poseCm = bar
         var out = Pops()
-        r.brain.commandedIdle = kind          // (as the tour / a voice command does: the brain starts it on its next tick)
+        if let start { start(r) } else { r.brain.commandedIdle = kind }          // (as the tour / a voice command does: the brain starts it on its next tick)
+        let on = isOn ?? { $0.brain.idleState.kind != nil }
+        let name = label ?? "\(kind)"
+        var ring: [String] = [], tail = 0
         var started = false
         var after: Float = -1
         let n = Int(seconds * 60)
@@ -28,7 +32,15 @@ final class GlitchEmoteTests: XCTestCase {
         var lastLocal: [SIMD3<Float>] = []
         for i in 0..<n {
             r.tick()
+            each?(r, Float(i) / 60)
             r.render()
+            if dumpEnd {
+                let b = r.brain, a = r.sim.attractor
+                let line = String(format: "GLITCH end %@ t=%.3f script=%@ act=%@ gait=%@ k=%.0f squash=%.3f poseW=%.2f feetInit=%d bean=%.2f armG=%.2f armBlend=%.2f lift=%.2f walkWant=%.1f dirW=%.2f anchorY=%.3f fitY=%.3f",
+                    name, Float(i) / 60, b.scriptKindName, "\(b.activity)", "\(b.gait.phase)", a.strength, a.squash, b.poseW, b.feetInit ? 1 : 0, r.skinner.beanBlend, b.armG, r.skinner.armBlend, b.armLiftNow, b.armWalkWant, b.armDirW, a.anchor.y, r.sim.bodyPose(iterations: 8).centroid.y)
+                let line2 = line + String(format: " sleep=%d/%.2f/k%.2f idlePhase=%d extra=%d override=%d retract=%d", b.sleep.stage, b.sleep.t, b.sleep.k, b.idleState.phase, r.skinner.extraVertices.count, r.skinner.overrideVertices.count, r.skinner.retractVertices.count)
+                if tail > 0 { MotionLog.write(line2); tail -= 1 } else { ring.append(line2); if ring.count > 4 { ring.removeFirst() } }
+            }
             if dumpWindow.contains(Float(i) / 60) {
                 let a = r.sim.attractor, f = r.sim.bodyPose(iterations: 8)
                 let ae = a.rotation.act(SIMD3<Float>(0, 0, 1)), au = a.rotation.act(SIMD3<Float>(0, 1, 0))
@@ -46,10 +58,17 @@ final class GlitchEmoteTests: XCTestCase {
                 out.byPart[part, default: 0] += 1
                 out.max[part] = Swift.max(out.max[part] ?? 0, e.perStep)
                 out.events.append((part, e.perStep, r.brain.gait.isBusy))
-                out.lines.append(String(format: "%@ t=%.3f %@ %.1f cm %@ armDirW=%.2f armLift=%.2f armG=%.2f gait=%@ k=%.0f", "\(kind)", Float(i) / 60, part, e.perStep, e.detail, r.brain.armDirW, r.brain.armLiftNow, r.brain.armG, "\(r.brain.gait.phase)", r.sim.attractor.strength))
+                if dumpEnd, e.perStep >= 4, let vi = Int32(e.detail.components(separatedBy: "vi=").last ?? "") {
+                    let sk = r.skinner, fs = r.brain.footSkin
+                    let member = "retract=\(sk.retractVertices.contains(vi)) armRetract=\(sk.armRetractVertices.contains(vi)) override=\(sk.overrideVertices.contains(vi)) extra=\(sk.extraVertices.contains(vi)) footSkin=\(fs.verts.indices.map { fs.verts[$0].contains(vi) }) skinVerts=\(sk.skinVerts.contains(vi))"
+                    MotionLog.write(String(format: "GLITCH popdump %@ t=%.3f %@ %.1f cm vi=%d %@", name, Float(i) / 60, part, e.perStep, vi, member))
+                    for l in ring { MotionLog.write("GLITCH   " + l) }
+                    ring = []; tail = 2
+                }
+                out.lines.append(String(format: "%@ t=%.3f %@ %.1f cm %@ armDirW=%.2f armLift=%.2f armG=%.2f gait=%@ k=%.0f", name, Float(i) / 60, part, e.perStep, e.detail, r.brain.armDirW, r.brain.armLiftNow, r.brain.armG, "\(r.brain.gait.phase)", r.sim.attractor.strength))
             }
-            if r.brain.idleState.kind != nil { started = true }
-            if after < 0, started, r.brain.idleState.kind == nil { after = Float(i) / 60 }
+            if on(r) { started = true }
+            if after < 0, started, !on(r) { after = Float(i) / 60; if dumpEnd { for l in ring { MotionLog.write(l) }; ring = []; tail = 8 } }
             if after >= 0, Float(i) / 60 > after + 1.5 { break }
         }
         if !started { out.diag = "did not start: "; }
@@ -93,6 +112,67 @@ final class GlitchEmoteTests: XCTestCase {
         }
         MotionLog.write("GLITCH hop foot pops (bounce + jacks + hopscotch): morph snap \(off) (max \(offMax) cm), eased \(on) (max \(onMax) cm)")
         XCTAssertLessThan(on, Swift.max(1, off))
+    }
+
+    /// The arm override is drawn eased (BlobBrain.armDirEase): the end of a bounce / jacks / joy no longer snaps the arms (21 cm in one step).
+    func testEmoteEndArmsWithoutAPop() {
+        let saved = BlobBrain.armDirEase
+        defer { BlobBrain.armDirEase = saved }
+        var off: [Float] = [], on: [Float] = []
+        for k in [IdleKind.bounce, .jacks, .joy] {
+            BlobBrain.armDirEase = false
+            off += pops(k).events.filter { !$0.hop && $0.part == "arm" }.map(\.cm)
+            BlobBrain.armDirEase = true
+            on += pops(k).events.filter { !$0.hop && $0.part == "arm" }.map(\.cm)
+        }
+        MotionLog.write("GLITCH emote-end arm pops (bounce + jacks + joy, not hopping): snap \(off.count) (max \(off.max() ?? 0) cm), eased \(on.count) (max \(on.max() ?? 0) cm)")
+        XCTAssertLessThan(on.max() ?? 0, Swift.max(6, 0.5 * (off.max() ?? 0)), "the end of an emote leaves the arms without a big pop")
+    }
+
+    /// The bean collar fades out at the end of its reach along the foot axis (Skinner.collarEdgeEase): the wave's lifted foot no longer flicks the belly skin over it.
+    func testWaveLegSkinWithoutAPop() {
+        let saved = Skinner.collarEdgeEase
+        defer { Skinner.collarEdgeEase = saved }
+        func run() -> [Float] { pops(.bounce, seconds: 6, label: "wave", start: { $0.brain.pending = .wave }, isOn: { $0.brain.isWaving }).events.filter { $0.part == "body" && $0.cm >= 3 }.map(\.cm) }
+        Skinner.collarEdgeEase = false; let off = run()
+        Skinner.collarEdgeEase = true; let on = run()
+        MotionLog.write("GLITCH wave body pops >= 3 cm: cut \(off.count) (max \(off.max() ?? 0)), faded \(on.count) (max \(on.max() ?? 0))")
+        XCTAssertLessThan(on.count, off.count)
+    }
+
+    /// A nap's lie-down and get-up ease the attractor's anchor (BlobBrain.sleepAnchorEase): no 13 cm anchor step, fewer pops.
+    func testNapWithoutAnchorPops() {
+        let saved = BlobBrain.sleepAnchorEase
+        defer { BlobBrain.sleepAnchorEase = saved }
+        func run() -> (pops: [Float], step: Float) {
+            var held = false, last: SIMD3<Float>? = nil, step: Float = 0
+            let p = pops(.sleep, seconds: 16, label: "sleep", start: { $0.brain.commandedIdle = .sleep }, isOn: { $0.brain.idleState.kind == .sleep },
+                         each: { r, _ in
+                             if !held, r.brain.idleState.kind == .sleep { held = true; r.brain.sleep.hold = 4 }
+                             let a = r.sim.attractor.anchor; if let l = last { step = Swift.max(step, simd_length(a - l)) }; last = a })
+            return (p.events.filter { $0.cm >= 5 }.map(\.cm), step)
+        }
+        BlobBrain.sleepAnchorEase = false; let off = run()
+        BlobBrain.sleepAnchorEase = true; let on = run()
+        MotionLog.write("GLITCH nap: pops >= 5 cm snap \(off.pops.count) (max \(off.pops.max() ?? 0)), eased \(on.pops.count) (max \(on.pops.max() ?? 0)); largest anchor step snap \(off.step), eased \(on.step)")
+        XCTAssertLessThan(on.step, 0.05, "no anchor step of 5 cm or more")
+        XCTAssertLessThanOrEqual(on.pops.count, off.pops.count)
+    }
+
+    /// Log only (GLITCH_DUMP=1): the ends of a bounce and a jacks, a wave, a nap and its wake, with the brain / attractor state around each end and every pop.
+    func testDumpEndsWaveSleep() throws {
+        guard ProcessInfo.processInfo.environment["GLITCH_DUMP"] == "1" else { throw XCTSkip("GLITCH_DUMP=1 runs the dump") }
+        var cases: [Pops] = []
+        cases.append(pops(.bounce, dumpEnd: true))
+        cases.append(pops(.jacks, dumpEnd: true))
+        cases.append(pops(.bounce, seconds: 6, label: "wave", start: { $0.brain.pending = .wave }, isOn: { $0.brain.isWaving }, dumpEnd: true))
+        var held = false
+        cases.append(pops(.sleep, seconds: 20, label: "sleep", start: { $0.brain.commandedIdle = .sleep }, isOn: { $0.brain.idleState.kind == .sleep },
+                          each: { r, _ in if !held, r.brain.idleState.kind == .sleep { held = true; r.brain.sleep.hold = 4 } }, dumpEnd: true))
+        for p in cases {
+            MotionLog.write("GLITCH dumpcase [\(p.diag)]: " + p.byPart.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value) (max \(String(format: "%.1f", p.max[$0.key] ?? 0)))" }.joined(separator: ", "))
+            for l in p.lines { MotionLog.write("GLITCH pop " + l) }
+        }
     }
 
     /// Survey (log only): every solo emote's pops by part.

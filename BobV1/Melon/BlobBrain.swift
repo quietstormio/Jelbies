@@ -349,6 +349,15 @@ final class BlobBrain {
     var armDirEl: [Float] = [0, 0]
     var armDirSa: [Float] = [0, 0]
     var armDirOut: Float = 0
+    /// glitch-hunt-r2: the nap anchor ease's state (BlobBrain+Sleep.swift `easeSleepAnchor`).
+    var sleepAnchorLast: SIMD3<Float>?, sleepAnchorFrom: SIMD3<Float>?, sleepAnchorT: Float = 0, sleepAnchorNear: Float = 0, sleepAnchorSerial = 0
+    /// glitch-hunt-r2: the idle arm override as drawn (`armDirEase`) and the pose it fades from.
+    var armDirDrawn: Float = 0, armDirLastEl: [Float] = [0, 0], armDirLastSa: [Float] = [0, 0], armDirLastOut: Float = 0
+    /// glitch-hunt-r2 (2026-11-24): the idle arm override (`armDirW`: the bounce's flap, jacks, the cheer, the reach ...) is DRAWN following `armDirW` at most 1 per `armDirEaseTime`,
+    /// from the last pose it had. Emotes set `armDirW = 0` in one step at their end: both arms jumped up to 21 cm (the end of every bounce; the dev glitch probe's rig).
+    /// `-ArmDirEase 0` (env ARMDIREASE_OFF=1) = the snap.
+    nonisolated(unsafe) static var armDirEase = ProcessInfo.processInfo.environment["ARMDIREASE_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ArmDirEase") != nil && UserDefaults.standard.integer(forKey: "ArmDirEase") == 0)
+    static let armDirEaseTime: Float = 0.2
     /// 1 while a social hand reach drives the arm override (BlobSocial+Hands.swift): the arm is capped by the wave's thumb (ArmCap.maximum), not by the rest nub of the body-led moves, and the capsule is drawn with the body standing still.
     var armReachW: Float = 0
     /// Body-led weight 0...1: while a body-led move (jacks, flip, any arm override) runs, the arms stay at or below the rest nub even between their flaps (ArmCap).
@@ -822,6 +831,7 @@ final class BlobBrain {
         toyPoseTick()
         HopDiag.lap(.tkToy, &ht)
         drivePose(sim, dt)
+        easeSleepAnchor(sim, dt)          // (glitch-hunt-r2: the step back onto his feet after a nap eases)
         HopDiag.lap(.tkDrivePose, &ht)
         driveLimbs(sim, skinner, dt)
         updateActivity()
@@ -2557,6 +2567,7 @@ final class BlobBrain {
         if armG <= 0.0001 {
             armG = 0
             if armWasOut { skinner.clearArmCapsules(); skinner.clearOverride(); armWasOut = false; nubPhi = [0, 0] }
+            armDirDrawn = armDirW          // (no capsules drawn: nothing to ease)
             return
         }
         guard geom.valid else { return }
@@ -2579,6 +2590,15 @@ final class BlobBrain {
         if volleyFitted { let fit = sim.bodyPose(iterations: 3); armQ = fit.rotation; armAnchor = fit.centroid }          // (volleyball: the capsules root in the body that is drawn, not in the attractor it lags)
         let RS = simd_float3x3(armQ) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
         let org = armAnchor - RS * c0
+        // the idle arm override as drawn (glitch-hunt-r2): eased, never snapped
+        var dirW = armDirW, dirEl = armDirEl, dirSa = armDirSa, dirOut = armDirOut
+        if Self.armDirEase {
+            if armDirW > 0.001 { armDirLastEl = armDirEl; armDirLastSa = armDirSa; armDirLastOut = armDirOut }
+            armDirDrawn += max(-dt / Self.armDirEaseTime, min(dt / Self.armDirEaseTime, armDirW - armDirDrawn))
+            if armDirDrawn < 0.0005 { armDirDrawn = 0 }
+            dirW = armDirDrawn
+            if armDirW <= 0.001 { dirEl = armDirLastEl; dirSa = armDirLastSa; dirOut = armDirLastOut }
+        } else { armDirDrawn = armDirW }
         for si in 0..<2 {
             let sg: Float = si == 0 ? -1 : 1
             if armWalkWant > 0 {
@@ -2592,7 +2612,7 @@ final class BlobBrain {
                 armLastS[si] = tgt
             }
             nubPhi[si] = (armLastS[si] - ArmPath.armWalkCentreDeg) / 33
-            let g = armDirW > 0 ? armGeometry(S: armLastS[si], lift: armLift, dirEl: armDirEl[si], dirSa: armDirSa[si], w: armDirW, out: armDirOut) : armGeometry(S: armLastS[si], lift: armLift)
+            let g = dirW > 0 ? armGeometry(S: armLastS[si], lift: armLift, dirEl: dirEl[si], dirSa: dirSa[si], w: dirW, out: dirOut) : armGeometry(S: armLastS[si], lift: armLift)
             armLastGeom[si] = g; armLastRawTip[si] = armRawTip
             ArmCapsule.fill(a: g.a, b: g.b, r1: g.r1, r2: g.r2, flatten: g.f, sigma: sg, into: &armScratch[si])
             let r = armGeometry(S: 25, lift: 0, capped: false)
