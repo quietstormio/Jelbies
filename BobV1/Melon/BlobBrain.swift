@@ -398,6 +398,7 @@ final class BlobBrain {
     var beanCorr: [SIMD3<Float>] = [.zero, .zero]      // the eased post-step correction applied to each world-placed bean (refitBeans)
     var beanFitUsed: BodyPose? = nil     // the fitted body pose the beans were last placed on (nil = placed on the attractor): the post-step refit carries them onto the pose the body reaches after the step
     var beanSplay: Float = 0              // 0...1: how far the legs are splayed in a V (flip flight)
+    var beanFitW: Float = 0              // glitch-hunt-r4: the fitted pose's eased share of the rigid feet (`fitGateEase`)
     var beanFitHold = 0                  // steps left of the post-spin hold: feet stay on the fitted pose, keep their shape
     var beanForceLast = false            // the last driveBeansRigid call was a flip's (the post-step refit keeps the foot's shape then)
     var beanForce = false                // a spin move (flip) owns the beans: out for the whole flight, placed on the FITTED pose
@@ -2163,8 +2164,16 @@ final class BlobBrain {
         } else if scale != 1 { splay = 0 }
         let hopping = raceHopFitted || volleyFitted || scooterHopFitted          // the whole race jump (crouch / flight / landing) on the fitted pose: no switch to the attractor pose at the 0.1 m / 0.12 gates (a 4-5 cm flicker of the soles in the landing)
         let useFit = beanForce || beanFitHold > 0 || fitNeeded || hopping
-        let fitted: BodyPose? = useFit ? fit : nil
-        if scale == 1 { beanFitUsed = fitted }
+        // glitch-hunt-r4: the 0.1 u / 0.12 gate (`fitNeeded`) flips for single steps at a hop's landing (jacks: fit 0 -> 1 -> 0), and each flip moved the whole foot
+        // 6-8 cm in the world in one step. With `fitGateEase` a switch that only the gate asks for is blended over `fitGateSteps` steps; a spin, the post-spin hold and the
+        // fitted hops (race, volleyball, scooter) still switch at once. `-FitGateEase 0` (env FITGATE_OFF=1) = as before.
+        var fitW: Float = useFit ? 1 : 0
+        if scale == 1 {
+            let forced = beanForce || beanFitHold > 0 || hopping || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.3          // (held / thrown / far off the attractor: the fitted pose at once, as before)
+            if Self.fitGateEase && !forced { beanFitW += max(-1 / Self.fitGateSteps, min(1 / Self.fitGateSteps, fitW - beanFitW)); fitW = beanFitW } else { beanFitW = fitW }
+        } else if Self.fitGateEase && !(beanForce || beanFitHold > 0 || hopping || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.3) { fitW = beanFitW }
+        let fitted: BodyPose? = fitW > 0 ? fit : nil
+        if scale == 1 { beanFitUsed = fitW >= 0.5 ? fit : nil }
         for s in 0..<2 {
             let c = geom.contact[s]
             let sxs: Float = c.x < 0 ? -1 : 1
@@ -2179,7 +2188,11 @@ final class BlobBrain {
                     l = Self.splayHip + d
                 }
                 let r = SIMD3(c.x + l.x, c.y + l.y, c.z + l.z)
-                return fitted.map { $0.centroid + $0.rotation.act(r - sim.restCentroid) } ?? bodyRigid(sim, r)
+                guard let f = fitted else { return bodyRigid(sim, r) }
+                let pf = f.centroid + f.rotation.act(r - sim.restCentroid)
+                if fitW >= 1 { return pf }
+                let pa = bodyRigid(sim, r)
+                return pa + (pf - pa) * fitW
             }
             // 2026-10-28 (legs stay legs): in a flip (`beanForce`) the foot keeps its boot shape (`forceMorphCap`: no round bun pressed on the body) and a landing
             // squash that drives the fitted bean below the floor LIFTS the whole bean onto the floor instead of clamping every vertex to it (which flattened the foot into a
@@ -2224,7 +2237,11 @@ final class BlobBrain {
     var volleyFitted: Bool { Self.onePieceVolley && volley.active && volley.phase != .ground }
     /// glitch-hunt-r1: the body-rigid feet (hops, jacks, emotes; not the walk) change their ball / boot morph by at most `beanMorphStep` per step. `-BeanMorphEase 0` (env BEANMORPH_OFF=1) = as before.
     nonisolated(unsafe) static var beanMorphEase = ProcessInfo.processInfo.environment["BEANMORPH_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "BeanMorphEase") != nil && UserDefaults.standard.integer(forKey: "BeanMorphEase") == 0)
-    static let beanMorphStep: Float = 0.25
+    static var beanMorphStep: Float { beanMorphSlow ? 0.1 : 0.25 }
+    /// glitch-hunt-r4: the rigid feet's ball -> boot morph at most 0.1 a step (was 0.25: the toe still swung 8.6 cm in the step the foot met the floor). `-BeanMorphSlow 0` (env BEANMORPHSLOW_OFF=1) = 0.25.
+    nonisolated(unsafe) static var beanMorphSlow = ProcessInfo.processInfo.environment["BEANMORPHSLOW_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "BeanMorphSlow") != nil && UserDefaults.standard.integer(forKey: "BeanMorphSlow") == 0)
+    nonisolated(unsafe) static var fitGateEase = ProcessInfo.processInfo.environment["FITGATE_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "FitGateEase") != nil && UserDefaults.standard.integer(forKey: "FitGateEase") == 0)
+    static let fitGateSteps: Float = 6
     nonisolated(unsafe) static var raceHopFeet = true          // (false = the old race jump feet: before / after captures)
     /// The planted soles' pop at take-off: the drawn beans stood on the world-planted soles (ahead of / behind the body by up to a stride), the hop's first frame draws them body-rigid
     /// under the body. `raceCarry` is that horizontal offset per foot, eased out over the crouch (`raceCarryT` seconds left of `raceCarryTime`).
