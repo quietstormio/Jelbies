@@ -228,4 +228,4 @@ enum RoomCamera {
 }
 
 /// Shipped defaults of the park slide's round-5 switches.
-nonisolated enum ParkSlideDefaults { static let arms = true, lean = false, land = true }          // (round 5 measured alone: arms 3.1 -> 1.1 cm on the ride, landing lean 10.2 -> 4.8 cm; the riser lean did not hold (x6: -17 %, x12 and x20 worse), so it stays off)
+nonisolated enum ParkSlideDefaults { static let arms = false, lean = false, land = false }
