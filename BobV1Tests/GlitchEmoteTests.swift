@@ -177,6 +177,24 @@ final class GlitchEmoteTests: XCTestCase {
         XCTAssertLessThan(both.filter { $0 >= 6 }.count, Swift.max(1, off.filter { $0 >= 6 }.count))
     }
 
+    /// Log only (GLITCH_ARM=1): jumping jacks, every arm pop with the arm state of the 6 steps before and 3 after.
+    func testDumpJacksArm() throws {
+        guard ProcessInfo.processInfo.environment["GLITCH_ARM"] == "1" else { throw XCTSkip("GLITCH_ARM=1 runs the arm dump") }
+        var ring: [String] = [], tail = 0
+        let p = pops(.jacks, seconds: 6, label: "jacksarm", each: { r, t in
+            let b = r.brain, a = r.sim.attractor
+            let line = String(format: "GLITCH arm t=%.3f gait=%@ act=%@ hop=%d jackA=%.2f dirW=%.2f drawn=%.2f lift=%.2f liftV=%.2f armG=%.2f blend=%.2f short=%.2f walkWant=%.1f S=%.1f k=%.0f squash=%.3f anchorY=%.3f tip0=(%.3f,%.3f,%.3f)",
+                t, "\(b.gait.phase)", "\(b.activity)", b.idleState.hop, b.idleState.jackA, b.armDirW, b.armDirDrawn, b.armLiftNow, b.armLiftV, b.armG, r.skinner.armBlend, b.armShortW, b.armWalkWant, b.armLastS[0], a.strength, a.squash, a.anchor.y,
+                b.armLastGeom[0].b.x, b.armLastGeom[0].b.y, b.armLastGeom[0].b.z)
+            if tail > 0 { MotionLog.write(line); tail -= 1 } else { ring.append(line); if ring.count > 6 { ring.removeFirst() } }
+        }, onPop: { e, t in
+            guard e.part == "arm" else { return }
+            MotionLog.write(String(format: "GLITCH armpop t=%.3f %.1f cm hop=%d", t, e.cm, e.hop ? 1 : 0))
+            for l in ring { MotionLog.write(l) }; ring = []; tail = 3
+        })
+        MotionLog.write("GLITCH jacks arm pops: \(p.events.filter { $0.part == "arm" }.count)")
+    }
+
     /// Log only (GLITCH_FOOT=1): one jumping-jacks run, every foot pop while hopping with the foot state of the 6 steps before and 3 after:
     /// the brain's target (skinner.beanPos), the start shape (beanStart), the DRAWN piece (after the skin's join / weld / guard), morph, blend, clearance, the skin's pulls.
     func testDumpJacksFoot() throws {
