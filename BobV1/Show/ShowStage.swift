@@ -117,10 +117,10 @@ nonisolated enum ShowStage {
     /// the performer on the middle and the other three sitting out: two seats beside the middle (rivals 0 and 1) and two back seats (rival 2 and his Jelmiko), each 1.5+ from every other.
     /// A walk between a back seat and the middle goes through the GATE (a point on the middle line, 1.45+ from every seat), so that no walk ever passes through a body that sits out.
     /// `sideways` (a phone / tablet on its side): the performer is in the left third, the chrome column is on the right; rival 2 and the player swap back seats so the walk-on from the left never crosses a seat.
-    static func playerAside(sideways: Bool = false) -> SIMD2<Float> { SIMD2(sideways ? 1.15 : -1.2, -1.65) }          // (show-zoom-r1 2026-11-25, the owner: "zoom out a little for the show they need more room to walk": the Trick frame is ~19% wider and every seat / wing spreads to use it)
+    static func playerAside(sideways: Bool = false) -> SIMD2<Float> { SIMD2(sideways ? 1.15 : -1.1, sideways ? -1.65 : -1.8) }          // (show-zoom-r1 2026-11-25, the owner: "zoom out a little for the show they need more room to walk": the Trick frame is ~19% wider and every seat / wing spreads to use it)
     static let gate = SIMD2<Float>(0, 0.4)
     static func rivalRest(_ k: Int, sideways: Bool = false) -> SIMD2<Float> {
-        let fixed = [sideways ? SIMD2<Float>(-2.0, 0.0) : SIMD2<Float>(-1.7, 0.5), sideways ? SIMD2<Float>(1.8, 0.4) : SIMD2<Float>(1.7, 0.5), SIMD2<Float>(sideways ? -1.15 : 1.2, -1.65)]
+        let fixed = [sideways ? SIMD2<Float>(-2.0, 0.0) : SIMD2<Float>(-1.75, 0.45), sideways ? SIMD2<Float>(1.8, 0.4) : SIMD2<Float>(1.75, 0.45), SIMD2<Float>(sideways ? -1.15 : 1.1, sideways ? -1.65 : -1.8)]
         return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
     }
     /// Where entrant k waits in the wing before she walks on to her rest spot (just outside the wide shot: left, left, right; a phone on its side: all from the left).
@@ -151,6 +151,8 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     var landShift: Float = 0.22
     /// The camera's elevation above level (rad); the close-up's 0.17 unless a frame says otherwise (the Trick round looks down a little more so the back row shows over the performer).
     var elevation: Float = GameCamera.focusElevation
+    /// A phone on its side: its own elevation (nil = `elevation`). show-zoom-r2: the portrait Trick frame looks down more so the depth of the seats shows up the screen.
+    var landElevation: Float? = nil
     /// The Look round (trimmed screen: the creature 1.45x bigger and centred in the space the judge line left); `lookPad` keeps the tablet's old numbers.
     static let look = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.39, fill: 0.67)
     static let lookPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.30, fill: 0.46)
@@ -161,9 +163,9 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     static func trick(pad: Bool) -> ShowFrame {
         func dev(_ key: String, _ v: Float) -> Float { DevArgs.enabled && UserDefaults.standard.object(forKey: key) != nil ? Float(UserDefaults.standard.double(forKey: key)) : v }
         return ShowFrame(spots: [ShowStage.playerSpot],
-                         screenY: dev("ShowTrickSY", pad ? 0.42 : 0.41), fill: dev("ShowTrickFill", pad ? 0.25 : 0.27),
+                         screenY: dev("ShowTrickSY", pad ? 0.47 : 0.44), fill: dev("ShowTrickFill", pad ? 0.25 : 0.27),
                          landScreenY: dev("ShowTrickLandSY", 0.50), landFill: dev("ShowTrickLandFill", pad ? 0.42 : 0.52), landLeft: true, landShift: dev("ShowTrickLandShift", pad ? 0.27 : 0.25),
-                         elevation: dev("ShowTrickEl", 0.45))
+                         elevation: dev("ShowTrickEl", 0.75), landElevation: dev("ShowTrickLandEl", 0.45))
     }
     static var trick: ShowFrame { trick(pad: false) }
     static var trickPad: ShowFrame { trick(pad: true) }

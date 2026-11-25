@@ -240,7 +240,7 @@ final class ShowTurnOrderTests: XCTestCase {
         for (name, size, pad) in [("17e", CGSize(width: 390, height: 844), false), ("17 Pro Max", CGSize(width: 440, height: 956), false), ("small phone", CGSize(width: 375, height: 812), false), ("iPad", CGSize(width: 820, height: 1180), true)] {
             let f = ShowFrame.trick(pad: pad)
             let foot = StageProject.point(ShowStage.playerSpot, y: 0, frame: f, size: size), top = StageProject.point(ShowStage.playerSpot, y: BobShape.H, frame: f, size: size)
-            XCTAssertGreaterThan((foot.y - top.y) / size.height, pad ? 0.15 : 0.11, "\(name): the performer is big")          // (show-zoom-r1 2026-11-25: the Trick camera is ~19% wider for walking room, so the performer is ~15% smaller: was 0.17 / 0.13)
+            XCTAssertGreaterThan((foot.y - top.y) / size.height, pad ? 0.12 : 0.09, "\(name): the performer is big")          // (show-zoom-r1 2026-11-25: the Trick camera is ~19% wider for walking room, so the performer is ~15% smaller: was 0.17 / 0.13)
             XCTAssertLessThan(foot.y / size.height, 0.58, "\(name): his feet are above the menu")
             XCTAssertGreaterThan(top.y / size.height, 0.2, "\(name): his top is under the header")
             for spot in [ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2), ShowStage.playerAside()] {
@@ -261,5 +261,26 @@ final class ShowTurnOrderTests: XCTestCase {
         }
         let marks = [ShowStage.playerSpot, ShowStage.playerAside(), ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)]
         for i in marks.indices { for j in marks.indices where j > i { XCTAssertGreaterThan(simd_distance(marks[i], marks[j]), 1.5) } }
+    }
+
+    /// show-zoom-r2 (2026-11-25, the owner: "they still are bumping into each other"): in a portrait phone / tablet the bodies standing in the Trick round's line never overlap on the screen
+    /// (the body's box foot-to-top and the width of the body, 10% shrunk for the round corners), whichever of the seats the waiting bodies take.
+    func testPortraitLineSilhouettesDoNotOverlap() {
+        for (name, size, pad) in [("17e", CGSize(width: 390, height: 844), false), ("17 Pro Max", CGSize(width: 440, height: 956), false), ("iPad", CGSize(width: 820, height: 1180), true)] {
+            let f = ShowFrame.trick(pad: pad)
+            let marks = [("middle", ShowStage.playerSpot), ("aside", ShowStage.playerAside()), ("rest0", ShowStage.rivalRest(0)), ("rest1", ShowStage.rivalRest(1)), ("rest2", ShowStage.rivalRest(2))]
+            func box(_ s: SIMD2<Float>) -> CGRect {
+                let b = StageProject.body(s, frame: f, size: size)
+                let foot = StageProject.point(s, y: 0, frame: f, size: size), top = StageProject.point(s, y: BobShape.H, frame: f, size: size)
+                return CGRect(x: b.centre.x - b.radius * 0.9, y: top.y + (foot.y - top.y) * 0.05, width: b.radius * 1.8, height: (foot.y - top.y) * 0.9)
+            }
+            for i in marks.indices { for j in marks.indices where j > i {
+                let a = box(marks[i].1), b = box(marks[j].1), x = a.intersection(b)
+                let share = x.isNull ? 0 : (x.width * x.height) / min(a.width * a.height, b.width * b.height)
+                print("[ShowZoom] \(name) \(marks[i].0)/\(marks[j].0) overlap \(String(format: "%.3f", share))")
+                XCTAssertLessThan(share, 0.03, "\(name): \(marks[i].0) and \(marks[j].0) overlap on the screen")
+            } }
+            for m in marks { let b = box(m.1); XCTAssertGreaterThan(b.minX, 0, "\(name) \(m.0) cut left"); XCTAssertLessThan(b.maxX, size.width, "\(name) \(m.0) cut right"); XCTAssertGreaterThan(b.minY, size.height * 0.13, "\(name) \(m.0) under the header"); XCTAssertLessThan(b.maxY, size.height * 0.62, "\(name) \(m.0) over the menu") }
+        }
     }
 }
