@@ -36,7 +36,8 @@ nonisolated enum MoveCrowd {
     nonisolated(unsafe) static var legOn = part("leg")
     nonisolated(unsafe) static var spotOn = part("spot")
     /// reqcurve: a come / goTo walk (café customers, the Show line, the groomer, park calls; never a meal) curves round its route corners like a free walk (it used to stop and turn at every corner over 29 degrees).
-    nonisolated(unsafe) static var reqCurveOn = part("reqcurve")
+    /// OFF by default (café landscape table 0, two 150 s takes each way: corner stops of the customers 16 -> 23, not fewer; the clearance rule refuses most corners beside seated bodies): env MOVECROWD_ON=reqcurve turns it on.
+    nonisolated(unsafe) static var reqCurveOn = (env["MOVECROWD_ON"] ?? "").contains("reqcurve") && part("reqcurve")
     private static func num(_ k: String, _ d: Float) -> Float { Float(env[k] ?? "") ?? d }
 
     /// The one clearance (u, centre to centre): trigger, detour offset, goal rejection.
