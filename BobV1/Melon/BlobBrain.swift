@@ -200,6 +200,8 @@ final class BlobBrain {
     var mix = MixBook()
     /// move-crowd-r1 (Melon/MoveCrowd.swift): the waypoint-leg look-ahead clock.
     var crowd = CrowdBook()
+    /// move-crowd-r2 (BlobBrain+WalkEnd.swift): the eased hand-off from a walk to the stand.
+    var walkEnd = WalkEndState()
     var napWhy = "table"          // (round 2b: which roll started the last sleep: the logger counts nap causes)
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
@@ -735,6 +737,12 @@ final class BlobBrain {
         return true
     }
 
+    /// The locked walk / run gait is driving him (tag walk-lock-2026-11-23): a walk or a come-walk, a turn, a step in place, a step in progress or any run weight. The glitch-hunt eases stay out of it.
+    var walkGaitNow: Bool {
+        switch script { case .walk, .turn, .stepInPlace: return true; default: break }          // (by the script, not the activity: a come-here WAVE reads .coming but is not the walk)
+        return feet.active || runW > 0
+    }
+
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
         releaseInterruptedWave(sim, skinner)
@@ -742,6 +750,7 @@ final class BlobBrain {
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
+        defer { skinner.collarEdgeAllowed = !walkGaitNow }          // (walk-lock: the glitch-hunt collar fade never touches the locked walk / run; Skinning.swift)
         defer { if EmoteSpot.logOn { emoteSpotLog(dt) }; var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) }; storySample(dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
@@ -1848,7 +1857,8 @@ final class BlobBrain {
         // pitch outermost, roll innermost: rolling no longer turns the face (pitch * roll coupling was -3.9 deg in the game)
         let q = yawQuat(yaw + twist + chat.twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch + ears.pitch + storm.pitch + chat.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll + expr.roll + ears.roll + storm.roll + chat.roll, axis: SIMD3(0, 0, 1))
         sim.attractor.rotation = q
-        let sq = squash * touchSquash * socialBook.squash * ears.squash * storm.squash
+        var sq = squash * touchSquash * socialBook.squash * ears.squash * storm.squash
+        if Self.walkEndSettle { sq = walkEndSquash(sq, dt) }          // (move-crowd-r2: the stand's squash eased in after a walk, BlobBrain+WalkEnd.swift)
         sim.attractor.squash = sq
         if geom.valid {
             // pivot on his feet: the middle of both soles (or one foot, for the wave's lean) stays on the floor at its world spot
@@ -1865,6 +1875,7 @@ final class BlobBrain {
             else { m = geom.mid; w = SIMD2(px, pz) + rotXZ(geom.midOff, yaw) }
             var a = sim.pivotAnchor(rotation: q, squash: sq, pivot: m, world: SIMD3(w.x, sim.floorY + m.y, w.y))
             a.y += lift
+            if Self.walkEndSettle { a = walkEndAnchor(a) }          // (move-crowd-r2: the pivot moves from the stance foot to both feet without a jump)
             sim.attractor.anchor = a
         } else {
             sim.attractor.anchor = SIMD3(px, sim.groundedAnchorY(rotation: q, squash: sq) + lift, pz)
@@ -2179,9 +2190,9 @@ final class BlobBrain {
         // fitted hops (race, volleyball, scooter) still switch at once. `-FitGateEase 0` (env FITGATE_OFF=1) = as before.
         var fitW: Float = useFit ? 1 : 0
         if scale == 1 {
-            let forced = beanForce || beanFitHold > 0 || hopping || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.3          // (held / thrown / far off the attractor: the fitted pose at once, as before)
+            let forced = walkGaitNow || beanForce || beanFitHold > 0 || hopping || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.3          // (held / thrown / far off the attractor: the fitted pose at once, as before)
             if Self.fitGateEase && !forced { beanFitW += max(-1 / Self.fitGateSteps, min(1 / Self.fitGateSteps, fitW - beanFitW)); fitW = beanFitW } else { beanFitW = fitW }
-        } else if Self.fitGateEase && !(beanForce || beanFitHold > 0 || hopping || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.3) { fitW = beanFitW }
+        } else if Self.fitGateEase && !(walkGaitNow || beanForce || beanFitHold > 0 || hopping || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.3) { fitW = beanFitW }
         let fitted: BodyPose? = fitW > 0 ? fit : nil
         if scale == 1 { beanFitUsed = fitW >= 0.5 ? fit : nil }
         for s in 0..<2 {

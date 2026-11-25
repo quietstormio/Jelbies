@@ -287,6 +287,8 @@ nonisolated final class Skinner {
     /// glitch-hunt-r2: the collar fades out over the last `collarEdgeFade` of its 0.22 reach along the foot axis instead of a hard cut. `-CollarEdgeEase 0` (env COLLAREDGE_OFF=1) = the cut.
     nonisolated(unsafe) static var collarEdgeEase = ProcessInfo.processInfo.environment["COLLAREDGE_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "CollarEdgeEase") != nil && UserDefaults.standard.integer(forKey: "CollarEdgeEase") == 0)
     static let collarEdgeFade: Float = 0.06
+    /// Set by the brain every tick: false while the locked walk / run gait drives him (the walk-lock golden reads the hard cut there, WalkPolishLockTests).
+    var collarEdgeAllowed = true
     nonisolated(unsafe) static var collarCrossing = true          // (false = the old quarter-circle collar that stood tangent to the piece wall: before / after captures)
     var joinEnabled = true, collarEnabled = true
     /// 2026-11-01: 1 = the collar fillet at full height; the brain lowers it while BOTH feet are off the floor (jacks, hops, flips, the run's flight): the fillet pushes skin 7 cm along the foot axis in a polar frame about the piece,
@@ -490,7 +492,7 @@ nonisolated final class Skinner {
                 if abs(h) > 0.22 { continue }
                 // glitch-hunt-r2: the collar's reach along the foot axis used to end in a hard cut at 0.22: as a foot lifted (the wave's foot, a hop's tuck) skin vertices crossed it and their
                 // fillet (up to `collarK`, 7 cm) switched on / off in one step (4-7 cm pops of the belly skin over the foot). It now fades out over the last `collarEdgeFade`.
-                let eu = min(1, max(0, (abs(h) - (0.22 - Self.collarEdgeFade)) / Self.collarEdgeFade)), edge: Float = Self.collarEdgeEase ? 1 - eu * eu * (3 - 2 * eu) : 1
+                let eu = min(1, max(0, (abs(h) - (0.22 - Self.collarEdgeFade)) / Self.collarEdgeFade)), edge: Float = Self.collarEdgeEase && collarEdgeAllowed ? 1 - eu * eu * (3 - 2 * eu) : 1
                 let x = simd_dot(u, e1), y = simd_dot(u, e2)
                 let rr = (x * x + y * y).squareRoot()
                 let th = atan2f(y, x)

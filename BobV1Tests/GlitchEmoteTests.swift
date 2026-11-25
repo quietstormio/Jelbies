@@ -202,6 +202,46 @@ final class GlitchEmoteTests: XCTestCase {
         _ = (off, on)
     }
 
+    /// glitch-hunt-r6: hop() no longer drops the attention pitch for one step before the crouch (GaitDriver.hopStartRotKeep): no hop-start arm pop.
+    func testHopStartArmPitch() {
+        let saved = GaitDriver.hopStartRotKeep
+        defer { GaitDriver.hopStartRotKeep = saved }
+        func run(_ on: Bool) -> [Float] {
+            GaitDriver.hopStartRotKeep = on
+            var a: [Float] = []
+            for k in [IdleKind.jacks, .bounce, .joy, .hopscotch, .skipHop] { a += pops(k).events.filter { $0.hop && $0.part == "arm" }.map(\.cm) }
+            return a
+        }
+        let off = run(false), on = run(true)
+        func d(_ a: [Float]) -> String { "\(a.count) (>= 6 cm \(a.filter { $0 >= 6 }.count), max \(String(format: "%.1f", a.max() ?? 0)))" }
+        MotionLog.write("GLITCH hop arm pops: pitch dropped \(d(off)), kept \(d(on))")
+        XCTAssertLessThan(on.max() ?? 0, 6, "no arm pop of 6 cm or more in a hop")
+    }
+
+    /// Log only (GLITCH_ARM2=1): the jacks' first crouch, per step: the attractor (arm root), the fitted body, the capsule target and the drawn vertex of the arm that pops.
+    func testDumpHopStartArm() throws {
+        guard ProcessInfo.processInfo.environment["GLITCH_ARM2"] == "1" else { throw XCTSkip("GLITCH_ARM2=1 runs it") }
+        var popped: [Int32] = []
+        // pass 1: find the popping vertex
+        _ = pops(.jacks, seconds: 1.2, onPop: { _, _ in })
+        let p1 = pops(.jacks, seconds: 1.2)
+        for l in p1.lines where l.contains(" arm ") { if let v = Int32(l.components(separatedBy: "vi=").last?.split(separator: " ").first ?? "") { popped.append(v) } }
+        let vi = popped.first ?? 17574
+        MotionLog.write("GLITCH arm2 vertex \(vi)")
+        _ = pops(.jacks, seconds: 1.2, each: { r, t in
+            guard t >= 0.48 && t <= 0.64 else { return }
+            r.render()
+            let a = r.sim.attractor, f = r.sim.bodyPose(iterations: 8), sk = r.skinner
+            func ang(_ q: simd_quatf) -> String { let e = q.act(SIMD3<Float>(0, 0, 1)), u = q.act(SIMD3<Float>(0, 1, 0)); return String(format: "yaw=%.2f pitch=%.2f roll=%.2f", atan2f(e.x, e.z) * 180 / .pi, asinf(-e.y) * 180 / .pi, atan2f(u.x, u.y) * 180 / .pi) }
+            let o = 6 * Int(vi), w = SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]), l = f.rotation.inverse.act(w - f.centroid)
+            var tgt = SIMD3<Float>(repeating: .nan), st = tgt
+            if sk.armFirst.count == 2 { for s in 0..<2 { let k = Int(vi) - sk.armFirst[s]; if k >= 0, k < sk.armPos[s].count { tgt = sk.armPos[s][k]; st = sk.armStart[s][k] } } }
+            MotionLog.write(String(format: "GLITCH arm2 t=%.3f gait=%@ k=%.0f att(%@ anchor=%.3f,%.3f,%.3f sq=%.3f) fit(%@ c=%.3f,%.3f,%.3f) drawn=(%.3f,%.3f,%.3f) local=(%.3f,%.3f,%.3f) tgt=(%.3f,%.3f,%.3f) start=(%.3f,%.3f,%.3f) blend=%.2f lift=%.2f dirW=%.2f drawnW=%.2f short=%.2f",
+                t, "\(r.brain.gait.phase)", a.strength, ang(a.rotation), a.anchor.x, a.anchor.y, a.anchor.z, a.squash, ang(f.rotation), f.centroid.x, f.centroid.y, f.centroid.z,
+                w.x, w.y, w.z, l.x, l.y, l.z, tgt.x, tgt.y, tgt.z, st.x, st.y, st.z, sk.armBlend, r.brain.armLiftNow, r.brain.armDirW, r.brain.armDirDrawn, r.brain.armShortW))
+        })
+    }
+
     /// Log only (GLITCH_ARM=1): jumping jacks, every arm pop with the arm state of the 6 steps before and 3 after.
     func testDumpJacksArm() throws {
         guard ProcessInfo.processInfo.environment["GLITCH_ARM"] == "1" else { throw XCTSkip("GLITCH_ARM=1 runs the arm dump") }

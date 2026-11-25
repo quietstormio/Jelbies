@@ -53,6 +53,9 @@ final class ShowBook {
     var pendingWalks: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
     /// When a walker who stopped short was last asked again (CACurrentMediaTime), by actor id.
     var retryAt: [Int: Double] = [:]
+    /// move-crowd-r2: the show's own game clock (s) for `retryAt`: the retries used the WALL clock, so how often a stopped walker was asked again depended on the machine's speed (a headless run faster than real time
+    /// asked rarely: ShowLineTests' 21 s return; a loaded one often), and the real app on a slow frame waited longer.
+    var gameClock: Double = 0
     /// Bodies that are on their way to the middle (a turn's walk), with the seconds walked so far and the allowance: the walk's length at the stage pace + 1.5 s.
     var heading: [Int: (age: Float, limit: Float)] = [:]
     /// Second legs of walks through the gate: actor id -> where he goes on to.
@@ -372,15 +375,65 @@ extension GameCare {
     }
     static var settleOffset: SIMD2<Float> { ProcessInfo.processInfo.environment["SHOW_SETTLE_OFF"] == "1" ? .zero : SIMD2<Float>(0, 0.15) }          // (env switch for the proof only)
     /// On its side the near seat (-1.65, 0) stands 1.3 from the straight line between the gate and the left back seat: that walk bends through this point (0.3, -0.3) so it never brushes the one who sits there.
+    /// move-crowd-r2: every back seat has one (the walk from the middle to the back-right seat (0.90, -1.40) passed the right near seat at 1.16 and stood held until the keeper carried it, 4 carries in 4 shows):
+    /// a point on the middle line just behind the gate, 1.42+ from every seat in both orientations, so both legs (gate or middle -> point -> seat) keep the gap. Switch: env SHOWSEATWAY=0 / `-ShowSeatWay 0` = the old rule.
     private func seatWaypoint(_ seat: SIMD2<Float>) -> SIMD2<Float>? {
         GameCamera.aspect > 1 && seat.x < -0.5 && seat.y < Self.backRow ? SIMD2(0.3, -0.3) : nil
     }
+    /// move-crowd-r2: the bodies on the stage now (performers + the borrowed rival bodies) but `id`, by their drawn centre.
+    private func showOthers(except id: Int) -> [SIMD2<Float>] {
+        let book = showBook
+        let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+        return bodies.filter { $0.id != id }.map { let c = $0.sim.centroid(); return SIMD2(c.x, c.z) }
+    }
+    /// The straight walk a -> b passes every other body by `showLegGap` (a body standing on b itself does not count: it is a seat the keeper empties).
+    private func showLegClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ others: [SIMD2<Float>]) -> Bool {
+        let ab = b - a, l2 = max(simd_dot(ab, ab), 1e-6)
+        for o in others {
+            if simd_distance(o, b) < 0.5 { continue }
+            let t = min(max(simd_dot(o - a, ab) / l2, 0), 1)
+            if simd_distance(o, a + ab * t) < Self.showLegGap, simd_distance(o, a) > Self.showLegGap - 0.05 { return false }          // (a body already beside the start only has to be left)
+        }
+        return true
+    }
+    private static let showLegGap: Float = 1.45
+    /// One corner point (a coarse grid over the stage's middle) for a walk whose straight line passes a body closer than the gap: the shortest pair of clear legs. nil = the line is clear or no corner helps.
+    private func showCorner(_ id: Int, from here: SIMD2<Float>, to p: SIMD2<Float>) -> SIMD2<Float>? {
+        let others = showOthers(except: id)
+        if showLegClear(here, p, others) { return nil }
+        var best: (SIMD2<Float>, Float)?
+        for ix in -7...7 { for iz in -5...10 {
+            let w = SIMD2<Float>(Float(ix) * 0.2, Float(iz) * 0.2)
+            guard simd_distance(w, here) > 0.5, simd_distance(w, p) > 0.5, !others.contains(where: { simd_distance($0, w) < Self.showLegGap }) else { continue }
+            guard showLegClear(here, w, others), showLegClear(w, p, others) else { continue }
+            let len = simd_distance(here, w) + simd_distance(w, p)
+            if best == nil || len < best!.1 { best = (w, len) }
+        } }
+        return best?.0
+    }
+    nonisolated(unsafe) static var showGameClockOn: Bool = {
+        if let e = ProcessInfo.processInfo.environment["SHOWGAMECLOCK"] { return e != "0" }
+        if DevArgs.enabled, UserDefaults.standard.object(forKey: "ShowGameClock") != nil { return UserDefaults.standard.integer(forKey: "ShowGameClock") != 0 }
+        return true
+    }()
+    nonisolated(unsafe) static var seatWayOn: Bool = {
+        if let e = ProcessInfo.processInfo.environment["SHOWSEATWAY"] { return e != "0" }
+        if DevArgs.enabled, UserDefaults.standard.object(forKey: "ShowSeatWay") != nil { return UserDefaults.standard.integer(forKey: "ShowSeatWay") != 0 }
+        return true
+    }()
     /// A walk between a seat and the middle (or between two seats): back seats are left and reached through the gate, so a walk never goes through a body that sits out. `via` holds where he goes on to.
     func showRoute(_ a: JellyActor, to p: SIMD2<Float>) {
         let book = showBook
         let c = a.sim.centroid(), here = SIMD2(c.x, c.z)
         let backHere = here.y < Self.backRow, backThere = p.y < Self.backRow, oneBack = backHere != backThere
         var length = simd_distance(here, p)
+        if Self.seatWayOn, let w = showCorner(a.id, from: here, to: p) {          // (move-crowd-r2: a walk whose straight line passes a body goes round it through one clear corner)
+            book.via[a.id] = (w, p)
+            length = simd_distance(here, w) + simd_distance(w, p)
+            if simd_distance(p, ShowStage.playerSpot) < 0.01 { if book.heading[a.id] == nil { book.heading[a.id] = (0, length / Self.stagePace + 1.5) } } else { book.heading[a.id] = nil }
+            showWalk(a, to: w)
+            return
+        }
         if oneBack && simd_distance(here, ShowStage.gate) > 0.5 && simd_distance(p, ShowStage.gate) > 0.5 {
             let first = backHere ? (seatWaypoint(here) ?? ShowStage.gate) : ShowStage.gate
             book.via[a.id] = (first, p)
@@ -549,7 +602,7 @@ extension GameCare {
             if b.pending != nil { return false }
             if case .walk = b.script { return false }          // (still stepping; the turn to the camera after the walk is not waited for: it can take seconds)
             if simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.arriveRadius { book.goals[a.id] = nil; book.heading[a.id] = nil; showArrivedLog(a, "middle", c); return true }
-            let now = CACurrentMediaTime()          // she stopped short (held back by the one leaving, or pushed off it): ask again, at most every 0.6 s
+            let now = Self.showGameClockOn ? showBook.gameClock : CACurrentMediaTime()          // she stopped short (held back by the one leaving, or pushed off it): ask again, at most every 0.6 s
             if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showRoute(a, to: ShowStage.playerSpot) }
             return false
         }
@@ -557,8 +610,8 @@ extension GameCare {
         if b.pending != nil { return false }
         if case .walk = b.script { return false }
         if simd_distance(SIMD2(c.x, c.z), g) < Self.arriveRadius { book.goals[a.id] = nil; showArrivedLog(a, "mark", c); return true }
-        let now = CACurrentMediaTime()
-        if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: g) }
+        let now = Self.showGameClockOn ? showBook.gameClock : CACurrentMediaTime()
+        if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; if Self.seatWayOn, book.via[a.id] == nil { showRoute(a, to: g) } else { showWalk(a, to: g) } }          // (move-crowd-r2: the retry goes round a body too)
         return false
     }
     private static let arriveRadius: Float = 0.45
@@ -691,6 +744,7 @@ extension GameCare {
     #endif
 
     func tickShow(_ actors: [JellyActor], dt: Float) {
+        showBook.gameClock += Double(dt)
         showBook.actors = actors
         #if targetEnvironment(simulator)
         startShowCaptureAid(actors)

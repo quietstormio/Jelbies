@@ -51,6 +51,8 @@ enum MoveCrowdInfo { static var text: String { MoveCrowd.text } }
 
 struct CrowdBook {
     var lookClock: Float = -10
+    /// move-crowd-r2: a café customer on his walk in / out (set by GameCare+CafeCrowd): his goTo legs may curve (the requested-walk curve is otherwise off).
+    var cafeCurve = false
 }
 
 extension MoveCrowd {
@@ -161,7 +163,7 @@ extension BlobBrain {
 extension BlobBrain {
     /// reqcurve: this body serves a come / goTo request (never eat / drink / dine / sip).
     var crowdCurveRequested: Bool {
-        guard MoveCrowd.on, MoveCrowd.reqCurveOn else { return false }
+        guard MoveCrowd.on, MoveCrowd.reqCurveOn || crowd.cafeCurve else { return false }
         switch job {
         case .goTo?, .come?: return true
         default: return false
