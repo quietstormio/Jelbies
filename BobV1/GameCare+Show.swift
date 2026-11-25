@@ -603,7 +603,7 @@ extension GameCare {
         if case .walk = b.script { return false }
         if simd_distance(SIMD2(c.x, c.z), g) < Self.arriveRadius { book.goals[a.id] = nil; showArrivedLog(a, "mark", c); return true }
         let now = CACurrentMediaTime()
-        if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: g) }
+        if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; if Self.seatWayOn, book.via[a.id] == nil { showRoute(a, to: g) } else { showWalk(a, to: g) } }          // (move-crowd-r2: the retry goes round a body too)
         return false
     }
     private static let arriveRadius: Float = 0.45
