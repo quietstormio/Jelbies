@@ -372,15 +372,31 @@ extension GameCare {
     }
     static var settleOffset: SIMD2<Float> { ProcessInfo.processInfo.environment["SHOW_SETTLE_OFF"] == "1" ? .zero : SIMD2<Float>(0, 0.15) }          // (env switch for the proof only)
     /// On its side the near seat (-1.65, 0) stands 1.3 from the straight line between the gate and the left back seat: that walk bends through this point (0.3, -0.3) so it never brushes the one who sits there.
+    /// move-crowd-r2: every back seat has one (the walk from the middle to the back-right seat (0.90, -1.40) passed the right near seat at 1.16 and stood held until the keeper carried it, 4 carries in 4 shows):
+    /// a point on the middle line just behind the gate, 1.42+ from every seat in both orientations, so both legs (gate or middle -> point -> seat) keep the gap. Switch: env SHOWSEATWAY=0 / `-ShowSeatWay 0` = the old rule.
     private func seatWaypoint(_ seat: SIMD2<Float>) -> SIMD2<Float>? {
-        GameCamera.aspect > 1 && seat.x < -0.5 && seat.y < Self.backRow ? SIMD2(0.3, -0.3) : nil
+        guard seat.y < Self.backRow else { return nil }
+        if GameCamera.aspect > 1 && seat.x < -0.5 { return SIMD2(0.3, -0.3) }
+        guard Self.seatWayOn, abs(seat.x) > 0.5 else { return nil }
+        return SIMD2(seat.x > 0 ? 0.05 : -0.05, -0.35)
     }
+    nonisolated(unsafe) static var seatWayOn: Bool = {
+        if let e = ProcessInfo.processInfo.environment["SHOWSEATWAY"] { return e != "0" }
+        if DevArgs.enabled, UserDefaults.standard.object(forKey: "ShowSeatWay") != nil { return UserDefaults.standard.integer(forKey: "ShowSeatWay") != 0 }
+        return true
+    }()
     /// A walk between a seat and the middle (or between two seats): back seats are left and reached through the gate, so a walk never goes through a body that sits out. `via` holds where he goes on to.
     func showRoute(_ a: JellyActor, to p: SIMD2<Float>) {
         let book = showBook
         let c = a.sim.centroid(), here = SIMD2(c.x, c.z)
         let backHere = here.y < Self.backRow, backThere = p.y < Self.backRow, oneBack = backHere != backThere
         var length = simd_distance(here, p)
+        if Self.seatWayOn, backThere, !backHere, simd_distance(here, ShowStage.gate) <= 1.0, let w = seatWaypoint(p), simd_distance(here, w) > 0.5 {          // (move-crowd-r2: from the middle / gate area straight to the seat's point, then the seat)
+            book.via[a.id] = (w, p)
+            book.heading[a.id] = nil
+            showWalk(a, to: w)
+            return
+        }
         if oneBack && simd_distance(here, ShowStage.gate) > 0.5 && simd_distance(p, ShowStage.gate) > 0.5 {
             let first = backHere ? (seatWaypoint(here) ?? ShowStage.gate) : ShowStage.gate
             book.via[a.id] = (first, p)
