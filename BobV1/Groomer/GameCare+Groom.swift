@@ -132,7 +132,6 @@ extension GameCare {
                 b.autonomy = false; b.idleBlocked = true
                 b.startTurn(to: 0, sim: a.sim)
                 b.face(.excited, hold: 3)
-                b.requestNow(.goTo(b.fixed(GroomScenery.laneOut)))          // (first the doorway's centre line, then his own street spot, see below)
                 if k == 0 { AudioHub.shared.playClip(GroomTuning.clipHarp, volume: 0.6) }          // one soft harp flourish when they first walk out (no crowd "yay")
             }
         }
@@ -149,6 +148,10 @@ extension GameCare {
             #endif
             // the doorway: arms forward while he is in or near the frame (the opening is 1.40, his belly 1.17, the arms stick out another 0.4); on the pavement he is sent on to his spot
             let fy = GameCare.floorPos(b, a.sim).y, zf = GroomScenery.frontZ
+            if !book.walkStarted.contains(a.id), b.scriptIsNone || groom.cheerT - outAt > 1.6 {
+                book.walkStarted.insert(a.id)
+                b.requestNow(.goTo(b.fixed(GroomScenery.laneOut)))          // (first the doorway's centre line, then his own street spot: only once he faces the street, so the curved walk does not arc out sideways from his old heading)
+            }
             let inDoor = fy > zf - 1.0 && fy < zf + 2.5 && !book.laneDone.contains(a.id)
             if inDoor, fy < zf + 0.7 {          // (door round: a lane magnet: the doorway is 1.56 wide for a 1.17 belly, so he is drawn onto the centre line while he is in and just before the frame; the peer steering sometimes swerved the third one 0.5 sideways into the frame / the planter)
                 let dx = (GroomScenery.doorX - b.px) * min(1, 8 * dt)
@@ -197,7 +200,7 @@ extension GameCare {
         let total = tier.total(count: ids.count)
         guard !ids.isEmpty, bath.wallet.spend(total) else { return false }
         let book = groomBook
-        book.charged = total; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.laneDone = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
+        book.charged = total; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.laneDone = []; book.walkStarted = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         AudioHub.shared.playClip(GroomTuning.clipBell)
         CaptionCenter.shared.post("Shop bell")
         AudioHub.shared.playClip(GroomTuning.clipAmbience, volume: 0.9)
@@ -235,7 +238,7 @@ extension GameCare {
 
     private func groomToHome() {
         let book = groomBook
-        book.out = []; book.laneDone = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
+        book.out = []; book.laneDone = []; book.walkStarted = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         RoomLayout.dynamicBoxes = []          // (the door leaf's)
         RoomLayout.apply(RoomCatalog.def(store.currentRoom))
         GameCamera.endGroom(count: max(jellies.count, 1))
@@ -285,7 +288,7 @@ extension GameCare {
             b.idleBlocked = false
             b.restTimer = 1.5
         }
-        book.autonomy = [:]; book.homes = [:]; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.out = []; book.laneDone = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
+        book.autonomy = [:]; book.homes = [:]; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.out = []; book.laneDone = []; book.walkStarted = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
     }
 
     // MARK: the street's animated bits

@@ -164,6 +164,8 @@ final class GroomBook {
     var out: Set<Int> = []
     /// Who has walked out of the doorway onto the pavement and been sent on to the street spot.
     var laneDone: Set<Int> = []
+    /// Who has been sent into the doorway lane (after turning to face the street, hidden behind the wall: a walk started at once arcs out sideways from the old heading).
+    var walkStarted: Set<Int> = []
     /// The emote each one does at the line-up (all different).
     var emote: [Int: IdleKind] = [:]
     /// The cheer clock (`cheerT`) at which each one stepped out of the door.
