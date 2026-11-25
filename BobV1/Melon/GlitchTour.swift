@@ -60,6 +60,14 @@ enum GlitchTour {
     static func act(_ a: String, arg: Double?, care: GameCare, sleep: (Double) async -> Void) async {
         switch a {
         case "idle": await sleep(arg ?? 60)
+        case "jacks":          // (glitch-hunt-r4) everybody does the jumping jacks, n times, waiting for each to end
+            for _ in 0..<Int(arg ?? 10) {
+                GlitchProbe.shared.tag = "jacks"
+                for j in care.jellies { care.brainFor(j.id)?.commandedIdle = .jacks }
+                for _ in 0..<10 { await sleep(0.2) }
+                for _ in 0..<100 where care.jellies.contains(where: { care.brainFor($0.id)?.idleState.kind == .jacks }) { await sleep(0.2) }
+                await sleep(1)
+            }
         case "meal":          // (glitch-hunt-r3) a real food meal: a new game has no food in the bag, so `feed` was refused; pizza is granted first
             care.store.grant("pizza", 6); hungry(care)
             care.feed("pizza")
