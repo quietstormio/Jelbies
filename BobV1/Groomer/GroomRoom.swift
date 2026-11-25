@@ -45,6 +45,7 @@ extension GameCamera {
         roomWideScale = 1; roomWideLift = 0
         walkMinZ = GroomScenery.frontZ - 3.0; walkMaxZ = GroomScenery.curbZ - 0.8; arenaCenter = SIMD2(0, 0); arenaRadius = 80
         roamRect = (SIMD2(-4.0, GroomScenery.frontZ - 3.0), SIMD2(4.0, GroomScenery.curbZ - 0.8)); roamRectWide = roamRect
+        RoomLayout.walls[0] = RoomLayout.Plane(normal: SIMD3(0, 0, 1), d: GroomScenery.frontZ - 4.0)          // (the home room's back wall is at z -5: the ones who start INSIDE the shop would stand against it, 0.3 behind the doorway; here the shop's inside is open floor)
         groomOn = true
     }
     static func endGroom(count: Int) {
