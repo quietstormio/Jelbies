@@ -375,10 +375,38 @@ extension GameCare {
     /// move-crowd-r2: every back seat has one (the walk from the middle to the back-right seat (0.90, -1.40) passed the right near seat at 1.16 and stood held until the keeper carried it, 4 carries in 4 shows):
     /// a point on the middle line just behind the gate, 1.42+ from every seat in both orientations, so both legs (gate or middle -> point -> seat) keep the gap. Switch: env SHOWSEATWAY=0 / `-ShowSeatWay 0` = the old rule.
     private func seatWaypoint(_ seat: SIMD2<Float>) -> SIMD2<Float>? {
-        guard seat.y < Self.backRow else { return nil }
-        if GameCamera.aspect > 1 && seat.x < -0.5 { return SIMD2(0.3, -0.3) }
-        guard Self.seatWayOn, abs(seat.x) > 0.5 else { return nil }
-        return SIMD2(seat.x > 0 ? 0.05 : -0.05, -0.35)
+        GameCamera.aspect > 1 && seat.x < -0.5 && seat.y < Self.backRow ? SIMD2(0.3, -0.3) : nil
+    }
+    /// move-crowd-r2: the bodies on the stage now (performers + the borrowed rival bodies) but `id`, by their drawn centre.
+    private func showOthers(except id: Int) -> [SIMD2<Float>] {
+        let book = showBook
+        let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+        return bodies.filter { $0.id != id }.map { let c = $0.sim.centroid(); return SIMD2(c.x, c.z) }
+    }
+    /// The straight walk a -> b passes every other body by `showLegGap` (a body standing on b itself does not count: it is a seat the keeper empties).
+    private func showLegClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ others: [SIMD2<Float>]) -> Bool {
+        let ab = b - a, l2 = max(simd_dot(ab, ab), 1e-6)
+        for o in others {
+            if simd_distance(o, b) < 0.5 { continue }
+            let t = min(max(simd_dot(o - a, ab) / l2, 0), 1)
+            if simd_distance(o, a + ab * t) < Self.showLegGap, simd_distance(o, a) > Self.showLegGap - 0.05 { return false }          // (a body already beside the start only has to be left)
+        }
+        return true
+    }
+    private static let showLegGap: Float = 1.45
+    /// One corner point (a coarse grid over the stage's middle) for a walk whose straight line passes a body closer than the gap: the shortest pair of clear legs. nil = the line is clear or no corner helps.
+    private func showCorner(_ id: Int, from here: SIMD2<Float>, to p: SIMD2<Float>) -> SIMD2<Float>? {
+        let others = showOthers(except: id)
+        if showLegClear(here, p, others) { return nil }
+        var best: (SIMD2<Float>, Float)?
+        for ix in -7...7 { for iz in -5...10 {
+            let w = SIMD2<Float>(Float(ix) * 0.2, Float(iz) * 0.2)
+            guard simd_distance(w, here) > 0.5, simd_distance(w, p) > 0.5, !others.contains(where: { simd_distance($0, w) < Self.showLegGap }) else { continue }
+            guard showLegClear(here, w, others), showLegClear(w, p, others) else { continue }
+            let len = simd_distance(here, w) + simd_distance(w, p)
+            if best == nil || len < best!.1 { best = (w, len) }
+        } }
+        return best?.0
     }
     nonisolated(unsafe) static var seatWayOn: Bool = {
         if let e = ProcessInfo.processInfo.environment["SHOWSEATWAY"] { return e != "0" }
@@ -391,9 +419,10 @@ extension GameCare {
         let c = a.sim.centroid(), here = SIMD2(c.x, c.z)
         let backHere = here.y < Self.backRow, backThere = p.y < Self.backRow, oneBack = backHere != backThere
         var length = simd_distance(here, p)
-        if Self.seatWayOn, backThere, !backHere, simd_distance(here, ShowStage.gate) <= 1.0, let w = seatWaypoint(p), simd_distance(here, w) > 0.5 {          // (move-crowd-r2: from the middle / gate area straight to the seat's point, then the seat)
+        if Self.seatWayOn, let w = showCorner(a.id, from: here, to: p) {          // (move-crowd-r2: a walk whose straight line passes a body goes round it through one clear corner)
             book.via[a.id] = (w, p)
-            book.heading[a.id] = nil
+            length = simd_distance(here, w) + simd_distance(w, p)
+            if simd_distance(p, ShowStage.playerSpot) < 0.01 { if book.heading[a.id] == nil { book.heading[a.id] = (0, length / Self.stagePace + 1.5) } } else { book.heading[a.id] = nil }
             showWalk(a, to: w)
             return
         }
