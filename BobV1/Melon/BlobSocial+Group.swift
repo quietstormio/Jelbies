@@ -52,7 +52,7 @@ extension BlobBrain {
 
     /// Free (or just out on an ordinary wander leg: he finishes it, then joins), calm, close Jelbies other than me (nearest first).
     func groupCandidates() -> [BlobBrain] {
-        socialOthers().filter { $0 !== self && !$0.meetBusy && ($0.socialFree || $0.socialWandering) && $0.idleMood != .grumpy && $0.idleDeepNight < 0.5 && simd_distance($0.position, position) < GroupTuning.radius && !(MoveMix.on && ($0.mixQuiet || !$0.mixStopOK($0.position))) }
+        socialOthers().filter { $0 !== self && !$0.meetBusy && ($0.socialFree || $0.socialWandering || $0.restInvitable) && $0.idleMood != .grumpy && $0.idleDeepNight < 0.5 && simd_distance($0.position, position) < GroupTuning.radius && !(MoveMix.on && ($0.mixQuiet || !$0.mixStopOK($0.position))) }
             .sorted { simd_distance($0.position, position) < simd_distance($1.position, position) }
     }
 
@@ -138,7 +138,7 @@ extension BlobBrain {
     func socialStartGroup(_ kind: SocialKind, with others: [BlobBrain], _ sim: SoftBody) -> Bool {
         guard socialFree else { return false }
         var crew: [BlobBrain] = [self]
-        for o in others where o !== self && (o.socialFree || o.socialWandering) && !crew.contains(where: { $0 === o }) { crew.append(o) }
+        for o in others where o !== self && (o.socialFree || o.socialWandering || o.restInvitable) && !crew.contains(where: { $0 === o }) { crew.append(o) }
         let cap = kind.isTreat ? EmoteTuning.treatCrew : GroupTuning.maxCrew          // (the treats are for the three housemates: a visitor beyond them watches)
         for o in groupCandidates() where crew.count < cap && !crew.contains(where: { $0 === o }) { crew.append(o) }
         crew = Array(crew.prefix(cap))

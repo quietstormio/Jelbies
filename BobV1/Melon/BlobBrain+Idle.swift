@@ -184,6 +184,8 @@ struct IdleState {
     var kind: IdleKind?                         // the running behaviour (nil = none)
     var last: IdleKind?
     var cooldown: Float = 9                     // seconds until the next special may start
+    var restSlot = false                        // rest-more-r1: this sit / lie came from the rest slot (RestMore.swift), not from the table
+    var restArmed = false, restUrge: Float = 0   // the slot's own clock (s until the next urge)
     var treat: Float = 90                       // seconds until the next solo emote may start (its own clock: they come on top of the cooldown cycle, they do not take its picks)
     var t: Float = 0                            // seconds since the behaviour began
     var phase = 0
@@ -334,6 +336,8 @@ extension BlobBrain {
                 return true
             }
         }
+        // rest-more-r1: the occasional sit / lie in place. Only in the dead time of the special cooldown (a body whose next pick is due keeps it): the rest never takes an emote's pick, it fills the walking
+        if RestMore.on, idleState.cooldown > RestMore.minCooldown || idleState.restUrge < -RestMore.lateAfter, restSlotMaybeStart(sim) { return true }          // (a rest that has waited `lateAfter` s for a dead window takes the next pick: otherwise the share stays at half)
         guard idleState.cooldown <= 0 else { return false }
         if anticsEnabled, runMoveDemo == nil, idleState.treat <= 0, treatMaybeStart(sim) { return true }
         let decorOffers: Set<IdleKind> = anticsEnabled && !decorLocked ? Self.decorOffers() : []
@@ -406,6 +410,7 @@ extension BlobBrain {
     /// Every tick before the gait: counts the cooldown, yields to anything else, notices the end of a run.
     func idleGate(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         varietyTick(dt)
+        if RestMore.on, autonomy, !held { idleState.restUrge -= dt }          // (rest-more-r1: the slot's clock runs while he walks about; it is only looked at from a quiet pick)
         if !kindCool.isEmpty { for k in Array(kindCool.keys) { let v = kindCool[k]! - dt; if v <= 0 { kindCool[k] = nil } else { kindCool[k] = v } } }
         if !idleState.echo.isEmpty { for k in Array(idleState.echo.keys) { let v = idleState.echo[k]! - dt; if v <= 0 { idleState.echo[k] = nil } else { idleState.echo[k] = v } } }
         let boostWant: Float = (runW == 0 && zoomW == 0 && idleState.kind == nil && !hurry) ? Self.walkBoost : 1
@@ -419,6 +424,7 @@ extension BlobBrain {
             return
         }
         idleState.t += dt
+        if idleState.restSlot, autonomy, !held { idleState.cooldown -= dt; zoomUrge -= dt; idleState.treat -= dt }          // (rest-more-r1: the emote clocks keep counting during a slot rest: the time comes out of walking, not out of the emotes)
         // a script that is not ours any more (the care menu started a hop, ...)
         var mine = false
         switch script {
@@ -517,13 +523,13 @@ extension BlobBrain {
         if let k = idleState.kind {
             if k == .sleep { awakeMin = rand(SleepTuning.awakeMin.lowerBound, SleepTuning.awakeMin.upperBound); if Self.slowWakeOn, let c = sleep.mealCall { if pending == nil { pending = c }; sleep.mealCall = nil } }          // (a wake cut short, e.g. by a pick-up: the call kept for it is handed back, not lost)          // he stays up a while after any wake (no sleep / wake / sleep loop)
             let treat = Self.emoteKinds.contains(k) && idleState.resume == nil && idleState.reaction == nil && social == nil          // (a solo emote from the treat slot: not his pick, no last / recent, no cooldown of its own - the old cycle goes on as if he had only paused)
-            let flourish = (Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)) || treat          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
+            let flourish = (Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)) || treat || idleState.restSlot          // (a slot rest too: RestMore.swift; a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)
             idleState.counts[k, default: 0] += 1
-            if treat { idleState.cooldown = max(idleState.cooldown, 0.5) }
+            if treat || idleState.restSlot { idleState.cooldown = max(idleState.cooldown, 0.5) }
             if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) * (MoveMix.on && social == nil ? MoveMix.soloGapMul : 1) }
         }
-        idleState.kind = nil; idleState.yielding = false; idleState.k = 0
+        idleState.kind = nil; idleState.yielding = false; idleState.k = 0; idleState.restSlot = false
         sig = SignatureDrive(); runAir = 0          // (an emote's feature drive and its hop go with it)
         napping = false
         zoomW = 0
