@@ -16,9 +16,10 @@ final class RestMoreTests: XCTestCase {
         RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
         DayClock.shared.forcedHour = 14
+        BlobBrain.pickBudgetSeconds = .infinity          // (move-crowd-r4: the 1.5 ms WALL-clock pick budget made the soak depend on machine load: a 923 s run on a loaded gate lost picks and read 47 moments vs 52.2)
     }
     override func tearDown() {
-        RestMore.on = savedOn; DayClock.shared.forcedHour = nil
+        RestMore.on = savedOn; DayClock.shared.forcedHour = nil; BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds
         RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12
         GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
@@ -28,6 +29,7 @@ final class RestMoreTests: XCTestCase {
 
     /// 3 bodies, the home life as the stage runs it (antics, watching, a sleep table that stays off in the daytime), `seconds` of game time.
     private func soak(seed: UInt64, seconds: Int, home: Bool = true) -> Soak {
+        EmoteSpot.reset(); RoomTraffic.waitFor = [:]; RoomTraffic.waited = [:]; MoveMix.soccerNextAt = 0          // (move-crowd-r4: no state from the tests before)
         let lab = SocialTests.Lab(quiet: false, seed: seed)
         for (i, r) in lab.rigs.enumerated() {
             let b = r.brain
@@ -37,6 +39,7 @@ final class RestMoreTests: XCTestCase {
         var s = Soak(), wasResting = [Bool](repeating: false, count: 3), start = [Float](repeating: 0, count: 3)
         var prevKind = [IdleKind?](repeating: nil, count: 3)
         for _ in 0..<(60 * seconds) {
+            PlayerPresence.touch()          // (move-crowd-r4: the check-in emote reads the WALL clock since the last touch: in a class run it began firing in the later soaks (they read 47 moments vs 50 alone))
             lab.tick(watching: false)
             s.frames += 1
             var n = 0

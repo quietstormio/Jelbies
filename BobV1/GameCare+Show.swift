@@ -396,7 +396,7 @@ extension GameCare {
         }
         return true
     }
-    private static let showLegGap: Float = 1.45
+    private static let showLegGap: Float = 1.38          // (round 3: 1.45 found no corner between the near seats 2.9 apart: the passage is 1.45 from each)
     /// One corner point (a coarse grid over the stage's middle) for a walk whose straight line passes a body closer than the gap: the shortest pair of clear legs. nil = the line is clear or no corner helps.
     private func showCorner(_ id: Int, from here: SIMD2<Float>, to p: SIMD2<Float>) -> SIMD2<Float>? {
         let others = showOthers(except: id)
@@ -458,7 +458,8 @@ extension GameCare {
             guard simd_distance(SIMD2(c.x, c.z), at) < 0.6 else { continue }
             if b.pending != nil { continue }
             if case .walk = b.script { continue }
-            let next = simd_distance(at, ShowStage.gate) < 0.6 ? (seatWaypoint(final) ?? final) : final
+            var next = simd_distance(at, ShowStage.gate) < 0.6 ? (seatWaypoint(final) ?? final) : final
+            if Self.seatWayOn, next == final, simd_distance(final, ShowStage.playerSpot) > 0.01, let w = showCorner(id, from: SIMD2(c.x, c.z), to: final) { next = w }          // (round 3: the gate -> back seat leg passed the near seat too: through the clear corner)
             if simd_distance(next, ShowStage.playerSpot) < 0.01, !middleClear(for: id) { continue }          // (the middle is still occupied: wait where he is)
             book.via[id] = next == final ? nil : (next, final)
             showWalk(a, to: next)

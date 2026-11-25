@@ -94,7 +94,8 @@ extension GameCare {
     /// Not moving for `lineStall` s (a body with nothing to do) or `lineStallWalk` s (a body inside a walk: the half turn on the spot before a step takes ~1.7 s), off its seat, not waiting its turn: carried.
     static let lineStall: Float = 1.5, lineStallWalk: Float = 2.9, lineWaitMax: Float = 14.0, lineWindow: Float = 1.0
     /// A body this close to its seat is in it. A carry never passes closer than `lineClearOf` to another body.
-    static let lineAt: Float = 0.3, lineClearOf: Float = 1.15, glideSpeed: Float = 3.2
+    static let lineAt: Float = 0.45,          // (move-crowd-r4: was 0.3; the Show's own arrival radius is 0.45, so a body that arrived 0.36 from the middle stood idle while the keeper counted it off its seat and carried it late)
+                    lineClearOf: Float = 1.15, glideSpeed: Float = 3.2
     /// Off only for a capture that wants the old behaviour (`-ShowLineKeepOff 1`, dev arguments): the baseline measurement.
     static var lineKeeperOn: Bool { !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ShowLineKeepOff") != nil) }
 
