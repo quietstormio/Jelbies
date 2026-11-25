@@ -297,8 +297,9 @@ enum GroomScenery {
     static func shopInside(_ b: RoomMeshBuilder) {
         let Z = frontZ, x0 = doorX - doorW, x1 = doorX + doorW, yF: Float = 0.102, yT = doorY + doorH - 0.01, zB = Z - 2.75
         let n = V3(0, 0, 1)
-        func c(_ r: Float, _ g: Float, _ bl: Float) -> V3 { GroomScenery.c(r, g, bl) * 0.95 }          // (the glow material brightens its albedo by up to ~1.9: scaled down it reads as a softly lit room)
-        b.material = .glow
+        func c(_ r: Float, _ g: Float, _ bl: Float) -> V3 { GroomScenery.c(r, g, bl) * 0.95 }          // (slightly dimmed: the room is lit by its own emissive weight below)
+        b.material = .plain          // (NOT .glow: at dusk the glow material is replaced by the sky gradient, which made the whole inside a flat peach panel)
+        let from = b.mesh.vertices.count
         func lit(_ col: V3, _ k: Float) -> V3 { col * k }
         // floor: soft cream and sage tiles, 0.52 square, a warm pool of light on the middle
         let tile: Float = 0.52, cols = Int(ceilf((x1 - x0) / tile)), rows = Int(ceilf((Z - zB) / tile))
@@ -351,6 +352,8 @@ enum GroomScenery {
         for (dx, dy, r) in [(Float(0), Float(0.75), Float(0.3)), (-0.12, 0.5, 0.2), (0.1, 0.55, 0.2)] {
             ParkScenery.blob(b, V3(px + dx, yF + dy, pz), rx: r, ry: r * 0.85, rz: r, color: dy > 0.7 ? c(0.46, 0.62, 0.45) : c(0.40, 0.56, 0.40), segments: 12, rings: 5)
         }
+        // self-lit: baked AO above 1 is an emissive weight (RoomShaders.metal), so the inside stays a softly lit warm room at any hour
+        for i in from..<b.mesh.vertices.count { b.mesh.vertices[i].normal.w = 1.35 }
         b.material = .plain
     }
 
