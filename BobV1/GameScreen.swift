@@ -1085,6 +1085,9 @@ struct GameScreen: View {
             care.requestGroom()
             if m == "visit" { await sleep(1.5); care.startGroom(.royal) }
         }
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        if d.string(forKey: "GlitchTour") != nil { Task { @MainActor in await GlitchTour.run(care: care) } }          // glitch-hunt-r1: the scripted scene tour (Melon/GlitchTour.swift)
+        #endif
         // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (starting from some dirt)
         if d.string(forKey: "BlobGameDemo") == "gclean" {
             for _ in 0..<600 where LaunchGate.shared.visible || care.lastBrain == nil { await sleep(0.1) }          // (a slow load: wait for the room and his brain)

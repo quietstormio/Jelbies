@@ -24,6 +24,8 @@ struct VolleyDrive {
     var active = false
     var side: Float = 1
     var restYaw: Float = VolleyTuning.restYaw
+    /// The heading this jump turns to in the air (the sim sends it when the ball is not in front at the rest heading: he faces what he hits); nil = the rest heading.
+    var faceYaw: Float?
     var wantX: Float = 0
     var wantZ: Float = 0
     var block = false
@@ -121,7 +123,7 @@ extension BlobBrain {
         let netDir: Float = volley.side > 0 ? 1 : -1
         let room = (volley.side > 0 ? -VolleyTuning.netMargin - px : px - VolleyTuning.netMargin)
         volley.diveDir = (dir == netDir && room < 0.5) ? -dir : dir
-        volley.yaw0 = yaw; volley.spikeT = -1
+        volley.yaw0 = yaw; volley.spikeT = -1; volley.faceYaw = nil
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6, rate: 1.1)
     }
 
@@ -321,7 +323,7 @@ extension BlobBrain {
                 yawNow = volley.yaw0 + wrapAngle(facingNet - volley.yaw0) * ease(t / 0.16)
                 sy = (1 - 0.21 * amp) + (1.24 - (1 - 0.21 * amp)) * ease(t / 0.12)
             } else {
-                yawNow = volley.yaw0 + wrapAngle(restY - volley.yaw0) * ease(t / 0.4)
+                yawNow = volley.yaw0 + wrapAngle((volley.faceYaw ?? restY) - volley.yaw0) * ease(t / 0.4)
             }
             volley.pitchNow += (pitchGoal - volley.pitchNow) * min(1, dt * 24)
             var xz = volley.from + (volley.to - volley.from) * ease(u)
@@ -407,7 +409,7 @@ extension BlobBrain {
     private func volleyFinishMove(_ sim: SoftBody) {
         sim.targets = []
         sim.attractor.strength = 0
-        volley.pitchNow = 0; volley.tuck = 0; volley.spikeT = -1; volley.block = false
+        volley.pitchNow = 0; volley.tuck = 0; volley.spikeT = -1; volley.block = false; volley.faceYaw = nil
         armDirW = 0; armDirOut = 0; volley.armA = 0
         currentPose(sim)
         yaw = volley.restYaw

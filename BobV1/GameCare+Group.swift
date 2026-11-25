@@ -167,6 +167,7 @@ extension GameCare {
                 b.reserved = true; b.idleBlocked = true; b.waitFocus = group.originNow ?? DiningSpot.preferred
                 if DiningGroup.calmWait, let o = group.originNow { let p = Self.floorPos(b, a.sim); b.mealFaceYaw = atan2f(o.x - p.x, o.y - p.y) }          // (C6: he waits calmly, facing the tray)
             }
+            if cafe.inScene && !Self.cafeCalmOff { continue }          // (cafe-busy-r1: at the café a finished diner stays on his stand: he is never stepped aside)
             stepAsideGroup(id: a.id, brain: b, sim: a.sim, dt: dt)      // (a waiter, or a diner of the last sitting still on his place)
         }
         group.tick(dt: dt)

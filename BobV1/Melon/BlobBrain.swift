@@ -347,6 +347,15 @@ final class BlobBrain {
     var armDirEl: [Float] = [0, 0]
     var armDirSa: [Float] = [0, 0]
     var armDirOut: Float = 0
+    /// glitch-hunt-r2: the nap anchor ease's state (BlobBrain+Sleep.swift `easeSleepAnchor`).
+    var sleepAnchorLast: SIMD3<Float>?, sleepAnchorFrom: SIMD3<Float>?, sleepAnchorT: Float = 0, sleepAnchorNear: Float = 0, sleepAnchorSerial = 0
+    /// glitch-hunt-r2: the idle arm override as drawn (`armDirEase`) and the pose it fades from.
+    var armDirDrawn: Float = 0, armDirLastEl: [Float] = [0, 0], armDirLastSa: [Float] = [0, 0], armDirLastOut: Float = 0
+    /// glitch-hunt-r2 (2026-11-24): the idle arm override (`armDirW`: the bounce's flap, jacks, the cheer, the reach ...) is DRAWN following `armDirW` at most 1 per `armDirEaseTime`,
+    /// from the last pose it had. Emotes set `armDirW = 0` in one step at their end: both arms jumped up to 21 cm (the end of every bounce; the dev glitch probe's rig).
+    /// `-ArmDirEase 0` (env ARMDIREASE_OFF=1) = the snap.
+    nonisolated(unsafe) static var armDirEase = ProcessInfo.processInfo.environment["ARMDIREASE_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ArmDirEase") != nil && UserDefaults.standard.integer(forKey: "ArmDirEase") == 0)
+    static let armDirEaseTime: Float = 0.2
     /// 1 while a social hand reach drives the arm override (BlobSocial+Hands.swift): the arm is capped by the wave's thumb (ArmCap.maximum), not by the rest nub of the body-led moves, and the capsule is drawn with the body standing still.
     var armReachW: Float = 0
     /// Body-led weight 0...1: while a body-led move (jacks, flip, any arm override) runs, the arms stay at or below the rest nub even between their flaps (ArmCap).
@@ -819,6 +828,7 @@ final class BlobBrain {
         toyPoseTick()
         HopDiag.lap(.tkToy, &ht)
         drivePose(sim, dt)
+        easeSleepAnchor(sim, dt)          // (glitch-hunt-r2: the step back onto his feet after a nap eases)
         HopDiag.lap(.tkDrivePose, &ht)
         driveLimbs(sim, skinner, dt)
         updateActivity()
@@ -2184,6 +2194,11 @@ final class BlobBrain {
             // off the floor (hop, jacks, flip, held in the air): the foot rounds into the ball
             var mo = scale == 1 ? Self.beanMorph(clearance: lo - sim.floorY) : 0
             if flipShape { mo = min(mo, Self.forceMorphCap) }
+            if scale == 1, Self.beanMorphEase {          // (glitch-hunt-r1: a hop's landing drops the foot 2-3 cm a step: the ball -> boot morph flipped in one step, the toe shot out ~10 cm; now at most `beanMorphStep` a step)
+                let m0 = beanMorphLast[s]
+                mo = m0 + max(-Self.beanMorphStep, min(Self.beanMorphStep, mo - m0))
+                if flipShape { mo = min(mo, Self.forceMorphCap) }          // (a flip's boot cap still wins over the rate limit)
+            }
             if scale == 1 { beanMorphLast[s] = mo }
             if mo > 0 {
                 for i in 0..<FootBean.vertexCount { var w = place(i, mo); if !keepShape { w.y = max(w.y + tuck, sim.floorY) } else { w.y += tuck }; dst[s][i] = w }
@@ -2205,6 +2220,9 @@ final class BlobBrain {
     /// Every airborne / landing phase of a volleyball move (crouch, jump, spike, dive, slide, peel, land): the soft body lags the attractor (tens of degrees in a spike or a dive), so the beans
     /// and the arm capsules ride the FITTED pose, whole and for the whole move (no flicker between the two poses, no limb left behind on the attractor's pose).
     var volleyFitted: Bool { Self.onePieceVolley && volley.active && volley.phase != .ground }
+    /// glitch-hunt-r1: the body-rigid feet (hops, jacks, emotes; not the walk) change their ball / boot morph by at most `beanMorphStep` per step. `-BeanMorphEase 0` (env BEANMORPH_OFF=1) = as before.
+    nonisolated(unsafe) static var beanMorphEase = ProcessInfo.processInfo.environment["BEANMORPH_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "BeanMorphEase") != nil && UserDefaults.standard.integer(forKey: "BeanMorphEase") == 0)
+    static let beanMorphStep: Float = 0.25
     nonisolated(unsafe) static var raceHopFeet = true          // (false = the old race jump feet: before / after captures)
     /// The planted soles' pop at take-off: the drawn beans stood on the world-planted soles (ahead of / behind the body by up to a stride), the hop's first frame draws them body-rigid
     /// under the body. `raceCarry` is that horizontal offset per foot, eased out over the crouch (`raceCarryT` seconds left of `raceCarryTime`).
@@ -2540,6 +2558,7 @@ final class BlobBrain {
         if armG <= 0.0001 {
             armG = 0
             if armWasOut { skinner.clearArmCapsules(); skinner.clearOverride(); armWasOut = false; nubPhi = [0, 0] }
+            armDirDrawn = armDirW          // (no capsules drawn: nothing to ease)
             return
         }
         guard geom.valid else { return }
@@ -2562,6 +2581,15 @@ final class BlobBrain {
         if volleyFitted { let fit = sim.bodyPose(iterations: 3); armQ = fit.rotation; armAnchor = fit.centroid }          // (volleyball: the capsules root in the body that is drawn, not in the attractor it lags)
         let RS = simd_float3x3(armQ) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
         let org = armAnchor - RS * c0
+        // the idle arm override as drawn (glitch-hunt-r2): eased, never snapped
+        var dirW = armDirW, dirEl = armDirEl, dirSa = armDirSa, dirOut = armDirOut
+        if Self.armDirEase {
+            if armDirW > 0.001 { armDirLastEl = armDirEl; armDirLastSa = armDirSa; armDirLastOut = armDirOut }
+            armDirDrawn += max(-dt / Self.armDirEaseTime, min(dt / Self.armDirEaseTime, armDirW - armDirDrawn))
+            if armDirDrawn < 0.0005 { armDirDrawn = 0 }
+            dirW = armDirDrawn
+            if armDirW <= 0.001 { dirEl = armDirLastEl; dirSa = armDirLastSa; dirOut = armDirLastOut }
+        } else { armDirDrawn = armDirW }
         for si in 0..<2 {
             let sg: Float = si == 0 ? -1 : 1
             if armWalkWant > 0 {
@@ -2575,7 +2603,7 @@ final class BlobBrain {
                 armLastS[si] = tgt
             }
             nubPhi[si] = (armLastS[si] - ArmPath.armWalkCentreDeg) / 33
-            let g = armDirW > 0 ? armGeometry(S: armLastS[si], lift: armLift, dirEl: armDirEl[si], dirSa: armDirSa[si], w: armDirW, out: armDirOut) : armGeometry(S: armLastS[si], lift: armLift)
+            let g = dirW > 0 ? armGeometry(S: armLastS[si], lift: armLift, dirEl: dirEl[si], dirSa: dirSa[si], w: dirW, out: dirOut) : armGeometry(S: armLastS[si], lift: armLift)
             armLastGeom[si] = g; armLastRawTip[si] = armRawTip
             ArmCapsule.fill(a: g.a, b: g.b, r1: g.r1, r2: g.r2, flatten: g.f, sigma: sg, into: &armScratch[si])
             let r = armGeometry(S: 25, lift: 0, capped: false)

@@ -62,6 +62,7 @@ final class CafeBook {
     var regularsPending = false
     /// cafe-regulars-r1: this visit's guest plan, the pair's table and their talk (GameCare+CafeRegulars.swift).
     let guests = CafeGuests()
+    let crowd = CafeCrowdState()
     var regulars: [JellyActor] = []
     var regularVisitors: [ParkVisitor] = []
     var regularIdle: [Int: Float] = [:]
@@ -192,7 +193,9 @@ extension GameCare {
             tickCafeLounge(actors, dt: dt)
         default: break
         }
-        if cafe.phase == .arriveIn || cafe.phase == .menu || cafe.phase == .eating || cafe.phase == .cheer || cafe.phase == .lounge || cafe.phase == .done { tickCafeTalk(actors, dt: dt); tickCafeRegulars(actors, dt: dt) }
+        cafeHoldFinished(actors)
+        CafeCalmProbe.shared.tick(self, actors, dt: dt)
+        if cafe.phase == .arriveIn || cafe.phase == .menu || cafe.phase == .eating || cafe.phase == .cheer || cafe.phase == .lounge || cafe.phase == .done { tickCafeTalk(actors, dt: dt); tickCafeCrowd(actors, dt: dt) }
     }
 
     // MARK: the world swaps (under the white)
@@ -230,7 +233,11 @@ extension GameCare {
             // the table sits well back (portrait) or to the left (landscape) so the order card never covers the Jelbies
             let aspect = GameCamera.aspect
             let want: [SIMD2<Float>] = aspect < 1 ? [SIMD2(0, -1.35), SIMD2(0, -0.9), SIMD2(0, -0.4)] : [SIMD2(-2.1, 0.2), SIMD2(-1.8, 0.4), SIMD2(-1.5, 0.6), SIMD2(-1.2, 0.9)]
-            book.origin = want.first { DiningSpot.isClear(origin: $0, layout: layout, of: SIMD2(99, 99), aspect: aspect) } ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: layout)
+            // cafe-busy-r1: the table of this visit is drawn from the candidates that are clear and on screen (the middle one most often); the old first-clear spot is the fallback
+            book.crowd.seed = Self.cafeSeedArg ?? UInt64.random(in: 1...UInt64.max)
+            let pick = Self.cafePlayerTable(landscape: aspect >= 1, seed: book.crowd.seed) { DiningSpot.isClear(origin: $0, layout: layout, of: SIMD2(99, 99), aspect: aspect) }
+            book.crowd.playerTable = pick ?? -1
+            book.origin = pick.map { CafeTables.playerTables(landscape: aspect >= 1)[$0].centre } ?? want.first { DiningSpot.isClear(origin: $0, layout: layout, of: SIMD2(99, 99), aspect: aspect) } ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: layout)
             dining.spawn(serving: CafePlate.emptyTable, n: n, bobAt: SIMD2(99, 99), forcedOrigin: book.origin)
             book.tableOut = true
             let order: [Int] = n == 3 ? [1, 0, 2] : Array(0..<n)          // left, middle, right
@@ -240,7 +247,7 @@ extension GameCare {
                 var st = book.origin + pl.rel
                 st.y += GameCare.eatCloser
                 book.stands[a.id] = st
-                book.chatYaw[a.id] = DiningLayout.ends && order[k] != 0 ? pl.yaw : nil          // (cafe-straw-r1: the two ends keep facing each other across the table, also in the lounge)
+                book.chatYaw[a.id] = (DiningLayout.ends && order[k] != 0) || n < 3 ? pl.yaw : nil          // (cafe-straw-r1: the two ends keep facing each other across the table, also in the lounge)
                 rehome(a, at: st)
                 guard let brain = a.brain else { continue }
                 brain.autonomy = false; brain.idleBlocked = true; brain.restTimer = 0.4
@@ -420,11 +427,13 @@ extension GameCare {
     /// A happy reaction: the jump for joy, a blush, an excited face, a heart and a chirp (existing moves only).
     private func cafeCheer(_ a: JellyActor) {
         guard let b = a.brain else { return }
-        b.abortAll(a.sim, a.skinner)
-        b.commandedIdle = .joy
+        if Self.cafeCalmOff {
+            b.abortAll(a.sim, a.skinner)
+            b.commandedIdle = .joy
+            b.postEvent(.joyJump)
+        }          // (cafe-busy-r1: no jump, no abort: they stay seated and calm after the treat; the glow, face, heart and chirp remain)
         b.blushBump(hold: 3, peak: 0.8)
         b.face(.excited, hold: 2.5)
-        b.postEvent(.joyJump)
         touchPlay?.spawnHeart(now: CACurrentMediaTime())
         AudioHub.shared.chirp(jelly: a.id, .happy, src: "cafe")
     }

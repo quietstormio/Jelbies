@@ -182,6 +182,7 @@ final class ShowTurnOrderTests: XCTestCase {
             for a in room.actors + room.park { if let b = a.brain { b.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: false) } }
             care.tickRace(room.actors, dt: 1 / 60)
             care.tickShow(room.actors, dt: 1 / 60)
+            for a in room.actors + room.park { a.sim.step() }          // (show-line-r1: the bodies really walk; with frozen sims the line keeper saw every walker standing still and carried it)
         }
         care.startShow(jelly: 0, rank: .puddle, seed: 5)
         for _ in 0..<(6 * 60) { step(); if care.show.onStage { break } }

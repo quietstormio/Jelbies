@@ -48,13 +48,13 @@ nonisolated struct BubbleField: Sendable {
     }
     private mutating func r(_ a: Float, _ b: Float) -> Float { a + (b - a) * r() }
 
-    /// A bubble from the wand's mouth `at` (x, y, z). `strength` 0...1 sets its size and push. False when the cap is reached.
+    /// A bubble from the wand's mouth `at` (x, y, z). `strength` 0...1 sets its size and push. `spread` widens the sideways push (park-open-r1: the park's stream fans out; 1 = as at home, same random draws). False when the cap is reached.
     @discardableResult
-    mutating func spawn(strength s: Float, at mouth: SIMD3<Float>) -> Bool {
+    mutating func spawn(strength s: Float, at mouth: SIMD3<Float>, spread: Float = 1) -> Bool {
         guard bubbles.count < Self.cap else { return false }
         let s = min(max(s, 0), 1)
         let radius = r(0.16, 0.26) + 0.20 * s * r(0.4, 1)
-        let vel = SIMD3<Float>(r(-0.3, 0.3), r(0.35, 0.6) * (0.8 + 0.5 * s), -r(0.9, 1.6) * (0.6 + 0.5 * s))
+        let vel = SIMD3<Float>(r(-0.3, 0.3) * spread, r(0.35, 0.6) * (0.8 + 0.5 * s), -r(0.9, 1.6) * (0.6 + 0.5 * s))
         let p = mouth + SIMD3(r(-0.25, 0.25), r(-0.05, 0.1), r(-0.15, 0.15))
         bubbles.append(Bubble(id: nextID, pos: p, vel: vel, radius: radius, life: r(3.8, 6.5), phase: r(0, 6.28)))
         nextID += 1; spawned += 1

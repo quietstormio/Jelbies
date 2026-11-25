@@ -87,7 +87,7 @@ nonisolated enum HopscotchCourt {
         case ...0: return SIMD2(0, z0)
         case 1: return SIMD2(g, z0)
         case 2: return SIMD2(1.5 * g, z0 - 0.866 * g)
-        default: return SIMD2(2.5 * g, z0 - 0.866 * g)
+        default: return ParkOpen.old ? SIMD2(2.5 * g, z0 - 0.866 * g) : SIMD2(g, z0 + g)          // (park-open-r1: slot 3 stood where the slide's back-left corner now is; it queues in front of slot 1 instead, in the open middle: ParkOpen.swift)
         }
     }
     /// Where the finished hopper walks: past the last square, out to the side and AHEAD (hop-leave-r1: the way he already faces, about 30 degrees off, so the walk is one arc away from the landing; the old

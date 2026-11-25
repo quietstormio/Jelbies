@@ -241,6 +241,7 @@ extension GameCare {
         }
         #endif
         #if targetEnvironment(simulator)
+        if ParkPosLog.on, park.phase == .playing { parkPosLog(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors, dt: dt) }          // (park-open-r1 capture aid: Park/ParkPosLog.swift)
         if Self.traceOn, park.phase == .playing { parkTrace(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors) }
         if ParkSlideProbe.busy, park.phase == .playing { parkSlideBusy(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors) }          // (capture aid `-SlideBusy 1`)
         if ParkSlideProbe.on, park.phase == .playing || park.phase == .arriveIn { parkSlideProbe(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors, dt: dt) }          // (park-slide-r3 capture aid: Park/ParkSlideProbe.swift)
@@ -564,7 +565,10 @@ enum ParkLayout {
     /// (x as a share of the half width, z as a share of the depth) for up to five.
     /// park-arrive-r2: slot 1 was (0.40, 0.72), 0.80 off the slide's box in portrait: Moss turning on that spot in his first second swayed his centre to 0.53 from it. 0.30 puts him
     /// ~1.1 off it in portrait, between the path and the slide, clear of slot 0 by the hopscotch court and of the bench at the back.
-    static let slots: [(Float, Float)] = [(-0.35, 0.62), (0.30, 0.72), (0.0, 0.46), (-0.60, 0.26), (0.62, 0.30)]
+    static let oldSlots: [(Float, Float)] = [(-0.35, 0.62), (0.30, 0.72), (0.0, 0.46), (-0.60, 0.26), (0.62, 0.30)]
+    /// park-open-r1: the slide stands further back and the middle is open: five spots scattered over it (no two nearer than about 2.0 on the 7 x 8 floor, none on the court, none by the slide's new box or its climb spot).
+    static let openSlots: [(Float, Float)] = [(-0.30, 0.66), (0.62, 0.78), (0.35, 0.50), (-0.85, 0.14), (0.0, 0.92)]
+    static var slots: [(Float, Float)] { ParkOpen.old ? oldSlots : openSlots }
     /// park-arrive-r2: no arrival spot starts nearer the slide's box than this (a wider screen spreads the shares: the spot is moved straight out from the box).
     static let slideClear: Float = 1.0
 
