@@ -184,3 +184,18 @@ extension BlobBrain {
         return true
     }
 }
+
+extension BlobBrain {
+    /// move-crowd-r3 (café exit-leg stops): a café customer's leg can be 10 u long (out to the off-screen door); `peerOnLeg` held him for any standing body ANYWHERE on it (the stops: held, the
+    /// nearest body 1.9-3.9 u away). For a café walker only the next `cafeHoldReach` u of the leg can hold him; the café's own proximity guard re-plans near bodies. Everyone else: the whole leg.
+    func crowdHoldReach(_ root: SIMD2<Float>, _ target: SIMD2<Float>) -> SIMD2<Float> {
+        guard crowd.cafeCurve, MoveCrowd.cafeHoldOn else { return target }
+        let d = target - root, L = simd_length(d)
+        return L > MoveCrowd.cafeHoldReach ? root + d / L * MoveCrowd.cafeHoldReach : target
+    }
+}
+
+extension MoveCrowd {
+    nonisolated(unsafe) static var cafeHoldReach = num("MOVECROWD_CAFE_HOLD_REACH", 2.5)
+    nonisolated(unsafe) static var cafeHoldOn = part("cafehold")
+}

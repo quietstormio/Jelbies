@@ -399,6 +399,7 @@ extension GameCare {
                 if !m.warm { b.abortAll(m.actor.sim, m.actor.skinner) }
                 b.commandedIdle = nil; b.restTimer = 0; m.warm = false
                 m.state = .walking; m.stuck = 0; m.lastPos = g.phase == .arriving && !m.replan ? door : pos; m.prevPos = m.lastPos; m.replan = false
+                b.crowd.cafeCurve = Self.cafeCornerOn          // (move-crowd-r3: the whole walk, not only after the first corner)
                 m.startedAt = cs.clock; m.slowT = 0; m.slowCounted = false; m.spawn = m.lastPos; m.nudges = 0
                 if g.phase == .leaving { b.reserved = false; b.mealFaceYaw = nil }
             case .walking:
