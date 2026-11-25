@@ -22,7 +22,7 @@ extension GameCare {
 
     /// Nothing in the game may legitimately hold a Jelmiko's life off right now.
     var nothingHolds: Bool {
-        focus.phase == .roaming && !tripActive && !raceBusy && !outing.running && newcomerWelcome == nil && !bath.active && !trayOut && !groupActive
+        focus.phase == .roaming && !tripActive && !raceBusy && !outing.running && outing.tidyT == nil && !outing.waking && newcomerWelcome == nil && !bath.active && !trayOut && !groupActive
             && !isPreview && !show.onStage && !bedtimeWalking && !play.active && !callRunning && queued.isEmpty && raceBook.returner == nil
     }
 

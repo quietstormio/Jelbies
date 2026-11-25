@@ -111,7 +111,7 @@ final class StuckDetector {
             ? (0..<max(c.jellies.count, 1)).compactMap { id in c.brainFor(id).map { (id, $0) } }
             : c.raceBook.actors.compactMap { a in a.brain.map { (a.id, $0) } }
         let trip = c.tripActive || c.raceBusy
-        let outing = c.outing.running
+        let outing = c.outing.running || c.outing.tidyT != nil || c.outing.waking
         let welcome = c.newcomerWelcome != nil
         let homeQuiet = !trip && !outing && !welcome && !c.bath.active && !c.trayOut && !c.groupActive && !c.isPreview && !c.show.onStage && c.focus.phase == .roaming && !c.bedtimeWalking && c.raceBook.returner == nil
         func line(_ b: BlobBrain, _ id: Int = -1) -> String {
