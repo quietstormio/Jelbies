@@ -120,7 +120,7 @@ extension GameCare {
                 let away = simd_length(GameCare.floorPos(pb, mine[k - 1].sim) - GroomScenery.doorStep)
                 if let t0 = book.outAt[mine[k - 1].id] {
                     let waited = groom.cheerT - t0
-                    if waited >= GroomTuning.exitPatience * 3 { return true }          // (never wait forever on a stalled one)
+                    if waited >= GroomTuning.exitPatience * 5 { return true }          // (never wait forever on a stalled one)
                     if waited >= GroomTuning.exitPatience, away >= 2.2 { return true }          // (a slow one: the next only once two bodies fit side by side)
                 }
                 if !book.laneDone.contains(mine[k - 1].id) { return false }
@@ -161,8 +161,7 @@ extension GameCare {
             if inDoor { b.armDirW = 1; b.armDirEl = [0.35, 0.35]; b.armDirSa = [1.25, 1.25]; b.armDirOut = 0 }
             else if b.armDirW > 0, book.arrivedAt[a.id] == nil { b.armDirW = 0; b.armDirOut = 0 }
             if !book.laneDone.contains(a.id), fy > zf + 2.5 || groom.cheerT - outAt > 6 {
-                book.laneDone.insert(a.id)
-                b.postEvent(.joyJump)
+                book.laneDone.insert(a.id)          // (no joy jump here: it held him standing in front of the door for a second, with the next one's lane goal right beside him)
                 b.requestNow(.goTo(b.fixed(GroomScenery.lineUp(index: k, of: mine.count))))
             }
             // the cheer starts when he has ARRIVED at his spot (a cheer's abort must not stop the walk-out half way and leave him in the next one's way)
