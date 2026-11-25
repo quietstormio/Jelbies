@@ -174,6 +174,9 @@ extension BlobBrain {
         mix.strollFrom = c / n
         mix.strollUntil = now + MoveMix.strollDue
         if scriptIsNone { restTimer = rand(MoveMix.strollWait.lowerBound, MoveMix.strollWait.upperBound) }
+        if scriptIsNone, MoveCrowd.on, MoveCrowd.partOn, homeRoom || outingPlay {          // (move-crowd-r1 part: staggered: each mate with a lower id leaves first, `partStagger` s apart)
+            restTimer += MoveCrowd.partStagger * Float(mates.filter { $0 < steerID }.count)
+        }
     }
 
     /// pickAutonomous: a stroll is due -> walk it. True = a leg was started.
@@ -204,6 +207,7 @@ extension BlobBrain {
         let here = position, now = variety.now
         let mates = mix.strollMates.compactMap { socialBrain($0) }
         let others = socialOthers().filter { $0 !== self }
+        let crowdPart = MoveCrowd.on && MoveCrowd.partOn && (homeRoom || outingPlay)          // (move-crowd-r1; read once)
         var out = here - mix.strollFrom
         out = simd_length(out) > 0.15 ? out / simd_length(out) : SIMD2(sinf(Float(steerID) * 2.1), cosf(Float(steerID) * 2.1))
         for pass in 0..<3 {
@@ -216,11 +220,12 @@ extension BlobBrain {
                 guard dr > lo, dr < hi, rf.stopOK(raw), pass > 0 || simd_dot((raw - here) / dr, out) >= cosf(MoveMix.strollOutward) else { continue }          // (the cheap tests first)
                 let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
                 let d = simd_distance(cand, here)
+                if crowdPart, simd_length(cand - raw) < 0.15, d > lo, d < hi, !crowdGoalFree(cand) || (pass == 0 && MoveCrowd.legOn && !crowdLegFree(from: here, to: cand)) { continue }          // (move-crowd-r1: cheap, before the floor and route checks)
                 guard simd_length(cand - raw) < 0.15, d > lo, d < hi, rf.stopOK(cand), peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }
                 let dir = (cand - here) / d
                 if pass == 0, simd_dot(dir, out) < cosf(MoveMix.strollOutward) { continue }
                 var split = true
-                if pass < 2 { for m in mates where now - m.mix.strollDirAt < 8 && simd_dot(dir, m.mix.strollDir) > MoveMix.strollSplitCos { split = false } }
+                if pass < 2 { for m in mates where now - m.mix.strollDirAt < 8 && simd_dot(dir, m.mix.strollDir) > (crowdPart ? MoveCrowd.partSplitCos : MoveMix.strollSplitCos) { split = false } }          // (move-crowd-r1 part: the two leave to different sides)
                 guard split else { continue }
                 var nearest: Float = 5
                 for o in others {
