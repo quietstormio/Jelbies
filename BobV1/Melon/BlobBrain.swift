@@ -1503,7 +1503,7 @@ final class BlobBrain {
         // a LYING body on the leg cannot step aside: a requested walk (the Come here call) did not set off for the whole 6 s of the standing patience (2026-11-21, come-here-r4: the walker stood 2.5 s before anything else moved him)
         let sleeperOnly = Self.sleeperLegWait && requested && standing && !slideLeg && legBlockedOnlyBySleepers(root, target)
         let patience: Float = forced ? 0 : (sleeperOnly ? 0.3 : (requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6)))
-        if steerWait < patience, peerOnLeg(root, target) { heldByPeer = true; return nil }
+        if steerWait < patience, peerOnLeg(root, crowdHoldReach(root, target)) { heldByPeer = true; return nil }          // (move-crowd-r3: a café customer is held only by a body on the next 2.5 u of his leg, MoveCrowd.swift)
         if !requested || (slideLeg && standing), peerOnLeg(root, target) { heldByPeer = true; steerGiveUp = true; return nil }
         return target
     }
