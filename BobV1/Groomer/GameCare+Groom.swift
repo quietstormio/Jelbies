@@ -117,9 +117,9 @@ extension GameCare {
                 if let t0 = book.outAt[mine[k - 1].id] {
                     let waited = groom.cheerT - t0
                     if waited >= GroomTuning.exitPatience * 3 { return true }          // (never wait forever on a stalled one)
-                    if waited >= GroomTuning.exitPatience, away >= 1.6 { return true }          // (a slow one: the next only once two bodies fit side by side)
+                    if waited >= GroomTuning.exitPatience, away >= 2.2 { return true }          // (a slow one: the next only once two bodies fit side by side)
                 }
-                return away >= 2.0          // (no-clip-r1: never two in the doorway; 2.0 so the next one's first steps do not cross the last one's route to the line-up)
+                return away >= 2.6          // (no-clip-r1: never two in the doorway; 2.0 so the next one's first steps do not cross the last one's route to the line-up)
             }()
             if let b = a.brain, groom.cheerT >= openAt + Float(k) * GroomTuning.exitSpacing, prevClear {
                 book.out.insert(a.id); book.outAt[a.id] = groom.cheerT
@@ -135,10 +135,10 @@ extension GameCare {
             guard let b = a.brain, let outAt = book.outAt[a.id] else { continue }
             // the doorway: arms forward while he is in or near the frame (the opening is 1.40, his belly 1.17, the arms stick out another 0.4); on the pavement he is sent on to his spot
             let fy = GameCare.floorPos(b, a.sim).y, zf = GroomScenery.frontZ
-            let inDoor = fy > zf - 1.0 && fy < zf + 0.9 && !book.laneDone.contains(a.id)
+            let inDoor = fy > zf - 1.0 && fy < zf + 1.9 && !book.laneDone.contains(a.id)
             if inDoor { b.armDirW = 1; b.armDirEl = [0.35, 0.35]; b.armDirSa = [1.25, 1.25]; b.armDirOut = 0 }
             else if b.armDirW > 0, book.arrivedAt[a.id] == nil { b.armDirW = 0; b.armDirOut = 0 }
-            if !book.laneDone.contains(a.id), fy > zf + 1.2 || groom.cheerT - outAt > 5 {
+            if !book.laneDone.contains(a.id), fy > zf + 1.9 || groom.cheerT - outAt > 6 {
                 book.laneDone.insert(a.id)
                 b.postEvent(.joyJump)
                 b.requestNow(.goTo(b.fixed(GroomScenery.lineUp(index: k, of: mine.count))))

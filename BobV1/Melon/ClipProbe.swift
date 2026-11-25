@@ -250,13 +250,13 @@ enum ClipProbe {
             for s in sm { lo = simd_min(lo, s.p); hi = simd_max(hi, s.p) }
             let brain = byID[j.id]?.brain
             if care.groom.inScene {
-                let hidden = care.groomHides(j.id)
-                if hiddenPrev[j.id] == true, !hidden {
+                let isOut = care.groomBook.out.contains(j.id)
+                if isOut, hiddenPrev[j.id] != false {
                     let pop = lo.z > GroomScenery.frontZ - 0.05
-                    NSLog("[clip] %@ id=%d first visible t=%.1f minZ=%.2f (shop front z=%.2f) centreX=%.2f", pop ? "POP" : "visible-behind-wall", j.id, t, lo.z, GroomScenery.frontZ, body.centre.x)
+                    NSLog("[clip] %@ id=%d first visible t=%.1f skinMinZ=%.2f skinMaxZ=%.2f (shop front z=%.2f)", pop ? "POP" : "visible-behind-wall", j.id, t, lo.z, hi.z, GroomScenery.frontZ)
                     if pop { popCount += 1 }
                 }
-                hiddenPrev[j.id] = hidden
+                hiddenPrev[j.id] = !isOut
             } else { hiddenPrev[j.id] = nil }
             for pr in plist {
                 if hi.x < pr.lo.x || lo.x > pr.hi.x || hi.y < pr.lo.y || lo.y > pr.hi.y || hi.z < pr.lo.z || lo.z > pr.hi.z { continue }

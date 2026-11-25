@@ -66,7 +66,7 @@ enum GroomScenery {
     /// Where the Jelbies step out (just in front of the door) and the line-up in front of the shop.
     /// Round door: where each one STARTS: inside the shop, 1.1 behind the shop front, so the whole body is hidden by the wall; and where he walks to first: out through the doorway's centre line to the pavement.
     static let insideSpot = SIMD2<Float>(doorX, frontZ - 1.1)
-    static let laneOut = SIMD2<Float>(doorX, frontZ + 1.6)
+    static let laneOut = SIMD2<Float>(doorX, frontZ + 2.2)
     static let doorStep = insideSpot          // (the release distance is measured from here)
     /// The doorway: opening half width `doorW` (0.70: 1.40 wide for a 1.17 belly; arms are tucked forward inside the frame), the frame ring 0.10 beyond.
     /// The open door leaf as a floor obstacle (a thin wall from the hinge out toward the street), for the walk resolver while the door stands open.
@@ -247,7 +247,7 @@ enum GroomScenery {
         b.material = .glow
         box(b, V3(doorX, doorY, Z + 0.025), V3(doorW, doorH, 0.02), r: 0.3, color: warm * 0.92, seg: 4)
         b.material = .plain
-        box(b, V3(doorX, 0.18, Z + 0.45), V3(0.95, 0.08, 0.45), r: 0.05, color: stoneDark)
+        box(b, V3(doorX, 0.03, Z + 0.45), V3(0.95, 0.03, 0.45), r: 0.02, color: stoneDark)          // (door round: a flat stone threshold, not a 0.26 step: the ones who walk out of the shop have their feet on the pavement)
 
         // a wall lamp (brass) beside the door
         box(b, V3(2.75, 1.85, Z + 0.1), V3(0.03, 0.14, 0.03), r: 0.02, color: brass, seg: 1)
