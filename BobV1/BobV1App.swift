@@ -17,7 +17,11 @@ struct BobV1App: App {
         if DevArgs.enabled { NSLog("[jelbies] DEV ARGS ENABLED in a non-Debug build: never ship this to the App Store") }
         #endif
         StoryModelSentinel.launchCheckOnce(); StoryAppState.install()          // before anything in Story runs: a marker left by a death inside the model turns the model off (Story/StoryModelGate.swift)
-        LaunchTiming.mark("app init"); StartFlow.applyLaunchArguments(); PerfMeter.configure(); PhotoAlbum.register(); FootLog.configure(); MoveLog.configure() }          // -ResetForAdoption 1 (simulator) wipes before anything reads a save
+        LaunchTiming.mark("app init"); StartFlow.applyLaunchArguments(); PerfMeter.configure(); PhotoAlbum.register(); FootLog.configure(); MoveLog.configure()
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        GlitchProbe.configure()          // glitch-hunt-r1: -GlitchProbe 1 (Melon/GlitchProbe.swift)
+        #endif
+        }          // -ResetForAdoption 1 (simulator) wipes before anything reads a save
 
     /// iPad only (sizeRestrictions is nil on iPhone): a resizable window never goes below about 600 x 500 pt.
     @MainActor private static func applyPadMinimumWindow() {

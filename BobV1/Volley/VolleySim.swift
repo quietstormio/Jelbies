@@ -24,6 +24,8 @@ nonisolated enum VolleyQuality: Equatable, Sendable { case perfect, good, early,
 nonisolated enum VolleyEvent: Equatable, Sendable {
     case jump(player: Int, dx: Float, dz: Float, apex: Float, block: Bool)
     case spike(player: Int)
+    /// The body turns to this heading (radians, 0 = toward the camera, +pi/2 = toward +x) while it jumps for the ball: it faces what it hits.
+    case face(player: Int, yaw: Float)
     case dive(player: Int, dir: Float)
     case serveToss(player: Int)
     case contact(player: Int, kind: VolleyHit, quality: VolleyQuality, point: SIMD2<Float>, normal: SIMD2<Float>, speed: Float)
@@ -89,6 +91,10 @@ nonisolated struct VolleyPlayer: Sendable {
     var lastX: Float = 0, lastZ: Float = 0
     /// The top of the head (or of the hat on it) in the world: x, y, z. nil until the glue says (then the crown is taken as (x, top, z)).
     var crown: SIMD3<Float>?
+    /// Where the body is facing now (radians, as the body reports it); nil until the glue says (then the rest heading, 3/4 toward the camera and the net).
+    var yaw: Float?
+    /// Where he is told to look (radians): at the ball while it is his to play; nil = the rest heading. The body turns to it on the ground and in the air.
+    var faceGoal: Float?
     var crownPoint: SIMD3<Float> { crown ?? SIMD3(x, top, z) }
 }
 
@@ -148,8 +154,24 @@ nonisolated struct VolleyAIParams: Sendable {
     var serveFast: Float = 1
     /// Settles who takes the ball once per touch and keeps to it.
     var sticky = false
-    static func tier(_ t: VolleyTier) -> VolleyAIParams {
+    /// How well the team notices that the human keeps putting the ball in the same part of the court (2026-11-24: 'I won every set the same way'): 0 never, 1 always. Once two
+    /// hits in a row went to the same ninth of the court, one defender waits there and neither loses time reacting or misjudging it.
+    var adapt: Float = 0
+    static func tier(_ t: VolleyTier) -> VolleyAIParams { tierBase(t) }
+    static func tierBase(_ t: VolleyTier) -> VolleyAIParams {
         if VolleyTuning.old { return oldTier(t) }
+        if !VolleyTuning.hard { return installTenT(t) }
+        // 2026-11-24 (the owner: "slightly increase difficulty of volleyball opponents ... I won every set the same way"): the numbers after the harness round (VolleyHarness bots, 40 to 100
+        // matches a cell): the visitors make fewer honest mistakes, start running sooner, smash a little faster and notice a placement the player keeps using (`adapt`).
+        switch t {
+        case .sandcastle: return VolleyAIParams(attack: 0, set: 0.30, perfect: 0.02, block: 0, tip: 0, read: 0.0, react: 0.40, mishit: 0.20, easy: 0.35, loft: 0.25, slip: 0.9, smash: false, reactSpread: 0.25, adapt: 0)
+        case .shore: return VolleyAIParams(attack: 0.55, set: 0.80, perfect: 0.18, block: 0.20, tip: 0, read: 0.25, react: 0.20, mishit: 0.10, easy: 0.25, loft: 0.12, slip: 0.50, smash: true, reactSpread: 0.10, adapt: 0.9)
+        case .reef: return VolleyAIParams(attack: 0.90, set: 0.95, perfect: 0.55, block: 0.35, tip: 0.10, read: 0.75, react: 0.06, mishit: 0.02, easy: 0.10, loft: 0.05, slip: 0.30, smash: true, reactSpread: 0.08, sticky: true, adapt: 1.0)
+        case .tidal: return VolleyAIParams(attack: 0.97, set: 1.0, perfect: 0.65, block: 0.45, tip: 0.30, read: 1.0, react: 0.04, mishit: 0.02, easy: 0, loft: 0, slip: 0.05, smash: true, reactSpread: 0.03, serveFast: 0.55, sticky: true, adapt: 1)
+        }
+    }
+    /// The computer team as installed on the phone at 10t (`-VolleyHard 0`).
+    static func installTenT(_ t: VolleyTier) -> VolleyAIParams {
         switch t {
         case .sandcastle: return VolleyAIParams(attack: 0, set: 0.30, perfect: 0.02, block: 0, tip: 0, read: 0.0, react: 0.60, mishit: 0.50, easy: 0.90, loft: 0.55, slip: 1.40, smash: false, reactSpread: 0.25)
         case .shore: return VolleyAIParams(attack: 0.40, set: 0.70, perfect: 0.12, block: 0.25, tip: 0, read: 0.25, react: 0.40, mishit: 0.27, easy: 0.50, loft: 0.25, slip: 0.85, smash: true, reactSpread: 0.15)
@@ -167,6 +189,21 @@ nonisolated struct VolleyAIParams: Sendable {
         }
     }
     static let teammate = VolleyAIParams(attack: 0.88, set: 1.0, perfect: 0.30, block: 0.55, tip: 0.05, read: 0.6, react: 0.10)
+}
+
+nonisolated enum FlightCap {
+    static var passScale: Float = {
+        #if STANDALONE
+        if let v = ProcessInfo.processInfo.environment["PASSSCALE"], let f = Float(v) { return f }
+        #endif
+        return 1.0
+    }()
+    static var maxSmash: Float = {
+        #if STANDALONE
+        if let v = ProcessInfo.processInfo.environment["MAXSMASH"], let f = Float(v) { return f }
+        #endif
+        return 2.0
+    }()
 }
 
 nonisolated struct VolleySim: Sendable {
@@ -225,6 +262,21 @@ nonisolated struct VolleySim: Sendable {
     var ballOnHead: Bool { !VolleyTuning.old && (phase == .intro || phase == .serveWait) && carry == nil }
     static let carryLead: Float = 1.0, carryDur: Float = 0.85
     private var crossedFor = -1
+    /// The player whose hit the ball is still leaving: it bounces off his body (no touch) until it has cleared it (a spiker never hits his own slow ball again: no fourth-touch faults).
+    private var guardPlayer = -1
+    /// The computer team misses reading a smash of the player's until this clock (see `digMiss`): it cannot start running for the ball.
+    private var blindUntil: Float = -1
+    /// A short ball the computer has read (where it is going, and until when): its nearer player goes in at once.
+    private var shortRead: (spot: SIMD2<Float>, until: Float)?
+    /// Measuring aids: how many balls rolled off a back turned to them, and where (x, y, z) the ball was when the last touch began.
+    private(set) var turnedAway = 0
+    /// Measuring aid: smashes played and how many fell back to a lob, per team.
+    private(set) var smashCount = [0, 0], smashLobbed = [0, 0]
+    private(set) var contactBall = SIMD3<Float>.zero
+    /// The ninths of the computer's court the human team's last shots were sent to (see `VolleyAIParams.adapt`), and the last outgoing target.
+    private var humanCells: [Int] = []
+    private var lastTgt = SIMD2<Float>.zero
+    private var lastKind: VolleyHit = .bump
     private(set) var comboFlash: Float = 0
 
     var tier: VolleyTier? { if case .match(let t) = mode { return t }; return nil }
@@ -329,6 +381,8 @@ nonisolated struct VolleySim: Sendable {
     private func spikeIntent(_ i: Int, timing tm: VolleyTiming?) -> Bool {
         let p = players[i], t = touches[p.team]
         guard let tm, !tm.dig else { return false }
+        // a smash is struck square to the net: only with the ball in front of that heading (a ball that will pass behind him is played, not smashed)
+        if T.facing, !ballInFront(i, at: SIMD2(xAfter(tm.tau), zAfter(tm.tau)), yaw: -Self.side(p.team) * .pi / 2) { return false }
         if t >= 2 { return true }
         let nearNet = abs(tm.x) < 1.75
         let highEnough = ball.pos.y > T.netTop + 0.5 || (timeToHeight(T.netTop + 0.8).map { $0 < 2.5 } ?? false)
@@ -375,7 +429,7 @@ nonisolated struct VolleySim: Sendable {
         // a low ball is a dig: a dive at it
         let low = ball.pos.y < 1.05 + 0.35 && ball.vel.y < 1.0
         let reach = ball.pos.x - p.x
-        if low, abs(reach) > 0.35, abs(reach) < T.diveReach + 0.35, ball.pos.x * s > -0.2, abs(ball.z - p.z) < 0.9 {
+        if low, abs(reach) > 0.35, abs(reach) < T.diveReach + 0.35, ball.pos.x * s > -0.2, abs(ball.z - p.z) < 0.9, !T.facing || ballInFront(i, at: SIMD2(ball.pos.x, ball.z), yaw: reach > 0 ? .pi / 2 : -.pi / 2) {
             players[i].act = .dive; players[i].actT = 0
             events.append(.dive(player: i, dir: reach > 0 ? 1 : -1))
             return
@@ -386,6 +440,7 @@ nonisolated struct VolleySim: Sendable {
         let apex = T.apex(hops: p.stats.hops)
         let dx = max(-0.5, min(0.5, (p.wantX - p.x) * 0.9)), dz = max(-0.5, min(0.5, (p.wantZ - p.z) * 0.9))
         players[i].act = .jump; players[i].actT = 0
+        if !spike, let y = faceForBall(i, landing: tm.map { SIMD2(xAfter($0.tau), zAfter($0.tau)) }) { events.append(.face(player: i, yaw: y)) }          // (toward where the ball will be when it is at his hitting height)
         events.append(.jump(player: i, dx: dx, dz: dz, apex: apex, block: false))
     }
 
@@ -429,7 +484,8 @@ nonisolated struct VolleySim: Sendable {
     }
 
     private mutating func rollQuality(_ i: Int) -> VolleyQuality {
-        let pr = players[i].team == 0 ? params[0].perfect : params[1].perfect
+        var pr = players[i].team == 0 ? params[0].perfect : params[1].perfect
+        if T.hard, players[i].team == 1, readsHabit() { pr += 0.25 * params[1].adapt }
         let r = rng.next()
         if r < pr { return .perfect }
         if r < pr + (1 - pr) * 0.8 { return .good }
@@ -470,7 +526,7 @@ nonisolated struct VolleySim: Sendable {
     private mutating func startServe() {
         phase = .serveWait; phaseT = 0; carried = false
         serverIndex = server * 2 + serveRot[server]
-        touches = [0, 0]; lastHit = -1; possession = -1; touchLog = []; ring = nil; serveMeter = nil; servePending = false
+        touches = [0, 0]; lastHit = -1; possession = -1; touchLog = []; ring = nil; serveMeter = nil; servePending = false; guardPlayer = -1
         events.append(.serveReady(player: serverIndex))
         if serverIndex < players.count {
             players[serverIndex].wait = T.serveWaitAI
@@ -489,6 +545,7 @@ nonisolated struct VolleySim: Sendable {
             players[i].actT += dt
             if players[i].act != .stand, players[i].actT > 2.5 { players[i].act = .stand; players[i].spikePlanned = false }      // stuck-state guard: no move lasts this long
         }
+        if phase != .rally { for i in players.indices { players[i].faceGoal = nil } }          // (nobody keeps staring at a ball that is not in play)
         switch phase {
         case .intro:
             hover(dt: dt)
@@ -508,6 +565,7 @@ nonisolated struct VolleySim: Sendable {
             if phase == .rally {
                 updateRing()
                 runAI(dt: dt)
+                updateFacing()
                 fireSpikes()
                 serverJump()
                 autoSwitchTick()
@@ -574,6 +632,8 @@ nonisolated struct VolleySim: Sendable {
     /// Fires the leans: a spike-planned jump tips onto its belly once it is a little way up.
     private mutating func fireSpikes() {
         for i in players.indices where players[i].act == .jump && players[i].spikePlanned && !players[i].grounded && players[i].actT >= T.crouch + 0.10 {
+            // he tips onto his belly square to the net only when the ball really is in front of that heading by now (a ball that has drifted behind him is played with the head, facing it)
+            if T.facing, !ballInFront(i, at: SIMD2(xAfter(0.25), zAfter(0.25)), yaw: -Self.side(players[i].team) * .pi / 2) { players[i].spikePlanned = false; continue }
             players[i].act = .spike; players[i].actT = 0
             events.append(.spike(player: i))
         }
@@ -637,6 +697,7 @@ nonisolated struct VolleySim: Sendable {
         if abs(ball.pos.x) < R, abs(ball.z) < T.netDepth, ball.pos.y < T.netTop + R * 0.5 {
             if ball.pos.y > T.netTop - 0.05 {         // the top tape: a little bounce up
                 ball.vel.y = max(ball.vel.y, 0.8 * abs(ball.vel.x) + 0.8)
+                if T.hard { ball.vel.x = (ball.vel.x >= 0 ? 1 : -1) * max(abs(ball.vel.x) * 0.6, 0.7) }          // (it rolls over the tape, it is not thrown on at full speed; never slower than a roll, or it would sit on the tape)
             } else {
                 let s: Float = sideBefore >= 0 ? 1 : -1
                 ball.pos.x = s * R
@@ -654,6 +715,12 @@ nonisolated struct VolleySim: Sendable {
             autoSwitchNow(reason: .crossed)
         }
         // bodies
+        if T.hard, guardPlayer >= 0 {
+            let g = players[guardPlayer]
+            var near = abs(ball.z - g.z) < T.zReach + 0.2 && g.samples.contains { simd_length($0 - ball.pos) < R + 0.4 }
+            if g.act == .spike, abs(ball.z - g.z) < T.zReach + 0.2, simd_length(SIMD2(g.x - Self.side(g.team) * 0.5, g.top - 0.15) - ball.pos) < 0.78 + 0.4 { near = true }          // (the leaning belly's generous zone, see `contact`)
+            if !near { guardPlayer = -1 }
+        }
         for i in players.indices { contact(i) }
         // the sand
         if phase == .rally, ball.pos.y <= R {
@@ -715,6 +782,18 @@ nonisolated struct VolleySim: Sendable {
         }
         guard n > 0 else { return }
         let c = sum / n
+        contactBall = SIMD3(ball.pos.x, ball.pos.y, ball.z)
+        if T.facing, !(lastHit < 0 && i == serverIndex), !ballInFront(i, at: SIMD2(ball.pos.x, ball.z)) {          // (the server's own toss is always over his head)
+            // behind his back: he has not turned to it, so it is not his ball. It rolls off him (no touch)
+            turnedAway += 1
+            rollOff(i, at: c)
+            return
+        }
+        if T.hard, i == guardPlayer, lastKind != .block {
+            // still inside the body it was just hit off: it rolls off him, no touch
+            rollOff(i, at: c)
+            return
+        }
         var nrm = ball.pos - c
         let L = simd_length(nrm)
         nrm = L > 1e-4 ? nrm / L : SIMD2(0, 1)
@@ -744,6 +823,9 @@ nonisolated struct VolleySim: Sendable {
         else if kind != .block { chain[team] = 0 }
         let v = outgoing(i, kind: kind, quality: q, combo: combo, at: c, normal: nrm)
         ball.vel = SIMD2(v.x, v.y); ball.vz = v.z
+        if T.hard, team == 0, kind == .spike, unit(touchSerial, 55) < Self.digMiss(tier) { blindUntil = clock + 2.2 }
+        if T.hard, team == 0, kind == .free || kind == .serve, abs(lastTgt.x) < 1.5, lastTgt.x * Self.side(1) > 0, unit(touchSerial, 33) < (params[1].read) { shortRead = (lastTgt, clock + 2.4) } else if T.hard, team == 0 { shortRead = nil }
+        if T.hard, team == 0, kind != .block, lastTgt.x * Self.side(1) > 0 { humanCells.append(Self.cell(lastTgt)); if humanCells.count > 4 { humanCells.removeFirst() } }
         ball.pos = c + nrm * (T.ballR + 0.02)
         if ball.pos.y < T.ballR { ball.pos.y = T.ballR }
         players[i].cooldown = 0.35
@@ -765,7 +847,7 @@ nonisolated struct VolleySim: Sendable {
             touches[team] += 1; touches[1 - team] = 0; possession = team
             touchLog.append(q)
         }
-        lastHit = i
+        lastHit = i; lastKind = kind; guardPlayer = i
         events.append(.contact(player: i, kind: kind, quality: q, point: c, normal: nrm, speed: simd_length(v)))
         if !isServe, kind != .block { events.append(.touchCount(team: team, count: touches[team])) }
         // feedback text (for the human's team)
@@ -857,9 +939,16 @@ nonisolated struct VolleySim: Sendable {
         let qf: Float = q == .perfect ? 0.25 : q == .good ? 1 : 1.8
         var err = (isHuman(i) ? T.aimError(timing: p.stats.timing) : (1 - p.skill) * 0.9 + 0.08) * qf
         if combo { err = 0 }
+        if T.hard, p.team == 1, tier != .sandcastle {
+            // the visitors above the first level pass and set to each other much more truly than they smash (the aim scatter is for the big shots; the honest misses are `mishit`)
+            err *= (kind == .bump || kind == .dig || kind == .set) ? 0.40 : 0.75
+        }
+        let focused = T.hard && p.team == 1 && readsHabit()          // (it has seen the same placement again and again: it plays this rally tight)
+        if focused { err *= 0.6 }
         var tgt: SIMD2<Float>
         var tf: Float
         var over = true
+        var missed = false
         let partner: VolleyPlayer? = players.indices.contains(p.team * 2 + (1 - i % 2)) && p.team * 2 + (1 - i % 2) != i ? players[p.team * 2 + (1 - i % 2)] : nil
         let slow: Float = q == .early || q == .late ? 1.12 : 1
         do {
@@ -890,42 +979,169 @@ nonisolated struct VolleySim: Sendable {
                 tgt = SIMD2(s * 1.05, sz); tf = 2.15 * (q == .perfect ? 0.97 : slow); over = false
             }
         }
+        if T.hard, kind == .bump || kind == .dig || kind == .set || kind == .free { tf *= FlightCap.passScale }          // (every pass and set is a little quicker: the rallies keep to about their old length)
         if !VolleyTuning.old, p.team == 1, !combo {
             let pr = params[1]
             if kind != .block, kind != .set { tf += pr.loft * (kind == .bump || kind == .dig ? (touches[1] >= 2 ? 1 : 0) : 1) }          // (higher and softer over the net)
             if kind == .spike, p.plan != .tip { tf *= pr.spikeFast }
             if kind == .serve { tf *= pr.serveFast }
-            if kind != .block, pr.mishit > 0, rng.next() < pr.mishit * (q == .perfect ? 0.3 : 1) * ((kind == .bump || kind == .dig || kind == .set) ? 0.5 : 1) {
+            if kind != .block, pr.mishit > 0, rng.next() < pr.mishit * (focused ? 0.3 : 1) * (q == .perfect ? 0.3 : 1) * ((kind == .bump || kind == .dig || kind == .set) ? 0.5 : 1) {
                 switch kind {
                 case .serve, .spike, .free:
+                    missed = true
                     if rng.next() < 0.5 { tgt = rng.next() < 0.5 ? SIMD2(opp * rng.range(3.4, 3.9), tgt.y) : SIMD2(tgt.x, (rng.next() < 0.5 ? -1 : 1) * rng.range(2.0, 2.4)) }          // long, or wide
                     else { tgt = SIMD2(opp * rng.range(0.15, 0.4), tgt.y); over = false; tf *= 0.75 }          // into the net
                 case .bump, .dig, .set:
+                    missed = true
                     tgt += SIMD2(rng.range(-1.7, 1.7), rng.range(-1.1, 1.1))          // a wild pass the partner cannot reach
                 default: break
                 }
             }
         }
+        lastTgt = tgt          // (where he MEANT it to go: the habit the computer notices is the aim, not the scatter)
         tgt.x += rng.range(-1, 1) * err
         tgt.y += rng.range(-1, 1) * err * 0.7
         if q == .early || q == .late { tgt += SIMD2(rng.range(-0.35, 0.35), rng.range(-0.25, 0.25)) }
         // solve the launch for the landing spot; lift it until it clears the net when it must cross
         var vx: Float = 0, vy: Float = 0
+        let lp = T.hard ? c + n * (T.ballR + 0.02) : c          // (where the ball really starts: its centre, out from the body's surface point, see `contact`)
+        if T.hard, over, kind != .block {
+            // a shot is only played where it can be: a ball in play lands on the court (the computer's deliberate misses aside), and a spike that cannot clear the net from where it is
+            // struck goes deeper first (a steeper ball needs room), then is slowed, and last of all becomes a plain lob: never a ball pushed into the tape that pops out the far side
+            let aimedOut = missed || abs(tgt.x) > T.outLine || abs(tgt.y) > T.outZ          // (a deliberate miss, or the human's own aim: left as it is)
+            if !aimedOut, p.team == 1, tier != .sandcastle {          // (the computer's shots from Shore up land on the court unless it means to miss: no stray balls from the aim error)
+                tgt.x = opp * min(abs(tgt.x), T.outLine - 0.45); tgt.y = max(-T.outZ + 0.45, min(T.outZ - 0.45, tgt.y))
+            }
+            if !aimedOut { tgt.x = opp * max(abs(tgt.x), 0.6) }
+            // the net's top band: the ball must be above it (its centre over `netTop + R / 2`, with a margin) at BOTH edges of the band, the far one being the lowest for a falling ball
+            let need = T.netTop + T.ballR * 0.5 + (kind == .spike ? 0.14 : 0.24)          // (a little over the band: the real ball sags under its drag)
+            func clears(_ tg: SIMD2<Float>, _ f: Float) -> Bool {
+                if abs(lp.x) < T.ballR + 0.02 { return true }
+                let vx0 = (tg.x - lp.x) / (f * (1 - 0.5 * T.drag * f)), vy0 = (T.ballR - lp.y) / f + 0.5 * g * f
+                for e: Float in [-opp * T.ballR, opp * T.ballR] {
+                    let te = (e - lp.x) / vx0
+                    if te <= 0 || te > f { continue }
+                    if lp.y + vy0 * te - 0.5 * g * te * te < need + 0.08 * f { return false }          // (a long flight sags more under its drag)
+                }
+                return true
+            }
+            if kind == .spike, p.plan != .tip { smashCount[p.team] += 1 }
+            if !clears(tgt, tf) {
+                var done = false
+                if !aimedOut { for k in 0..<6 { var t2 = tgt; t2.x = opp * min(abs(tgt.x) + 0.25 * Float(k + 1), T.outLine - 0.45); if clears(t2, tf) { tgt = t2; done = true; break } } }
+                if !done { var f = tf; for _ in 0..<60 { f *= 1.05; if f > FlightCap.maxSmash { break }; if clears(tgt, f) { tf = f; done = true; break } } }
+                if !done {
+                    if kind == .spike { smashLobbed[p.team] += 1 }
+                    if !aimedOut { tgt.x = opp * max(abs(tgt.x), 1.6) }
+                    tf = max(tf, T.flightTime(power: p.stats.power, over: true) + 0.1)
+                    for _ in 0..<6 where !clears(tgt, tf) { tf *= 1.12 }
+                }
+            }
+        }
+        if T.hard, over, kind != .block {
+            vx = (tgt.x - lp.x) / (tf * (1 - 0.5 * T.drag * tf))
+            vy = (T.ballR - lp.y) / tf + 0.5 * g * tf
+        } else {
         for _ in 0..<8 {
-            vx = (tgt.x - c.x) / (tf * (1 - 0.5 * T.drag * tf))
-            vy = (T.ballR - c.y) / tf + 0.5 * g * tf
-            if !over || abs(c.x) < 0.02 { break }
-            let tc = -c.x / vx
+            vx = (tgt.x - lp.x) / (tf * (1 - 0.5 * T.drag * tf))
+            vy = (T.ballR - lp.y) / tf + 0.5 * g * tf
+            if !over || abs(lp.x) < 0.02 { break }
+            let tc = -lp.x / vx
             if tc <= 0 || tc > tf { break }
-            let yc = c.y + vy * tc - 0.5 * g * tc * tc
+            let yc = lp.y + vy * tc - 0.5 * g * tc * tc
             if yc >= T.netTop + T.ballR + (kind == .spike || kind == .block ? 0.02 : 0.16) { break }
             tf *= 1.12
+        }
         }
         let vz = (tgt.y - ball.z) / (tf * (1 - 0.5 * T.drag * tf))
         // off-centre hits steer a little
         if (kind == .bump || kind == .dig), q != .perfect { vx += n.x * 0.45 }
         return SIMD3(vx, vy, vz)
     }
+
+    // MARK: facing: nobody hits a ball behind his back
+
+    /// A ball that met a body without being hit (his back is to it, or it is still leaving him): it glances off the surface and is nudged sideways along the sand, off his body, so it falls
+    /// clear instead of sliding along him.
+    private mutating func rollOff(_ i: Int, at c: SIMD2<Float>) {
+        let p = players[i]
+        var o = ball.pos - c
+        let lo = simd_length(o)
+        o = lo > 1e-4 ? o / lo : SIMD2(0, 1)
+        let vn = simd_dot(ball.vel, o)
+        if vn < 0 { ball.vel -= 1.5 * vn * o }
+        ball.pos = c + o * (T.ballR + 0.02)
+        var h = SIMD2(ball.pos.x - p.x, ball.z - p.z)
+        let lh = simd_length(h)
+        h = lh > 1e-3 ? h / lh : SIMD2(0, 1)
+        let away = ball.vel.x * h.x + ball.vz * h.y
+        if lh < 0.8, away < 1.0 { ball.vel.x += h.x * (1.0 - away); ball.vz += h.y * (1.0 - away) }          // (up to a gentle 1 u/s away from him, never more)
+    }
+
+    /// The heading a team's body rests at (3/4 toward the camera, facing the net): the brain's `restYaw`.
+    static func restYaw(team: Int) -> Float { -side(team) * VolleyTuning.restYaw }
+    static func forward(_ yaw: Float) -> SIMD2<Float> { SIMD2(sinf(yaw), cosf(yaw)) }
+    /// The heading that looks from `p` at `target` (x, z).
+    static func bearing(from p: SIMD2<Float>, to target: SIMD2<Float>) -> Float { atan2f(target.x - p.x, target.y - p.y) }
+    /// Is the ball in the front of this body (inside `facingHalfAngle` of where he looks), or right over him (inside `overheadRadius`, where the notion of front does not apply)?
+    func ballInFront(_ i: Int, at ballXZ: SIMD2<Float>, yaw: Float? = nil) -> Bool {
+        let p = players[i]
+        let d = ballXZ - SIMD2(p.x, p.z)
+        let l = simd_length(d)
+        if l < T.overheadRadius { return true }
+        let f = Self.forward(yaw ?? p.yaw ?? Self.restYaw(team: p.team))
+        return simd_dot(f, d / l) >= cosf(T.facingHalfAngle)
+    }
+    /// The heading to jump with so the coming ball is in front of him: nil (keep the rest heading) when it already is.
+    private func faceForBall(_ i: Int, landing: SIMD2<Float>?) -> Float? {
+        guard T.facing, let landing else { return nil }
+        let p = players[i]
+        if ballInFront(i, at: landing, yaw: Self.restYaw(team: p.team)) { return nil }
+        let want = Self.bearing(from: SIMD2(p.x, p.z), to: landing)
+        // face it, but never past the net: the heading stays within a quarter turn of the rest heading toward the camera / net side
+        return want
+    }
+
+    /// Everybody keeps his eyes on the ball while it is on his side of the net (or coming over it) and near him: he turns to it before it gets to him, and a hit never starts behind his back.
+    private mutating func updateFacing() {
+        guard T.facing else { return }
+        for i in players.indices {
+            let p = players[i]
+            var goal: Float?
+            let near = SIMD2(ball.pos.x - p.x, ball.z - p.z)
+            if ball.pos.x * Self.side(p.team) > -0.6 || (lastHit >= 0 && players[lastHit].team != p.team && ball.vel.x * Self.side(p.team) > 0), simd_length(near) > T.overheadRadius, simd_length(near) < 3.2 {
+                goal = atan2f(near.x, near.y)
+            }
+            players[i].faceGoal = goal
+        }
+    }
+
+    /// The share of the player's smashes the computer team does not read in time, by tier (the dig rate of the harness bots is about 1 - this over the natural 0.9).
+    static func digMiss(_ t: VolleyTier?) -> Float {
+        #if STANDALONE
+        if let v = ProcessInfo.processInfo.environment["DIGMISS"] { let a = v.split(separator: ",").compactMap { Float($0) }; if a.count == 4, let t { return a[t.index] } }
+        #endif
+        switch t { case .sandcastle?: return 0.60; case .shore?: return 0.30; case .reef?: return 0.15; case .tidal?: return 0.0; default: return 0 }
+    }
+    private var computerBlind: Bool { T.hard && clock < blindUntil }
+
+    // MARK: the computer notices a habit
+
+    /// The ninth of the court (x in three bands from the net, z in three) a point is in, 0...8.
+    static func cell(_ p: SIMD2<Float>) -> Int {
+        let ix = abs(p.x) < 1.35 ? 0 : abs(p.x) < 2.1 ? 1 : 2
+        let iz = p.y < -0.45 ? 0 : p.y < 0.45 ? 1 : 2
+        return ix * 3 + iz
+    }
+    /// The middle of ninth `c` on the computer's side.
+    static func cellCentre(_ c: Int) -> SIMD2<Float> { SIMD2([Float(0.95), 1.75, 2.45][c / 3] * side(1), [Float(-0.85), 0, 0.85][c % 3]) }
+    /// The ninth the human keeps using (his last two shots went there), if the computer team is the sort to notice.
+    private var habitCell: Int? {
+        guard T.hard, params[1].adapt > 0, humanCells.count >= 2, humanCells[humanCells.count - 1] == humanCells[humanCells.count - 2] else { return nil }
+        return humanCells[humanCells.count - 1]
+    }
+    /// Whether this ball is one the computer is ready for: a habit it noticed, and it is paying attention (a repeatable draw per touch, see `unit`).
+    private func readsHabit() -> Bool { habitCell != nil && unit(touchSerial, 77) < params[1].adapt }
 
     // MARK: control switching
 
@@ -953,7 +1169,9 @@ nonisolated struct VolleySim: Sendable {
 
     private func walkTime(_ i: Int, _ x: Float, _ z: Float) -> Float {
         let p = players[i]
-        return simd_length(SIMD2(p.x - x, p.z - z)) / max(T.walkSpeed(p), 0.3)
+        // a body that is off the ground (a block, a jump, a dive) cannot take a step for a good while yet: the partner on his feet is nearer in time
+        let busy: Float = T.hard ? (p.act == .stand && p.grounded ? 0 : max(0.3, 1.3 - p.actT)) : 0
+        return simd_length(SIMD2(p.x - x, p.z - z)) / max(T.walkSpeed(p), 0.3) + busy
     }
 
     // MARK: the ring
@@ -1009,7 +1227,8 @@ nonisolated struct VolleySim: Sendable {
             if phase == .rally, let tH = timeToHeight(1.55) ?? timeToHeight(T.ballR) { ballP = SIMD2(xAfter(tH), zAfter(tH)) }          // (where it will be at head height: whoever is going for it keeps his spot)
             let da = simd_distance(SIMD2(players[a].wantX, players[a].wantZ), ballP), db = simd_distance(SIMD2(players[b].wantX, players[b].wantZ), ballP)
             let assisted = autoMove || autoJump          // (a thumb on the stick keeps his spot; with the move assist he is a computer player)
-            let keeper = isHuman(a) && !assisted ? a : isHuman(b) && !assisted ? b : (da <= db ? a : b), mover = keeper == a ? b : a
+            let busyA = T.hard && (players[a].act != .stand || !players[a].grounded), busyB = T.hard && (players[b].act != .stand || !players[b].grounded)          // (a body off the ground keeps nothing: his partner on his feet keeps his spot)
+            let keeper = isHuman(a) && !assisted ? a : isHuman(b) && !assisted ? b : busyA != busyB ? (busyA ? b : a) : (da <= db ? a : b), mover = keeper == a ? b : a
             var w = SIMD2(players[mover].wantX, players[mover].wantZ)
             let lane = Self.side(team)          // (dead on the same spot: step back, away from the net)
             w = clear(w, of: SIMD2(players[keeper].wantX, players[keeper].wantZ), gap: T.partnerGap, team: team, lane: lane)
@@ -1076,6 +1295,12 @@ nonisolated struct VolleySim: Sendable {
         // where will the ball be when it comes down to head height (or the sand)?
         guard let tH = timeToHeight(1.55) ?? timeToHeight(T.ballR) else { players[i] = p; return }
         let landX = xAfter(tH), landZ = zAfter(tH)
+        if computerBlind, team == 1, moveToo, p.act == .stand {
+            // wrong-footed: it read the smash to the other side of the court and goes there; the ball comes down where nobody is
+            p.wantX = s * (abs(landX) < 1.7 ? 2.4 : 1.0); p.wantZ = landZ > 0 ? -0.8 : 0.8
+            players[i] = p
+            return
+        }
         let mine = landX * s > -0.35 && (ballOnMySide(team) || ball.vel.x * s > 0.3 || lastHit < 0)
         if servePending, i == serverIndex {          // the server waits under his toss
             players[i] = p
@@ -1084,6 +1309,7 @@ nonisolated struct VolleySim: Sendable {
         guard mine else {
             // the ball is with the others: be ready, and put up a block against a set
             p.wait = pr.react + pr.reactSpread * unit(touchSerial, i)
+            if team == 1, readsHabit() { p.wait = 0 }
             aiBlock(&p, i: i, pr: pr)
             if moveToo, p.act == .stand {
                 let blocking = blockWanted[team] && touches[1 - team] >= 2 && abs(p.x) < 2.2 && (players.indices.contains(team * 2 + 1) ? abs(p.x) <= abs(players[team * 2 + (i % 2 == 0 ? 1 : 0)].x) : true)
@@ -1093,6 +1319,25 @@ nonisolated struct VolleySim: Sendable {
                     var hx = homeX, hz = homeZ + max(-0.5, min(0.5, ball.z * 0.3))
                     if let mate { hx = abs(mate.x) < 1.7 ? backX : frontX; hz = max(-0.9, min(0.9, -mate.z * 0.6 + ball.z * 0.2)) }
                     p.wantX = hx; p.wantZ = hz
+                    if T.hard, team == 1, let sr = shortRead, clock < sr.until, players.indices.contains(team * 2 + 1) {
+                        let a = team * 2, b = a + 1
+                        let nearer = simd_distance(SIMD2(players[a].x, players[a].z), sr.spot) <= simd_distance(SIMD2(players[b].x, players[b].z), sr.spot) ? a : b
+                        if i == nearer { p.wantX = max(T.netMargin + 0.15, sr.spot.x * s * s); p.wantZ = max(-T.zLimit, min(T.zLimit, sr.spot.y)); p.wait = 0 }
+                    }
+                    if T.hard, team == 1, touches[0] >= 2, lastHit >= 0, players[lastHit].team == 0, players.indices.contains(team * 2 + 1), unit(touchSerial, 91) < pr.read {
+                        // the human team has set the ball up: the nearer defender goes to the emptiest part of the court (where a smash would go), and the other keeps the rest
+                        let spot = openSpot(from: 0, read: 0)
+                        let a = team * 2, b = a + 1
+                        let nearer = simd_distance(SIMD2(players[a].x, players[a].z), spot) <= simd_distance(SIMD2(players[b].x, players[b].z), spot) ? a : b
+                        if i == nearer { p.wantX = spot.x; p.wantZ = spot.y }
+                    }
+                    if team == 1, readsHabit(), let hc = habitCell, players.indices.contains(team * 2 + 1) {
+                        // one defender (the nearer) goes to wait where the last two balls went
+                        let ctr = Self.cellCentre(hc)
+                        let a = team * 2, b = a + 1
+                        let nearer = simd_distance(SIMD2(players[a].x, players[a].z), ctr) <= simd_distance(SIMD2(players[b].x, players[b].z), ctr) ? a : b
+                        if i == nearer { p.wantX = ctr.x; p.wantZ = ctr.y }
+                    }
                 }
             }
             players[i] = p
@@ -1114,11 +1359,14 @@ nonisolated struct VolleySim: Sendable {
                 let slip = pr.slip ?? (1 - pr.read) * 1.0
                 p.readErr = (rng.next() - 0.5) * 2 * slip
                 if rng.next() < 0.5 { p.readErr *= 0.3 }
+                if team == 1, readsHabit() { p.readErr *= 0.15 }
+                if T.hard, team == 1, tier != .sandcastle, lastHit >= 0, players[lastHit].team == team { p.readErr *= 0.2 }          // (the pass of his own partner: he knows where it is going)
             }
             var tx = landX + p.readErr
             if t0 >= 2 { tx = landX + s * 0.45 + p.readErr }
             if moveToo {
                 p.wait = max(0, p.wait - dt)
+                if computerBlind, team == 1 { p.wait = max(p.wait, blindUntil - clock) }
                 if p.wait <= 0 { p.wantX = tx; p.wantZ = landZ }
             }
             // a teammate calls for it
@@ -1134,7 +1382,9 @@ nonisolated struct VolleySim: Sendable {
                     action(i, ai: true)
                     return
                 }
-                if let tL = timeToHeight(T.ballR + 0.3), tL < 0.62, tL > 0.25, abs(landX - p.x) > 0.45, abs(landX - p.x) < T.diveReach, abs(landZ - p.z) < 0.7, ball.vel.y < 0.5 {
+                if let tL = timeToHeight(T.ballR + 0.3), tL < 0.62, tL > 0.25, abs(landX - p.x) > 0.45, abs(landX - p.x) < T.diveReach, abs(landZ - p.z) < (T.hard && team == 1 ? 0.7 + 0.25 * pr.read : 0.7), ball.vel.y < 0.5, !(computerBlind && team == 1), !T.hard || (ball.pos.x * s > -0.3 && !(landX * s < p.x * s && abs(p.x) - T.netMargin < 0.25)),          // (never a dive at a ball that is between him and the net: the body would be turned away from it)
+                   
+                   !T.facing || ballInFront(i, at: SIMD2(landX, landZ), yaw: landX > p.x ? .pi / 2 : -.pi / 2) {
                     players[i] = p
                     players[i].act = .dive; players[i].actT = 0
                     players[i].tapQ = .good; players[i].tapT = clock
@@ -1202,8 +1452,9 @@ nonisolated struct VolleySim: Sendable {
 
     // MARK: sync from the bodies
 
-    mutating func setBody(_ i: Int, x: Float, z: Float = 0, lift: Float, top: Float, grounded: Bool) {
+    mutating func setBody(_ i: Int, x: Float, z: Float = 0, lift: Float, top: Float, grounded: Bool, yaw: Float? = nil) {
         guard players.indices.contains(i) else { return }
+        if let yaw { players[i].yaw = yaw }
         players[i].vx = (x - players[i].x) / (1.0 / 60); players[i].vz = (z - players[i].z) / (1.0 / 60)
         players[i].x = x; players[i].z = z; players[i].lift = lift; players[i].top = top; players[i].grounded = grounded
     }

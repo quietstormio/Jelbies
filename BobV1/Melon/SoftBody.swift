@@ -71,6 +71,8 @@ nonisolated final class SoftBody {
     private var restSteps = 0
     /// Bumped by every outside edit of the body (reset, shift, nudge, launch, grab, press): a sleeping Jelly (JellyActor.updateSleep) wakes when it changes.
     private(set) var epoch = 0
+    /// Bumped by every deliberate whole-body move (reset, shift, teleport): the dev glitch probe tells a placement from a jump (Melon/GlitchProbe.swift).
+    private(set) var moveSerial = 0
 
     /// The body is at a fixed point: not held or pressed, perfectly still for the rest-snap time, and whatever pulls on it (pose attractor, foot / hand
     /// targets) is exactly what pulled on it in its last step. Stepping it again would change nothing, so a sleeping Jelly may skip the step.
@@ -336,7 +338,7 @@ nonisolated final class SoftBody {
     }
 
     func reset(drop: Float = 0.35) {
-        epoch &+= 1
+        epoch &+= 1; moveSerial &+= 1
         for i in 0..<n {
             x[3 * i] = rest[3 * i]
             x[3 * i + 1] = rest[3 * i + 1] + drop
@@ -352,7 +354,7 @@ nonisolated final class SoftBody {
 
     /// Slides the whole body (and its previous positions, so there is no velocity) by (dx, dz) on the floor.
     func shift(byXZ d: SIMD2<Float>) {
-        epoch &+= 1
+        epoch &+= 1; moveSerial &+= 1
         for i in 0..<n {
             x[3 * i] += d.x; x[3 * i + 2] += d.y
             prev[3 * i] += d.x; prev[3 * i + 2] += d.y
