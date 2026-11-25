@@ -337,7 +337,7 @@ extension BlobBrain {
             }
         }
         // rest-more-r1: the occasional sit / lie in place. Only in the dead time of the special cooldown (a body whose next pick is due keeps it): the rest never takes an emote's pick, it fills the walking
-        if RestMore.on, idleState.cooldown > RestMore.minCooldown, restSlotMaybeStart(sim) { return true }
+        if RestMore.on, idleState.cooldown > RestMore.minCooldown || idleState.restUrge < -RestMore.lateAfter, restSlotMaybeStart(sim) { return true }          // (a rest that has waited `lateAfter` s for a dead window takes the next pick: otherwise the share stays at half)
         guard idleState.cooldown <= 0 else { return false }
         if anticsEnabled, runMoveDemo == nil, idleState.treat <= 0, treatMaybeStart(sim) { return true }
         let decorOffers: Set<IdleKind> = anticsEnabled && !decorLocked ? Self.decorOffers() : []
