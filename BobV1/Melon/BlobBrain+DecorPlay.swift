@@ -221,3 +221,27 @@ extension BlobBrain {
         }
     }
 }
+
+
+// MARK: round 6: the near arm of a walker passing the park slide's wall
+extension BlobBrain {
+    /// Walking past the park slide (the way round it, or just beside it) the stubby arm on the slide's side reached into its rail / wall (up to 8.6 cm). Pose only, no path change: while a free walker is within arm's reach
+    /// of the slide's side wall the arms are held forward (the ride's own pose, `armDirEl` / `armDirSa`), blended in and out over 0.2 s; the walk, its route and its arm swing code are untouched.
+    func slideWallTuck(_ dt: Float) {
+        guard RoomLayout.parkWallTuck else { return }
+        var want = false
+        if idleState.kind == nil, social == nil, !held, !isSleeping, case .walk = script, let f = DecorField.shared.foot(ParkToys.slideUID) {
+            let q = SIMD2(px, pz), d = f.distance(q)
+            // beside the walls only (the front / back edges have no rail): inside the slide's length +/- 0.2, and within arm's reach of a side
+            let l = f.local(q - f.centre), h = f.quarter & 1 == 0 ? f.spec.half : SIMD2(f.spec.half.y, f.spec.half.x)
+            want = d < 1.05 && abs(l.y) < h.y + 0.4
+        }
+        if want || slideTuckOwn {
+            slideTuckW = max(0, min(1, slideTuckW + (want ? dt / 0.2 : -dt / 0.2)))
+            slideTuckOwn = slideTuckW > 0
+            armDirW = slideTuckW; armDirEl = [0.35, 0.35]; armDirSa = [1.25, 1.25]; armDirOut = 0
+            armWalkWant = max(armWalkWant, 1)
+            if !slideTuckOwn { armDirW = 0; armDirOut = 0 }
+        }
+    }
+}

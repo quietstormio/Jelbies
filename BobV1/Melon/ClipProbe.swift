@@ -227,6 +227,20 @@ enum ClipProbe {
     nonisolated(unsafe) static var pairAgg = Agg()
     static let partName = ["body", "arm", "foot"]
 
+    /// Where on the park slide's art a world point is (piece-local z / y / x, scale 1.25 art): the steps, the deck, the chute, the rails, the posts.
+    static func slideRegion(_ p: V3) -> String {
+        guard let f = DecorField.shared.foot(ParkToys.slideUID) else { return "-" }
+        let l = f.local(SIMD2(p.x, p.z) - f.centre)
+        let x = l.x, z = l.y, y = p.y - f.lift
+        var r = "slideLocal=(\(String(format: "%.2f,%.2f,%.2f", x, y, z)))"
+        if z < -1.75 { r += " before-step1" }
+        else if z < -1.45 { r += " step1(top .27)" }
+        else if z < -1.05 { r += " step2(top .55)" }
+        else if z < 0.05 { r += abs(x) > 0.75 ? (y > 0.9 ? " post" : " deck-side-rail") : " deck(top .83)" }
+        else if z < 1.8 { r += abs(x) > 0.75 ? " chute-rail" : " chute-floor" }
+        return r
+    }
+
     static func doing(_ b: BlobBrain?) -> String {
         guard let b else { return "-" }
         var s: [String] = []
@@ -298,7 +312,7 @@ enum ClipProbe {
             e.clear += 1
             if e.clear >= 5 {
                 eps[k] = nil
-                NSLog("[clip] ep t=%.1f body=%d prop=%@ part=%@ maxDepth=%.1fcm frames=%d slideStage@max=%d deepestPt=(%.2f,%.2f,%.2f) bodyCentre=(%.2f,%.2f,%.2f) doing [%@] at (%.2f,%.2f)", e.t0, k.id, k.prop, partName[Int(k.part)], e.maxD * 100, e.frames, e.stage, e.pt.x, e.pt.y, e.pt.z, e.cen.x, e.cen.y, e.cen.z, e.doing, e.at.x, e.at.y)
+                NSLog("[clip] ep t=%.1f body=%d prop=%@ part=%@ maxDepth=%.1fcm frames=%d slideStage@max=%d deepestPt=(%.2f,%.2f,%.2f) bodyCentre=(%.2f,%.2f,%.2f) rel=(%.2f,%.2f,%.2f) %@ doing [%@] at (%.2f,%.2f)", e.t0, k.id, k.prop, partName[Int(k.part)], e.maxD * 100, e.frames, e.stage, e.pt.x, e.pt.y, e.pt.z, e.cen.x, e.cen.y, e.cen.z, e.pt.x - e.cen.x, e.pt.y - e.cen.y, e.pt.z - e.cen.z, slideRegion(e.pt), e.doing, e.at.x, e.at.y)
             } else { eps[k] = e }
         }
         // two drawn skins sunk into each other while the Spa door is open

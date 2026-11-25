@@ -141,6 +141,8 @@ enum RoomLayout {
         #endif
         return d
     }
+    /// Round 6: the walker's near arm held forward beside the park slide's wall (`-ParkSlideWallArms 0 / 1`).
+    nonisolated(unsafe) static var parkWallTuck = flag("ParkSlideWallArms", ParkSlideDefaults.wallArms)
     static func slideArmsFwd(_ f: DecorFoot) -> Bool { f.uid != ParkToys.slideUID || parkArms }
     static func slideFixes(_ f: DecorFoot) -> Bool { f.uid != ParkToys.slideUID || parkSlideNoClip }
     static func slidePad(_ f: DecorFoot) -> Float { slideFixes(f) ? slideArmPad : 0 }
@@ -228,4 +230,4 @@ enum RoomCamera {
 }
 
 /// Shipped defaults of the park slide's round-5 switches.
-nonisolated enum ParkSlideDefaults { static let arms = false, lean = false, land = false }
+nonisolated enum ParkSlideDefaults { static let arms = true, lean = false, land = false, wallArms = false }
