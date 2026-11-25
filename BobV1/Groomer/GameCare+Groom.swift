@@ -119,6 +119,7 @@ extension GameCare {
                     if waited >= GroomTuning.exitPatience * 3 { return true }          // (never wait forever on a stalled one)
                     if waited >= GroomTuning.exitPatience, away >= 2.2 { return true }          // (a slow one: the next only once two bodies fit side by side)
                 }
+                if !book.laneDone.contains(mine[k - 1].id) { return false }          // (door round: the next one starts only when the last has walked clear of the doorway lane: with him still in it the peer steering swerved the new one sideways, into the frame / the planter)
                 return away >= 2.6          // (no-clip-r1: never two in the doorway; 2.0 so the next one's first steps do not cross the last one's route to the line-up)
             }()
             if let b = a.brain, groom.cheerT >= openAt + Float(k) * GroomTuning.exitSpacing, prevClear {
