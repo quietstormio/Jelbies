@@ -19,7 +19,7 @@ nonisolated enum RestMore {
     }
     nonisolated(unsafe) static var on: Bool = flag()
     /// Seconds between one slot rest and the next urge (per body), the hold (s), the share of sits (the rest lie down).
-    nonisolated(unsafe) static var gap: ClosedRange<Float> = 75...130
+    nonisolated(unsafe) static var gap: ClosedRange<Float> = 95...160
     nonisolated(unsafe) static var firstGap: ClosedRange<Float> = 25...100
     /// A rest only starts while the special cooldown still has this many seconds to run (it counts down during the rest: the next pick is due about when he is up).
     static let minCooldown: Float = 1.5
