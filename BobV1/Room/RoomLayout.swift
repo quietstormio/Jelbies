@@ -18,9 +18,11 @@ enum RoomLayout {
 
     /// Half-space: a point p is inside while dot(normal, p) >= d.
     struct Plane { var normal: SIMD3<Float>; var d: Float }
+    /// The Jelly Spa street moves the back wall behind the shop front (the ones who walk out start inside); nil = the room's own `minZ`.
+    nonisolated(unsafe) static var backOverride: Float?
     nonisolated(unsafe) static var walls: [Plane] = makeWalls(front: maxZ)
     private static func makeWalls(front: Float) -> [Plane] {
-        [Plane(normal: SIMD3(0, 0, 1), d: minZ),     // back
+        [Plane(normal: SIMD3(0, 0, 1), d: backOverride ?? minZ),     // back (the Spa street opens the shop's inside behind the front: GroomRoom.swift)
          Plane(normal: SIMD3(0, 0, -1), d: -front),  // front (invisible)
          Plane(normal: SIMD3(1, 0, 0), d: minX),     // left
          Plane(normal: SIMD3(-1, 0, 0), d: -maxX)]   // right
