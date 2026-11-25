@@ -37,6 +37,7 @@ struct SnapshotArmState {
     var armWasOut: Bool, armCollarTick: Int
     var armPos: [[SIMD3<Float>]], armStart: [[SIMD3<Float>]], armBlend: Float, armRetractMatrix: simd_float3x3, armCollarDelta: [SIMD3<Float>]
     var overrideVertices: [Int32], overrideDelta: [SIMD3<Float>], overrideMat: [Float]
+    var armDirDrawn: Float = 0          // (glitch-hunt-r2's eased arm override weight)
 }
 
 extension BlobBrain {
@@ -45,12 +46,13 @@ extension BlobBrain {
                          armWalkWant: armWalkWant, armDirW: armDirW, armDirEl: armDirEl, armDirSa: armDirSa, armDirOut: armDirOut,
                          armLastGeom: armLastGeom, armLastRawTip: armLastRawTip, armLastS: armLastS, armWasOut: armWasOut, armCollarTick: armCollarTick,
                          armPos: s.armPos, armStart: s.armStart, armBlend: s.armBlend, armRetractMatrix: s.armRetractMatrix, armCollarDelta: s.armCollarDelta,
-                         overrideVertices: s.overrideVertices, overrideDelta: s.overrideDelta, overrideMat: s.overrideMat)
+                         overrideVertices: s.overrideVertices, overrideDelta: s.overrideDelta, overrideMat: s.overrideMat, armDirDrawn: armDirDrawn)
     }
 
     func restoreArmState(_ o: SnapshotArmState, _ s: Skinner) {
         armLift = o.armLift; armLiftV = o.armLiftV; armG = o.armG; armHold = o.armHold; armShortW = o.armShortW; armGaitW = o.armGaitW
         armWalkWant = o.armWalkWant; armDirW = o.armDirW; armDirEl = o.armDirEl; armDirSa = o.armDirSa; armDirOut = o.armDirOut
+        armDirDrawn = o.armDirDrawn
         armLastGeom = o.armLastGeom; armLastRawTip = o.armLastRawTip; armLastS = o.armLastS; armWasOut = o.armWasOut; armCollarTick = o.armCollarTick
         if o.armPos[0].isEmpty { s.clearArmCapsules() } else { s.armPos = o.armPos; s.armStart = o.armStart; s.armCollarDelta = o.armCollarDelta }
         s.armBlend = o.armBlend; s.armRetractMatrix = o.armRetractMatrix
@@ -63,7 +65,7 @@ extension BlobBrain {
         if !geom.valid { geom = FootGeom(sim: sim) }          // (a Jelbie who has not walked yet has none: the same lazy build the idle moves do)
         guard geom.valid else { return false }
         armWalkWant = 1; armLift = 1; armLiftV = 0; armG = 1; armHold = 0.7; armShortW = 1
-        armDirW = 1; armDirEl = p.el; armDirSa = p.sa; armDirOut = p.out
+        armDirW = 1; armDirEl = p.el; armDirSa = p.sa; armDirOut = p.out; armDirDrawn = 1          // (the snapshot is posed at once: no ease)
         armLastS = [25, 25]
         driveArms(sim, skinner, 1.0 / 60)
         return armWasOut

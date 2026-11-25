@@ -1010,6 +1010,7 @@ extension BlobBrain {
         a.x += (px - a.x) * kk; a.z += (pz - a.z) * kk
         a.y = max(a.y, g)
         sim.attractor.anchor = a
+        easeSleepAnchor(sim, dt)          // (glitch-hunt-r2: the stage hand-overs ease, never snap)
         sim.attractor.strength = kPose
         poseW = 1
         skinner.setEyeOpenness(min(1, 1 - 0.96 * smooth01(min(1, k * 1.6)) + (fa && fid.halfU >= 0 ? fid.halfAmp * sinf(.pi * fid.halfU) : 0) + sleep.stirEye))
@@ -1161,5 +1162,29 @@ enum SleepOrder {
         case .bed: return slot == 0 ? rand(0, 0.4) : slot == 1 ? rand(1.2, 1.8) : rand(2.4, 3.2) + 0.9 * Float(slot - 2)
         case .wake, .morning: return slot == 0 ? rand(0, 0.3) : slot == 1 ? rand(0.7, 1.5) : rand(1.6, 2.8) + 0.8 * Float(slot - 2)
         }
+    }
+}
+
+// MARK: glitch-hunt-r2: the nap's anchor hand-overs
+extension BlobBrain {
+    /// glitch-hunt-r2 (2026-11-24): around a nap the attractor's anchor jumped 13 cm in ONE step twice: up when he starts to lie down (the pivot pose over his feet, stage 2) and down
+    /// when he is back on his feet (the normal pose path, stage 5); the soft body jolted after it and the arms / feet riding the attractor popped 9-13 cm (the dev glitch probe's rig).
+    /// While a nap is on (and 1 s after it) an anchor step of more than 3 cm now eases from where the anchor was over `sleepAnchorEaseTime`. `-SleepAnchorEase 0` (env SLEEPANCHOR_OFF=1) = the snap.
+    nonisolated(unsafe) static var sleepAnchorEase = ProcessInfo.processInfo.environment["SLEEPANCHOR_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "SleepAnchorEase") != nil && UserDefaults.standard.integer(forKey: "SleepAnchorEase") == 0)
+    static let sleepAnchorEaseTime: Float = 0.3
+
+    func easeSleepAnchor(_ sim: SoftBody, _ dt: Float) {
+        guard Self.sleepAnchorEase else { sleepAnchorLast = nil; sleepAnchorFrom = nil; return }
+        if idleState.kind == .sleep { sleepAnchorNear = 1 } else { sleepAnchorNear = max(0, sleepAnchorNear - dt) }
+        var a = sim.attractor.anchor
+        if sleepAnchorNear > 0, sleepAnchorFrom == nil, let last = sleepAnchorLast, sleepAnchorSerial == sim.moveSerial, simd_length(a - last) > 0.03 { sleepAnchorFrom = last; sleepAnchorT = 0 }
+        if let from = sleepAnchorFrom {
+            sleepAnchorT += dt
+            let u = min(1, sleepAnchorT / Self.sleepAnchorEaseTime), w = u * u * (3 - 2 * u)
+            a = from + (a - from) * w
+            sim.attractor.anchor = a
+            if u >= 1 { sleepAnchorFrom = nil }
+        }
+        sleepAnchorLast = a; sleepAnchorSerial = sim.moveSerial
     }
 }
