@@ -117,8 +117,8 @@ enum RoomLayout {
         #endif
         return 0.20
     }()
-    /// The pad in force now: the park (its slide is placed) keeps only the slide's own side pad, so the park's slide round trips stay as tested; the home rooms keep `armPad`.
-    static var padNow: Float { decorFeet.contains(where: { $0.uid == ParkToys.slideUID }) ? 0 : armPad }
+    /// The pad in force now: only the home rooms (home, loft, cabin) keep `armPad`; every other room keeps its floor rules exactly.
+    static var padNow: Float { (current.id == .home || current.id == .loft || current.id == .cabin) ? armPad : 0 }          // (home rooms only: the park, the camp, the cafe, the beach and the Spa street keep their own floor rules exactly)
 
     /// The park / home slide's walls are 0.9 high and 0.16 thick: a walker's arm reached 0.24 past the footprint and 11 cm into them, so the slide keeps the walker this much further.
     /// Round 4: the park slide's lateral pad, its +5 cm floor and its forward arms are the part that turned ParkSlideRoundTests.testWalkRoundWithFriendsRarelyDrops red. They are OFF for the park's slide
