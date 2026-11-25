@@ -240,7 +240,7 @@ final class ShowTurnOrderTests: XCTestCase {
         for (name, size, pad) in [("17e", CGSize(width: 390, height: 844), false), ("17 Pro Max", CGSize(width: 440, height: 956), false), ("small phone", CGSize(width: 375, height: 812), false), ("iPad", CGSize(width: 820, height: 1180), true)] {
             let f = ShowFrame.trick(pad: pad)
             let foot = StageProject.point(ShowStage.playerSpot, y: 0, frame: f, size: size), top = StageProject.point(ShowStage.playerSpot, y: BobShape.H, frame: f, size: size)
-            XCTAssertGreaterThan((foot.y - top.y) / size.height, pad ? 0.17 : 0.13, "\(name): the performer is big")
+            XCTAssertGreaterThan((foot.y - top.y) / size.height, pad ? 0.15 : 0.11, "\(name): the performer is big")          // (show-zoom-r1 2026-11-25: the Trick camera is ~19% wider for walking room, so the performer is ~15% smaller: was 0.17 / 0.13)
             XCTAssertLessThan(foot.y / size.height, 0.58, "\(name): his feet are above the menu")
             XCTAssertGreaterThan(top.y / size.height, 0.2, "\(name): his top is under the header")
             for spot in [ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2), ShowStage.playerAside()] {
