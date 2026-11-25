@@ -1135,6 +1135,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if let f = SmoothDraw.forceFPS, stage.preferredFramesPerSecond != f { stage.preferredFramesPerSecond = f }          // (-SmoothForceFPS: a pinned display rate for the scripted checks)
         let now = SmoothDraw.virtualClock && lastTime != 0 ? lastTime + 1.0 / Double(max(stage.preferredFramesPerSecond, 1)) : cpu0          // (-SmoothVirtualClock: a synthetic clock, one display interval per frame)
         if MicTrace.recording { MicTrace.frame(now) }          // the mic trace's frame-pacing window (Voice/MicTrace.swift); one Bool test when off
+        let rawIntervalMs = lastTime == 0 ? 0 : (now - lastTime) * 1000          // (the dev glitch probe's hitch reading)
         let dt = lastTime == 0 ? Float(1.0 / 60) : Self.pacedDt(Double(now - lastTime), fps: stage.preferredFramesPerSecond)
         lastTime = now
         adaptScale(stage, dt: Double(dt))
@@ -1310,6 +1311,17 @@ final class MelonController: NSObject, MTKViewDelegate {
         let cam = game ? GameCamera.camera(aspect: drawAspect, focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, raceFollow: raceFollow, show: model.care.show.cameraBlend, showFrame: model.care.showFrame) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        if GlitchProbe.on {          // glitch-hunt-r1: dev builds only, `-GlitchProbe 1`, logging only (Melon/GlitchProbe.swift)
+            var dst: [ObjectIdentifier: UnsafeMutablePointer<Float>] = [:]
+            for j in skinJobs { dst[ObjectIdentifier(j.skinner)] = j.dst }
+            var bodies: [(key: Int, actor: JellyActor, dyn: UnsafeMutablePointer<Float>)] = []
+            for a in actors { if let d = dst[ObjectIdentifier(a.skinner)] { bodies.append((a.id, a, d)) } }
+            for a in parkActors { if let d = dst[ObjectIdentifier(a.skinner)] { bodies.append((1000 + a.id, a, d)) } }
+            GlitchProbe.shared.record(bodies: bodies, steps: smoothSteps, scene: sceneName, touching: (stageView?.activeTouches ?? 0) > 0 || mode != .none, cover: m.coverUp, wipe: game ? model.care.glitchWipe : 0,
+                                      cam: cam, rawIntervalMs: rawIntervalMs, cpuMs: lastCPUFrameMs)
+        }
+        #endif
         renderer.perfFocus = game && model.care.focus.blend > 0.001      // PerfMeter ctx: GPU time in the close-up
         renderer.perfNote = !game ? "" : model.paused ? "paused" : model.care.select.isSelecting ? "select" : model.care.trayOut ? "tray" : ""
         if game { syncRoam(aspect: drawAspect) }          // the roaming floor follows the screen (a rotation changes how much floor is on screen)

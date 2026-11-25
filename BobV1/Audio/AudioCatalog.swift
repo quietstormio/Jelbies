@@ -14,6 +14,8 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     case purchase
     /// The doorbell when a friend arrives (doorbell_1: a soft two-note ding-dong).
     case doorbell
+    /// The café shop door's light bell when a group of customers comes in or leaves (cafe_door_bell_1: two soft tinkles; played quietly, under the café music).
+    case cafeDoorBell = "cafe_door_bell"
     /// Jelly Circuit cues (files countdown_beep_N, race_go_N, race_finish_N, stumble_N).
     case countdownBeep = "countdown_beep", raceGo = "race_go", raceFinish = "race_finish", stumble
     /// Store cues (files store_open_N, buy_coins_N, ...). The sound worker's clips, normalised; buy_coins keeps only the long variant.
@@ -53,6 +55,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .storeOpen, .pageTurn: return 0.5
         case .buyCoins, .perkSparkle: return 0.55
         case .purchase, .doorbell: return 0.7
+        case .cafeDoorBell: return 0.5
         case .notEnough: return 0.5
         case .shoeOn, .unwrap: return 0.45
         case .placeItem: return 0.55
@@ -97,6 +100,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .bubbleChirp: return 1.5
         case .congaTick: return 0.2
         case .ringChime: return 0.25
+        case .cafeDoorBell: return 1.5
         case .letgo: return 0.25
         case .chomp, .slurp, .crunchNugget, .crunchFries: return 0.25
         case .soapbubbles, .lintroller, .splash: return 0.45
