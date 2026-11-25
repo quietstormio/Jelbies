@@ -16,9 +16,10 @@ final class RestMoreTests: XCTestCase {
         RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
         DayClock.shared.forcedHour = 14
+        BlobBrain.pickBudgetSeconds = .infinity          // (move-crowd-r4: the 1.5 ms WALL-clock pick budget made the soak depend on machine load: a 923 s run on a loaded gate lost picks and read 47 moments vs 52.2)
     }
     override func tearDown() {
-        RestMore.on = savedOn; DayClock.shared.forcedHour = nil
+        RestMore.on = savedOn; DayClock.shared.forcedHour = nil; BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds
         RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12
         GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
