@@ -26,7 +26,7 @@ extension BlobBrain {
     /// A free, autonomous or requested ordinary walk that is already moving (the first step of a walk from a stand is the old turn, then walk).
     var curveBody: Bool {
         guard Self.curvedWalk, enabled, !held, social == nil || social?.kind == .follow, bubbleLeash == nil, !race.active, !volley.active, toy.waitUID < 0, toy.chaseSpot == nil,
-              mealFinalYaw == nil, job == nil, playChase == 0, !tossBusy, !stanceStepFree, !ContactTouchMemory.exact.contains(steerID), peerClock - lastTranslateClock < 0.5 else { return false }
+              mealFinalYaw == nil, job == nil || crowdCurveRequested, playChase == 0, !tossBusy, !stanceStepFree, !ContactTouchMemory.exact.contains(steerID), peerClock - lastTranslateClock < 0.5 else { return false }
         switch job { case .some(.dine), .some(.sip): return false; default: break }
         switch idleState.kind {
         case nil, .some(.wander), .some(.run): return true
@@ -81,6 +81,7 @@ extension BlobBrain {
             let d = aim - root
             guard simd_length(d) > 0.4 else { continue }
             let err = wrapAngle(atan2f(d.x, d.y) - yaw)
+            if job != nil, !crowdCornerClear(root, aim: aim, corner: eff, next: pts.count > 1 ? pts[1] : tgt) { continue }          // (move-crowd-r1: a requested walk rounds a corner only where it comes no nearer to a body than the routed corner does, never under the gap)
             if abs(err) <= 0.5 {
                 if curveStraightFree(root, d) { return aim }
             } else if abs(err) <= Self.curveMaxErr, !(simd_length(d) < 0.6 && abs(err) > 1.2), curvedBend(root, err, dist: simd_length(d)) != nil { return aim }

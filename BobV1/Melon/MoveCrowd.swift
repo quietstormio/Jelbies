@@ -35,12 +35,14 @@ nonisolated enum MoveCrowd {
     nonisolated(unsafe) static var allOn = part("all")
     nonisolated(unsafe) static var legOn = part("leg")
     nonisolated(unsafe) static var spotOn = part("spot")
+    /// reqcurve: a come / goTo walk (café customers, the Show line, the groomer, park calls; never a meal) curves round its route corners like a free walk (it used to stop and turn at every corner over 29 degrees).
+    nonisolated(unsafe) static var reqCurveOn = part("reqcurve")
     private static func num(_ k: String, _ d: Float) -> Float { Float(env[k] ?? "") ?? d }
 
     /// The one clearance (u, centre to centre): trigger, detour offset, goal rejection.
     nonisolated(unsafe) static var gap = num("MOVECROWD_GAP", 1.45)
 
-    static var text: String { "MoveCrowd on=\(on) gap=\(gapOn) goal=\(goalOn) yield=\(yieldOn) look=\(lookOn) part=\(partOn) speed=\(speedOn) all=\(allOn) leg=\(legOn) spot=\(spotOn) gapU=\(gap)" }
+    static var text: String { "MoveCrowd on=\(on) gap=\(gapOn) goal=\(goalOn) yield=\(yieldOn) look=\(lookOn) part=\(partOn) speed=\(speedOn) all=\(allOn) leg=\(legOn) spot=\(spotOn) reqcurve=\(reqCurveOn) gapU=\(gap)" }
 }
 
 /// Read by the scoreboard (tests): the switches as they stand.
@@ -152,5 +154,30 @@ extension BlobBrain {
         case .eat?, .drink?, .dine?, .sip?: return false
         default: return true
         }
+    }
+}
+
+extension BlobBrain {
+    /// reqcurve: this body serves a come / goTo request (never eat / drink / dine / sip).
+    var crowdCurveRequested: Bool {
+        guard MoveCrowd.on, MoveCrowd.reqCurveOn else { return false }
+        switch job {
+        case .goTo?, .come?: return true
+        default: return false
+        }
+    }
+    /// The shortcut root -> aim keeps from every other body at least the smaller of the gap and what the routed corner (root -> corner -> next) keeps.
+    func crowdCornerClear(_ root: SIMD2<Float>, aim: SIMD2<Float>, corner: SIMD2<Float>, next: SIMD2<Float>) -> Bool {
+        func segD(_ p: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+            let ab = b - a, l2 = simd_dot(ab, ab)
+            let t = l2 > 1e-6 ? min(max(simd_dot(p - a, ab) / l2, 0), 1) : 0
+            return simd_distance(p, a + ab * t)
+        }
+        for o in socialOthers() where o !== self {
+            let p = o.position
+            let routed = min(segD(p, root, corner), segD(p, corner, next))
+            if segD(p, root, aim) < min(MoveCrowd.gap, routed) - 0.02 { return false }
+        }
+        return true
     }
 }
