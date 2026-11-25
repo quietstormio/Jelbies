@@ -15,15 +15,18 @@ final class ShowLineTests: XCTestCase {
     struct Stats {
         var placed = 0, overlaps = 0, hidden = 0, slowReturns = 0, notFormed = 0, turns = 0, returns = 0
         var worstReturn: Float = 0, minGap: Float = 99
+        var frames = 0, closeFrames = 0, closeWalkFrames = 0, walkFrames = 0, closeEvents = 0, walkMinGap: Float = 99          // (show-zoom-r1: frames with a pair under 1.3 apart; `walk` = at least one of the pair is walking)
         var notes: [String] = []
         mutating func add(_ o: Stats) {
             placed += o.placed
             overlaps += o.overlaps; hidden += o.hidden; slowReturns += o.slowReturns; notFormed += o.notFormed; turns += o.turns; returns += o.returns
             worstReturn = max(worstReturn, o.worstReturn); minGap = min(minGap, o.minGap); notes += o.notes
+            frames += o.frames; closeFrames += o.closeFrames; closeWalkFrames += o.closeWalkFrames; walkFrames += o.walkFrames; closeEvents += o.closeEvents; walkMinGap = min(walkMinGap, o.walkMinGap)
         }
     }
     struct RNG { var s: UInt64; mutating func next() -> Float { s = s &* 6364136223846793005 &+ 1442695040888963407; return Float((s >> 40) & 0xFFFF) / 65536 } }
 
+    static let closeThr: Float = 1.8          // show-zoom-r1: a "bump" = centres closer than 1.8 (the body is 1.4 wide, plus the arms)
     private var logHandle: FileHandle?
     private func log(_ s: String) { logHandle?.write((s + "\n").data(using: .utf8)!) }
 
@@ -74,7 +77,7 @@ final class ShowLineTests: XCTestCase {
         var pickedInEntrance = false, skipAt: Float? = nil, skippedAll = false
         let stress = ProcessInfo.processInfo.environment["SHOWLINE_STRESS"] == "1" || tag.hasSuffix("!")
         var returnStart: [Int: Float] = [:]          // body id -> when its return began
-        var hiddenNow = false, overlapNow = false, hidT: Float = 0
+        var hiddenNow = false, overlapNow = false, closeNow = false, hidT: Float = 0
         func seat(_ id: Int) -> SIMD2<Float>? {          // where body `id` is meant to stand while nobody is walking (nil = in transit)
             let sw = sideways
             let player = room.actors[0].id
@@ -118,15 +121,20 @@ final class ShowLineTests: XCTestCase {
             guard inTrick, book.trickSet else { if f.round == .results && f.trickStage == .pick { break }; continue }
             let all = bodies()
             // overlaps / hidden
-            var ov = false, hid = false
+            var ov = false, hid = false, closeAny = false, closeWalk = false, anyWalk = false
             for i in all.indices { for j in all.indices where j > i {
                 let g = simd_distance(all[i].floor, all[j].floor); st.minGap = min(st.minGap, g)
+                let w = all[i].isWalking || all[j].isWalking
+                if w { anyWalk = true; st.walkMinGap = min(st.walkMinGap, g) }
+                if g < Self.closeThr { closeAny = true; if w { closeWalk = true } }
                 if g < 1.0 { ov = true }
                 for (a, b) in [(all[i], all[j]), (all[j], all[i])] {          // b hidden by a: a nearer the camera (greater z), side by side within 0.6, and close in depth
                     let d = a.floor - b.floor
                     if d.y > 0 && d.y < 1.1 && abs(d.x) < 1.0 && abs(a.floor.x) < 3 && abs(b.floor.x) < 3 { hid = true }
                 }
             } }
+            st.frames += 1; if closeAny { st.closeFrames += 1 }; if anyWalk { st.walkFrames += 1 }; if closeWalk { st.closeWalkFrames += 1 }
+            if closeAny && !closeNow { st.closeEvents += 1 }; closeNow = closeAny
             if ov && !overlapNow { st.overlaps += 1; st.notes.append(String(format: "[%@] overlap at t=%.1f turn %d step %@ %@", tag, t, f.rivalRound, "\(f.rivalStep)", all.map { String(format: "%d@(%.2f,%.2f)", $0.id, $0.floor.x, $0.floor.y) }.joined(separator: " "))) }
             hidT = hid ? hidT + 1 / 60 : 0          // (a body passing in front of another for a moment is not hiding it: only 0.7 s or more counts)
             let hidNow = hidT > 0.7
@@ -161,7 +169,8 @@ final class ShowLineTests: XCTestCase {
     }
 
     private func report(_ name: String, _ st: Stats) {
-        print("[ShowLine] \(name): turns \(st.turns) returns \(st.returns) worstReturn \(String(format: "%.2f", st.worstReturn)) minGap \(String(format: "%.2f", st.minGap)) placed \(st.placed) overlaps \(st.overlaps) hidden \(st.hidden) slowReturns \(st.slowReturns) notFormed \(st.notFormed)")
+        defer { if let f = ProcessInfo.processInfo.environment["SHOWLINE_STATS"], !f.isEmpty { let line = "\(name): turns \(st.turns) returns \(st.returns) worstReturn \(st.worstReturn) minGap \(st.minGap) placed \(st.placed) overlaps \(st.overlaps) hidden \(st.hidden) slow \(st.slowReturns) notFormed \(st.notFormed) frames \(st.frames) closeFrames \(st.closeFrames) walkFrames \(st.walkFrames) closeWalkFrames \(st.closeWalkFrames) closeEvents \(st.closeEvents) walkMinGap \(st.walkMinGap)\n"; if let h = FileHandle(forWritingAtPath: f) ?? { FileManager.default.createFile(atPath: f, contents: nil); return FileHandle(forWritingAtPath: f) }() { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!) } } }
+        print("[ShowLine] \(name): turns \(st.turns) returns \(st.returns) worstReturn \(String(format: "%.2f", st.worstReturn)) minGap \(String(format: "%.2f", st.minGap)) placed \(st.placed) overlaps \(st.overlaps) hidden \(st.hidden) slowReturns \(st.slowReturns) notFormed \(st.notFormed) | frames \(st.frames) close<1.8 \(st.closeFrames) (\(String(format: "%.2f", 100 * Float(st.closeFrames) / Float(max(st.frames, 1))))%) walkFrames \(st.walkFrames) closeWhileWalking \(st.closeWalkFrames) (\(String(format: "%.2f", 100 * Float(st.closeWalkFrames) / Float(max(st.walkFrames, 1))))% of walk) closeEvents \(st.closeEvents) walkMinGap \(String(format: "%.2f", st.walkMinGap))")
         for n in st.notes.prefix(30) { print("[ShowLine]   \(n)") }
     }
     private func openLog() {
