@@ -22,8 +22,14 @@ enum PlayMeasure {
     }
     static func angle(_ a: Float, _ b: Float) -> Float { abs(wrapAngle(a - b)) * 180 / .pi }
 
+    private static var wasWalking: [Int: Bool] = [:]
     static func tick(_ p: PlayToss, dt: Float) {
         guard on else { return }
+        for j in p.jellies {          // (beach-aim-r1: every start of a walk, whoever sent it)
+            var w = false; if case .walk = j.brain.script { w = true }
+            if w, wasWalking[j.id] != true { NSLog("[walkstart] clock=%.3f id=%d phase=%@ bout=%d kind=%@ act=%@ script=%@ pos=(%.2f,%.2f)", p.clock, j.id, String(describing: p.phase), p.bout.active ? 1 : 0, String(describing: j.brain.idleState.kind), String(describing: j.brain.activity), String(String(describing: j.brain.script).prefix(60)), j.pos.x, j.pos.y) }
+            wasWalking[j.id] = w
+        }
         hist.append((p.clock, SIMD2(p.ball.pos.x, p.ball.pos.z)))
         if hist.count > 40 { hist.removeFirst(hist.count - 40) }
         guard p.phase == .flying || p.phase == .loose, p.clock - lastLog >= 0.5 else { return }
@@ -31,7 +37,8 @@ enum PlayMeasure {
         let cam = p.playerPoint()
         let angs = p.jellies.map { j -> String in
             let d = cam - j.pos
-            return String(format: "%d:%.0f%@", j.id, angle(heading(j), atan2f(d.x, d.y)), j.free ? "f" : "")
+            var walking = false; if case .walk = j.brain.script { walking = true }          // (beach-aim-r1: a letter w = he is on a walk goal)
+            return String(format: "%d:%.0f%@%@", j.id, angle(heading(j), atan2f(d.x, d.y)), walking ? "w" : "", j.free ? "f" : "")
         }
         NSLog("[camface] clock=%.2f phase=%@ bout=%d n=%d angs=%@", p.clock, p.phase == .flying ? "flying" : "loose", p.bout.active ? 1 : 0, p.jellies.count, angs.joined(separator: ","))
     }
