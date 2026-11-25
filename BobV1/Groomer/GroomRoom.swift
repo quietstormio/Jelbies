@@ -43,8 +43,8 @@ extension GameCamera {
     static func configureGroom() {
         roamFloor = nil; RoomLayout.setFront(z: RoomLayout.maxZ)
         roomWideScale = 1; roomWideLift = 0
-        walkMinZ = GroomScenery.doorStep.y - 0.2; walkMaxZ = GroomScenery.curbZ - 0.8; arenaCenter = SIMD2(0, 0); arenaRadius = 80
-        roamRect = (SIMD2(-4.0, -4.9), SIMD2(4.0, GroomScenery.curbZ - 0.8)); roamRectWide = roamRect
+        walkMinZ = GroomScenery.frontZ - 3.0; walkMaxZ = GroomScenery.curbZ - 0.8; arenaCenter = SIMD2(0, 0); arenaRadius = 80
+        roamRect = (SIMD2(-4.0, GroomScenery.frontZ - 3.0), SIMD2(4.0, GroomScenery.curbZ - 0.8)); roamRectWide = roamRect
         groomOn = true
     }
     static func endGroom(count: Int) {
@@ -60,12 +60,16 @@ enum GroomScenery {
 
     static let frontZ: Float = -4.7
     static let curbZ: Float = 2.4
-    static let doorX: Float = 1.7, doorW: Float = 0.62, doorH: Float = 1.05, doorY: Float = 1.2
+    static let doorX: Float = 1.7, doorW: Float = 0.70, doorH: Float = 1.05, doorY: Float = 1.2
     static let windowC = V3(-1.55, 1.3, frontZ + 0.03), windowR: Float = 0.72
     /// Where the Jelbies step out (just in front of the door) and the line-up in front of the shop.
-    static let doorStep = SIMD2<Float>(doorX + 0.1, frontZ + 1.5)          // (no-clip-r1: clear of the stone step (its front edge is frontZ + 0.9) by a body's depth, and of the open door leaf (x <= 1.12): he steps out in front of the door, never into it)
+    /// Round door: where each one STARTS: inside the shop, 1.1 behind the shop front, so the whole body is hidden by the wall; and where he walks to first: out through the doorway's centre line to the pavement.
+    static let insideSpot = SIMD2<Float>(doorX, frontZ - 1.1)
+    static let laneOut = SIMD2<Float>(doorX, frontZ + 1.6)
+    static let doorStep = insideSpot          // (the release distance is measured from here)
+    /// The doorway: opening half width `doorW` (0.70: 1.40 wide for a 1.17 belly; arms are tucked forward inside the frame), the frame ring 0.10 beyond.
     /// The open door leaf as a floor obstacle (a thin wall from the hinge out toward the street), for the walk resolver while the door stands open.
-    static let doorLeafBox = RoomLayout.FlatBox(centre: SIMD2(0.95, frontZ + 0.85), half: SIMD2(0.21, 0.85), height: 2.0, radius: 0.04)
+    static let doorLeafBox = RoomLayout.FlatBox(centre: SIMD2(doorX - doorW - 0.1, frontZ + 0.85), half: SIMD2(0.2, 0.85), height: 2.0, radius: 0.04)
     static func lineUp(index k: Int, of n: Int) -> SIMD2<Float> {
         SIMD2((Float(k) - Float(n - 1) / 2) * GroomTuning.streetSpacing, -1.2)
     }

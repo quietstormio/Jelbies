@@ -106,7 +106,7 @@ extension GameCare {
         let mine = actors.filter { picked.contains($0.id) }
         // the door opens, then they come out ONE AT A TIME (spaced GroomTuning.exitSpacing, and the next only once the last is a body-gap clear of the door),
         // each running to its own spot in the line-up, so the paths fan out and never overlap
-        let openAt = GroomTuning.doorOpen          // (no-clip-r1: the leaf is fully open before the first steps out; at 60% it still swept through the spot he stepped onto)
+        let openAt = GroomTuning.doorOpen + GroomTuning.doorSettle          // (door round: wide open AND still for a beat before the first walks into the doorway) // (no-clip-r1: the leaf is fully open before the first steps out; at 60% it still swept through the spot he stepped onto)
         if RoomLayout.dynamicBoxes.isEmpty { RoomLayout.dynamicBoxes = [GroomScenery.doorLeafBox] }
         if groom.cheerT >= openAt, book.out.count < mine.count {
             let k = book.out.count
@@ -123,19 +123,26 @@ extension GameCare {
             }()
             if let b = a.brain, groom.cheerT >= openAt + Float(k) * GroomTuning.exitSpacing, prevClear {
                 book.out.insert(a.id); book.outAt[a.id] = groom.cheerT
-                rehome(a, at: b.fixed(GroomScenery.doorStep))
+                rehome(a, at: b.fixed(GroomScenery.insideSpot))          // (door round: he starts INSIDE the shop, hidden by the wall, and walks out through the open doorway)
                 b.autonomy = false; b.idleBlocked = true
                 b.startTurn(to: 0, sim: a.sim)
                 b.face(.excited, hold: 3)
-                b.postEvent(.joyJump)
-                touchPlay?.spawnHeart(now: CACurrentMediaTime())
-                let spot = GroomScenery.lineUp(index: k, of: mine.count)
-                b.requestNow(.goTo(b.fixed(spot)))
+                b.requestNow(.goTo(b.fixed(GroomScenery.laneOut)))          // (first the doorway's centre line, then his own street spot, see below)
                 if k == 0 { AudioHub.shared.playClip(GroomTuning.clipHarp, volume: 0.6) }          // one soft harp flourish when they first walk out (no crowd "yay")
             }
         }
         for (k, a) in mine.enumerated() {
             guard let b = a.brain, let outAt = book.outAt[a.id] else { continue }
+            // the doorway: arms forward while he is in or near the frame (the opening is 1.40, his belly 1.17, the arms stick out another 0.4); on the pavement he is sent on to his spot
+            let fy = GameCare.floorPos(b, a.sim).y, zf = GroomScenery.frontZ
+            let inDoor = fy > zf - 1.0 && fy < zf + 0.9 && !book.laneDone.contains(a.id)
+            if inDoor { b.armDirW = 1; b.armDirEl = [0.35, 0.35]; b.armDirSa = [1.25, 1.25]; b.armDirOut = 0 }
+            else if b.armDirW > 0, book.arrivedAt[a.id] == nil { b.armDirW = 0; b.armDirOut = 0 }
+            if !book.laneDone.contains(a.id), fy > zf + 1.2 || groom.cheerT - outAt > 5 {
+                book.laneDone.insert(a.id)
+                b.postEvent(.joyJump)
+                b.requestNow(.goTo(b.fixed(GroomScenery.lineUp(index: k, of: mine.count))))
+            }
             // the cheer starts when he has ARRIVED at his spot (a cheer's abort must not stop the walk-out half way and leave him in the next one's way)
             if book.arrivedAt[a.id] == nil {
                 let spot = b.fixed(GroomScenery.lineUp(index: k, of: mine.count))
@@ -172,7 +179,7 @@ extension GameCare {
         let total = tier.total(count: ids.count)
         guard !ids.isEmpty, bath.wallet.spend(total) else { return false }
         let book = groomBook
-        book.charged = total; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
+        book.charged = total; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.laneDone = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         AudioHub.shared.playClip(GroomTuning.clipBell)
         CaptionCenter.shared.post("Shop bell")
         AudioHub.shared.playClip(GroomTuning.clipAmbience, volume: 0.9)
@@ -202,7 +209,7 @@ extension GameCare {
         #endif
         for a in book.actors where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }          // (the room's small arena would pin the door step at z = -2.6: he could never leave the door)
         // everybody is inside the shop (not drawn): wait off to the right, so the room's spots do not become bodies in the street that block the door's walk-out (the peer steering sees them)
-        for (i, a) in book.actors.enumerated() { if let b = a.brain, !book.stayedAsleep.contains(a.id) { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.doorStep.y - 0.1 + 1.4 * Float(i % 4)))) } }
+        for (i, a) in book.actors.enumerated() { if let b = a.brain, !book.stayedAsleep.contains(a.id) { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.laneOut.y - 0.1 + 1.4 * Float(i % 4)))) } }
         syncDecor()
         if select.phase != .none { select.cancel() }
         return true
@@ -210,7 +217,7 @@ extension GameCare {
 
     private func groomToHome() {
         let book = groomBook
-        book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
+        book.out = []; book.laneDone = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         RoomLayout.dynamicBoxes = []          // (the door leaf's)
         RoomLayout.apply(RoomCatalog.def(store.currentRoom))
         GameCamera.endGroom(count: max(jellies.count, 1))
@@ -260,7 +267,7 @@ extension GameCare {
             b.idleBlocked = false
             b.restTimer = 1.5
         }
-        book.autonomy = [:]; book.homes = [:]; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
+        book.autonomy = [:]; book.homes = [:]; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.out = []; book.laneDone = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
     }
 
     // MARK: the street's animated bits
