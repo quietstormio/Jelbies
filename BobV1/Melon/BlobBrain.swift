@@ -709,6 +709,8 @@ final class BlobBrain {
     func requestNow(_ r: BlobRequest) { if slowWakeCall(r) { return }; pending = r; interruptScript = true }          // (slow wake: a sleeper is not hard-aborted, BlobBrain+SleepForce)
     func requestHard(_ r: BlobRequest) { pending = r; interruptScript = true }          // (today's requestNow: really aborts; the meal's fallbacks)
     var interruptScript = false
+    /// beach-aim-r1: the controller wants the header stand on the spot where he is, now: a step on the spot, a look or a walk is stopped in the brain's own tick and the stand starts in the SAME tick (a new waiting pose would otherwise take the free tick first). Never a walk.
+    var tossStandReq: (stand: SIMD2<Float>, dir: SIMD2<Float>)?
 
     // MARK: rng
 
@@ -788,6 +790,7 @@ final class BlobBrain {
         bestHugTick(dt)          // (the hug: the walk to the front, then a flagged hula; before the slow-wake hold so a sleeper's hug waits for the wake)
         slowWakeHoldCommands()          // (slow wake: a voice / trick command met a sleeper: it waits for the staged wake)
         if interruptScript { interruptScript = false; if case .none = script {} else { abortScript(sim, skinner) } }
+        if let r = tossStandReq { tossStandReq = nil; if idleState.kind == nil { if case .none = script {} else { abortScript(sim, skinner) }; tossBumpStart(sim, skinner, stand: r.stand, dir: r.dir, header: true) } }          // (beach-aim-r1: BlobBrain+PlayToss.swift)
         if blinkRequested { blinkRequested = false; skinner.blinkNow() }
         if let k = commandedIdle { commandedIdle = nil; startCommanded(k, sim, skinner) }
         if commandedFlip { commandedFlip = false; startCommandedFlip(sim, skinner) }

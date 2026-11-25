@@ -133,6 +133,17 @@ final class PlayToss {
     @ObservationIgnored private var saved: [Int: (reserved: Bool, idleBlocked: Bool, waitFocus: SIMD2<Float>?)] = [:]
     // beach-volley-r1 (PlayBout.swift): the bout's state
     @ObservationIgnored var bout = BoutState()
+    // beach-aim-r1 (owner 2026-11-25: "they should only be facing me", "make them jump when bouncing off their head"): the beach ball is MOVED to the bodies, the bodies are not walked to it.
+    /// On for the beach ball (dev builds: `-BeachAimOld 1` = off, for before / after). While it is on, nobody is sent walking while the ball is live, every Jelmiko-to-Jelmiko flight is aimed at a point over the receiver's current spot at the top of his hop, and the body always faces the camera.
+    nonisolated(unsafe) static var beachAimOld: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "BeachAimOld") != 0
+    var beachAim: Bool { ballKind == .beachball && !Self.beachAimOld && !PlayTuning.ballReturnOld && !PlayTuning.old }
+    /// When each receiver's aimed flight is to meet his crown (the play clock), and when his go (the crouch) was given: capture aid + the go's schedule.
+    @ObservationIgnored var contactAt: [Int: Float] = [:]
+    @ObservationIgnored var goneAt: [Int: Float] = [:]
+    @ObservationIgnored var lastIntLog: Float = -9
+    /// Seconds from the go (the crouch's start) to the top of the hop: the crouch, the hop's rise and the latency measured in the logs (`[beachgo]`).
+    nonisolated(unsafe) static var goLead: Float = 0.62
+    nonisolated(unsafe) static var beachHopStep: Float = 0.2
     @ObservationIgnored private var rng: UInt64 = 0x9E3779B97F4A7C15
     @ObservationIgnored private(set) var clock: Float = 0
     /// For tests: pins the header quality (nil = rolled).
@@ -259,6 +270,7 @@ final class PlayToss {
         guard phase != .off else { return }
         netEnd()          // (play-net-r1)
         phase = .off
+        BlobBrain.tossHopStep = 0.012
         boutAbort("end"); bout = BoutState()          // (beach-volley-r1)
         chainEnd("end"); setOwn(.none); pendingPasses = 0; passPlan = nil
         camGoal = 0
@@ -401,6 +413,8 @@ final class PlayToss {
 
     private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>, foot: Bool = false, bout planned: Bool = false) {
         footFlight = foot; footChoice = nil; footPlan = [:]; kickHeightT = nil
+        contactAt = [:]; goneAt = [:]
+        if beachAim { for j in jellies where !j.free && !j.brain.tossBusy { if case .walk = j.brain.script { j.brain.interruptScript = true } } }          // (beach-aim-r1: a walk home that is still going at the throw is stopped where he stands)
         boutAbort("new throw"); bout.homing = false
         chainEnd("new-throw"); setOwn(.none); passPlan = nil; recallAt = nil; pendingPasses = rollChain()
         if planned { pendingPasses = 0; bout = BoutState(); bout.planned = true; bout.startedAt = clock }          // (beach-volley-r1)
@@ -428,6 +442,8 @@ final class PlayToss {
         }
         guard active else { return }
         jellies = js
+        BlobBrain.tossHopStep = beachAim ? Self.beachHopStep : 0.012
+        PlayMeasure.tick(self, dt: dt)          // (capture aid, log only)
         if GameCamera.playFrame, abs(viewAspect - frameAspect) > 0.005 { reframe() }          // (the phone was turned: the frame is the new view's)
         switch phase {
         case .inHand:
@@ -571,6 +587,7 @@ final class PlayToss {
     /// Capture aid (`-PlayDemo`): one line per strike with the striker's visible facing error toward the player (the hand), its lift and the screen points for cutting pictures.
     func touchLog(_ kind: String, _ j: PlayJelly) {
         netNoteToucher(j.id)          // (play-net-r1: the last one to touch it is the scorer)
+        PlayMeasure.touch(self, kind, j)          // (capture aid, log only)
         guard UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
         let hand = handWorld()
         let toHand = SIMD2(hand.x - j.pos.x, hand.z - j.pos.y)
@@ -631,8 +648,14 @@ final class PlayToss {
         noteRecallStrike()
         var v: SIMD3<Float>
         if let o = anotherHead {
-            let tgt = SIMD3<Float>(o.pos.x, o.headTop + ball.radius * 0.4, o.pos.y)
-            v = TossAim.ballistic(from: from, to: tgt, flight: (0.75 + 0.05 * simd_distance(o.pos, j.pos)) * TossTuning.slow)
+            var tgt = SIMD3<Float>(o.pos.x, o.headTop + ball.radius * 0.4, o.pos.y)
+            var fl = (0.75 + 0.05 * simd_distance(o.pos, j.pos)) * TossTuning.slow
+            if beachAim {          // (beach-aim-r1: over where he stands, at the top of his hop, at a known time)
+                tgt.y = o.sim.restCentroid.y + BobShape.H * 0.5 + BlobBrain.tossCrownRise + ball.radius * 0.9
+                fl = 1.05 + 0.12 * min(simd_distance(o.pos, j.pos), 4)
+                contactAt[o.id] = clock + fl; goneAt[o.id] = nil
+            }
+            v = TossAim.ballistic(from: from, to: tgt, flight: fl)
             passTo = o.id; passes += 1
             if styled { NSLog("[playpass] clock=%.3f throw=%d kind=head from=%d to=%d dist=%.2f", clock, throwSerial, id, o.id, simd_distance(o.pos, j.pos)) }
             onEvent?(.pass(from: id, to: o.id))
@@ -703,7 +726,7 @@ final class PlayToss {
     /// 1.4 s at most), so a live ball moves all three, not one: they are in position for a pass and the next bump. `rehome` sends them back to the line once it is caught.
     private func support(toward xz: SIMD2<Float>, except: Set<Int>) {
         if netKeepOut(xz) { netReject("stand", "support-target-in-keepout", who: nil, at: xz) }
-        guard !PlayTuning.old, !netKeepOut(xz) else { return }          // (play-net keep-out: nobody takes steps toward a ball in or at the goal)
+        guard !PlayTuning.old, !netKeepOut(xz), !beachAim else { return }          // (play-net keep-out: nobody takes steps toward a ball in or at the goal; beach-aim-r1: no ready steps with the beach ball, the ball comes to them)
         for j in jellies where !j.free && !except.contains(j.id) {
             guard !j.brain.tossBusy, Self.canHop(j.brain), j.brain.idleState.kind == nil, clock - (supportT[j.id] ?? -9) > PlayTuning.supportEvery else { continue }
             let d = simd_distance(j.pos, xz)
@@ -721,8 +744,9 @@ final class PlayToss {
         let g = TossTuning.gravity
         let yHead = j.headTop + ball.radius * 0.55
         let y0 = ball.pos.y - yHead, vy = ball.vel.y
-        guard y0 > -0.05 else { return nil }
-        let disc = vy * vy + 2 * g * max(y0, 0)
+        guard y0 > (beachAim ? -2.5 : -0.05) else { return nil }          // (beach-aim-r1: a ball still rising from the hand is already somebody's: the one it will come down on)
+        if beachAim, y0 < 0, vy * vy + 2 * g * y0 < 0 { return nil }
+        let disc = vy * vy + 2 * g * (beachAim ? y0 : max(y0, 0))
         let t = (vy + disc.squareRoot()) / g
         guard t > 0, t < 1.8 * TossTuning.slow else { return nil }
         return (t, SIMD2(ball.pos.x + ball.vel.x * t, ball.pos.z + ball.vel.z * t))
@@ -740,6 +764,10 @@ final class PlayToss {
             guard d < Self.interceptReach else { continue }
             if netKeepOut(a.xz) { netReject("stand", "landing-in-keepout", who: j.id, at: a.xz); continue }          // (play-net keep-out: a ball that will come down in or at the goal is not walked under: he lets it land)
             if best == nil || d < best!.d { best = (j, a.t, a.xz, d) }
+        }
+        if beachAim {          // (beach-aim-r1: the one it comes down on; the one chosen first keeps it only while nobody is clearly nearer to its landing)
+            if let c = headChoice, c != best?.j.id, let bb = best, let jc = jelly(c), let a = arrival(jc), simd_distance(jc.pos, a.xz) < bb.d + 0.4, !netKeepOut(a.xz) { best = (jc, a.t, a.xz, simd_distance(jc.pos, a.xz)) }
+            headChoice = best?.j.id; beachIntercept(best.map { ($0.j, $0.t, $0.xz) }); return
         }
         // the one already going for it keeps it (two Jelmiko about as near as each other must not hand it back and forth every step: each hand-over releases the other's stand and nobody gets there)
         if !PlayTuning.ballReturnOld, let c = headChoice, c != best?.j.id, let jc = jelly(c), let a = arrival(jc), simd_distance(jc.pos, a.xz) < Self.interceptReach, !netKeepOut(a.xz) { best = (jc, a.t, a.xz, simd_distance(jc.pos, a.xz)) }          // (play-net keep-out)
@@ -803,6 +831,8 @@ final class PlayToss {
     /// A late ball (no time for a stand) that will pass within this of him is not walked to: he jumps where he stands, turning toward the player in the air, and the nudge brings the ball onto his crown. Further out he steps under it as before (walking, so facing his walk).
     static let lateWalk: Float = 0.9
     static let steerReach: Float = 0.8
+    /// beach-aim-r1: the beach ball is never walked to, so the ball is eased further onto the crown (how far from a body it may come down and still be his, the nudge's reach and its sideways speed cap).
+    static let beachReach: Float = 1.5
     /// The cap on the sideways speed the nudge may add (m/s): a gentle curve, never a snap.
     static let steerMaxDV: Float = 1.7
     func steerOntoCrown(_ j: PlayJelly, arriveIn t: Float, to spot: SIMD2<Float>? = nil) {
@@ -810,11 +840,11 @@ final class PlayToss {
         let target: SIMD2<Float> = spot ?? ((j.brain.idleState.kind == .tossBump && j.brain.idleState.toss.walking) ? j.brain.idleState.toss.stand : j.pos)
         let here = SIMD2(ball.pos.x, ball.pos.z) + SIMD2(ball.vel.x, ball.vel.z) * t
         let miss = target - here
-        guard simd_length(miss) < Self.steerReach + 0.2 else { return }
+        guard simd_length(miss) < (beachAim ? Self.beachReach : Self.steerReach + 0.2) else { return }
         let want = SIMD2(ball.vel.x, ball.vel.z) + miss / t
         let cur = SIMD2(ball.vel.x, ball.vel.z)
         var d = (want - cur) * min(1, 0.05 / max(t, 0.05) + 0.1)
-        let L = simd_length(d), cap = Self.steerMaxDV * 0.02          // (per tick; about 60 ticks a second)
+        let L = simd_length(d), cap = (beachAim ? 2.6 : Self.steerMaxDV) * 0.02          // (per tick; about 60 ticks a second)
         if L > cap { d *= cap / L }
         ball.vel.x += d.x; ball.vel.z += d.y
     }
@@ -1279,3 +1309,32 @@ final class PlayToss {
     }
 }
 
+// MARK: beach-aim-r1 - the thrown ball and the passes
+
+extension PlayToss {
+    /// The beach ball in flight that is not a bout's: the one it comes down on stays where he is (a short shuffle only when it comes down further than the nudge reaches), faces the camera, crouches and jumps so the top of the hop meets it.
+    func beachIntercept(_ b: (j: PlayJelly, t: Float, xz: SIMD2<Float>)?) {
+        if b == nil, clock - lastIntLog > 0.5 {          // (capture aid)
+            lastIntLog = clock
+            let info = jellies.map { o -> String in let a = arrival(o); return String(format: "%d%@:%@", o.id, o.free ? "f" : "", a.map { String(format: "t%.2f/d%.2f", $0.t, simd_distance(o.pos, $0.xz)) } ?? "nil") }.joined(separator: ",")
+            NSLog("[beachint] clock=%.2f none ball=(%.2f,%.2f,%.2f) v=(%.1f,%.1f,%.1f) %@", clock, ball.pos.x, ball.pos.y, ball.pos.z, ball.vel.x, ball.vel.y, ball.vel.z, info)
+        }
+        for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 && o.id != b?.j.id { o.brain.tossHeaderRelease(o.sim, o.skinner) }
+        guard let b else { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }
+        let j = b.j
+        var t = b.t, thr = BlobBrain.tossCrouch + 0.10 + BlobBrain.tossHeaderLead
+        if let c = contactAt[j.id], c - clock > -0.2 { t = c - clock; thr = Self.goLead }
+        else if let m = meetTime(j) { t = m.t; thr = BlobBrain.tossCrouch + Self.riseTime(m.rise) + Self.goEarly }
+        // the thrown ball comes down further than the nudge reaches: a short shuffle toward it (the one flight nobody controls), as little as will do
+        let land = b.xz, off = land - j.pos, dist = simd_length(off)
+        if !j.brain.tossBusy, dist > Self.beachReach - 0.25, t > 0.55, clock - (interceptAt[j.id]?.t ?? -9) > 0.45, simd_length(playerPoint() - j.pos) > 1e-3 {
+            let zr = Self.bodyZ(), bx = Self.bodyReach(min(max(land.y, zr.lowerBound), zr.upperBound))
+            var stand = j.pos + off / dist * (dist - (Self.beachReach - 0.55))
+            stand.x = min(max(stand.x, -bx), bx); stand.y = min(max(stand.y, zr.lowerBound), zr.upperBound); stand = netStand(stand)
+            let P = playerPoint() - stand
+            if j.brain.tossBumpStart(j.sim, j.skinner, stand: stand, dir: simd_normalize(P), header: true) { interceptAt[j.id] = (stand, clock); NSLog("[beachgo] clock=%.3f id=%d how=shuffle d=%.2f", clock, j.id, simd_distance(stand, j.pos)) }
+        }
+        beachGoCheck(j, t: t, thr: thr)
+        steerOntoCrown(j, arriveIn: max(t, 0.05))
+    }
+}

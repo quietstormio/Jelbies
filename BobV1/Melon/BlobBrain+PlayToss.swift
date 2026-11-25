@@ -59,6 +59,8 @@ extension BlobBrain {
     /// The side lean of a planned kick's wind-up and snap (rad).
     static let tossLeanAmount: Float = 0.22
 
+    /// How far the header's hop travels toward the way he faces (m). 0.012 = the 1 cm hop that only gives the hop its heading; beach-aim-r1 sets a little more while the beach ball is live, because the bodies stay where they are and each hop landed about 0.2 m behind its take-off.
+    nonisolated(unsafe) static var tossHopStep: Float = 0.012
     var tossBusy: Bool { idleState.kind == .tossHeader || idleState.kind == .tossBump }
 
     // MARK: header
