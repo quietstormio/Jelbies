@@ -121,6 +121,17 @@ enum RoomLayout {
     static var padNow: Float { decorFeet.contains(where: { $0.uid == ParkToys.slideUID }) ? 0 : armPad }
 
     /// The park / home slide's walls are 0.9 high and 0.16 thick: a walker's arm reached 0.24 past the footprint and 11 cm into them, so the slide keeps the walker this much further.
+    /// Round 4: the park slide's lateral pad, its +5 cm floor and its forward arms are the part that turned ParkSlideRoundTests.testWalkRoundWithFriendsRarelyDrops red. They are OFF for the park's slide
+    /// (it behaves exactly as at base) unless `-ParkSlideNoClip 1`; the home slides always have them.
+    nonisolated(unsafe) static var parkSlideNoClip: Bool = {
+        #if targetEnvironment(simulator)
+        return UserDefaults.standard.integer(forKey: "ParkSlideNoClip") != 0
+        #else
+        return false
+        #endif
+    }()
+    static func slideFixes(_ f: DecorFoot) -> Bool { f.uid != ParkToys.slideUID || parkSlideNoClip }
+    static func slidePad(_ f: DecorFoot) -> Float { slideFixes(f) ? slideArmPad : 0 }
     nonisolated(unsafe) static var slideArmPad: Float = {
         #if targetEnvironment(simulator)
         if UserDefaults.standard.object(forKey: "SlideArmPad") != nil { return UserDefaults.standard.float(forKey: "SlideArmPad") }
@@ -164,7 +175,7 @@ enum RoomLayout {
             for b in tableBoxes.values { pushOut(&p, radius: radius * lowPropScale, box: b) }
             for f in decorFeet where f.spec.solid && f.uid != ignoreDecor {
                 var bx = f.box
-                if f.kind == .slide { if f.quarter & 1 == 0 { bx.half.x += slideArmPad } else { bx.half.y += slideArmPad } }          // (the slide's SIDES only: the climb spot behind it and the landing in front keep their old distance)
+                if f.kind == .slide { let sp = slidePad(f); if f.quarter & 1 == 0 { bx.half.x += sp } else { bx.half.y += sp } }          // (the slide's SIDES only: the climb spot behind it and the landing in front keep their old distance)
                 pushOut(&p, radius: radius * f.spec.reach + armPad, box: bx)
             }
             if !ballSpheres.isEmpty { pushOutOfBalls(&p, radius: radius, ignore: ignoreDecor) }

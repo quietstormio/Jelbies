@@ -36,7 +36,7 @@ extension BlobBrain {
         #endif
     }()          // (no-clip-r1 round 2: no coast. A 0.2 coast past the lip made ParkSlideRoundTests stand-still / drops red (bisected); the landing belly overlap stays at the measured ~14 cm)
     /// no-clip-r1: the floor he stands, sits and rides on is this much above the art's surface (his seated belly sank 5 cm into the platform).
-    static var slideLift: Float { legacyOff["SlideNoLift"] == true ? 0 : 0.05 }
+    static func slideLift(_ f: DecorFoot) -> Float { RoomLayout.slideFixes(f) && legacyOff["SlideNoLift"] != true ? 0.05 : 0 }
     static var slideLength: Float {
         var L: Float = 0
         for i in 1..<slidePath.count { L += simd_length(slidePath[i] - slidePath[i - 1]) }
@@ -76,7 +76,7 @@ extension BlobBrain {
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
         if gait.phase == .land, !idleState.decorBooped {
             idleState.decorBooped = true
-            bagFloorOn = true; slideY = Self.slideSteps[idleState.slideStep].y + Self.slideLift
+            bagFloorOn = true; slideY = Self.slideSteps[idleState.slideStep].y + Self.slideLift(f)
             applyBagFloor(sim, skinner)
             DecorField.shared.kick(f.uid, 0.4)
             AudioHub.shared.play(.footstep, jelly: steerID, x: px, volume: 0.9)
@@ -102,11 +102,12 @@ extension BlobBrain {
     private func slideHop(_ sim: SoftBody, _ f: DecorFoot) {
         let st = Self.slideSteps[idleState.slideStep]
         idleState.slideStage = 1; idleState.decorBooped = false
-        bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y + Self.slideLift, apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
+        bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y + Self.slideLift(f), apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
     }
 
     /// no-clip-r1: while he sits, rides and gets up the arms point forward down the chute: at his sides they lay in the chute's walls and the ladder posts (up to 13 cm).
     private func slideArmsUp(_ k: Float, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        if let f = DecorField.shared.foot(idleState.decorUID), !RoomLayout.slideFixes(f) { return }          // (the park's slide: the base look unless -ParkSlideNoClip 1)
         armWalkWant = 1
         armDirW = smooth01(min(1, 2 * k)); armDirEl = [0.35, 0.35]; armDirSa = [1.25, 1.25]; armDirOut = -0.04          // (the arms point FORWARD down the chute: raised or at his sides the stubs reach 0.85 out, over the rails and posts that stand at 0.77; the chute is as wide as his belly)
         driveArms(sim, skinner, dt)
@@ -157,7 +158,7 @@ extension BlobBrain {
             let d = want - SIMD2(px, pz)
             px = want.x; pz = want.y
             feet.pos[0] += d; feet.pos[1] += d
-            slideY = at.y + Self.slideLift; bagFloorOn = true
+            slideY = at.y + Self.slideLift(f); bagFloorOn = true
             applyBagFloor(sim, skinner)
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             sitPose(skinner, 1, slump: false)
@@ -190,7 +191,7 @@ extension BlobBrain {
             squash *= 1 - 0.14 * sinf(.pi * min(1, phT / 0.4)) * (phT < 0.4 ? 1 : 0)
             if phT >= 1.3 && !feet.active && idleState.steps >= 2 {
                 idleState.k = 0; sitPose(skinner, 0, slump: false)
-                armDirW = 0; armDirOut = 0; armWalkWant = 0
+                if RoomLayout.slideFixes(f) { armDirW = 0; armDirOut = 0; armWalkWant = 0 }
                 currentPose(sim)
                 // the chute ends only ~0.4 beyond the footprint's edge, less than a body: he walks on to the nearest clear floor (the normal gait) instead of standing half inside
                 // the slide for `decorExitCheck` to drag out. Handed over as its own walk-out is (soft to the slide, its timers charged), so it does not cut this walk short.
