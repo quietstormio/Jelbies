@@ -129,7 +129,8 @@ extension GameCare {
             }()
             if let b = a.brain, groom.cheerT >= openAt + Float(k) * GroomTuning.exitSpacing, prevClear {
                 book.out.insert(a.id); book.outAt[a.id] = groom.cheerT
-                rehome(a, at: b.fixed(GroomScenery.insideSpot))          // (door round: he starts INSIDE the shop, hidden by the wall, and walks out through the open doorway)
+                rehome(a, at: b.fixed(GroomScenery.insideSpot))
+                b.route = []          // (a stale waypoint of his last walk (the hidden wait at x 3.5) sent the third one out sideways from the first step)          // (door round: he starts INSIDE the shop, hidden by the wall, and walks out through the open doorway)
                 b.autonomy = false; b.idleBlocked = true
                 b.startTurn(to: 0, sim: a.sim)
                 b.face(.excited, hold: 3)
