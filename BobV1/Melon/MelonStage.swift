@@ -1248,6 +1248,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         for j in skinJobs { renderer.setLegBlend(j.skinner.legBlend, body: j.id); renderer.setWaveBlend(j.skinner.waveBlend, body: j.id) }
+        #if targetEnvironment(simulator)
+        if ClipProbe.on, game { ClipProbe.run(skinJobs, bodies: actors + parkActors, care: model.care, dt: dt) }          // (no-clip-r1 capture aid: Melon/ClipProbe.swift)
+        #endif
         FeatureClip.apply(jobs: skinJobs)          // a limb / ear / tail drawn inside ANOTHER Jelbie goes out to his surface (FeatureClip.swift); also the table the features read
         PerfMeter.end(.skin, pmK)
         if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift). Only the actors skinned this frame (hidden ones keep stale values).

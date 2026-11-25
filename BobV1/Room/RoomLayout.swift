@@ -109,9 +109,40 @@ enum RoomLayout {
         return d
     }
 
+    /// no-clip-r1: how much further from a piece a walking body's root is kept than its footprint: the walking arms swing 10-25 cm past the footprint (measured with ClipProbe: arms inside the sofa, the table, the shelf,
+    /// the slide's walls), so the footprint's rule alone let them through the prop. Applied to the decor pieces and the room's fixed furniture, not to walls.
+    nonisolated(unsafe) static var armPad: Float = {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "ArmPad") != nil { return UserDefaults.standard.float(forKey: "ArmPad") }
+        #endif
+        return 0.20
+    }()
+    /// The pad in force now: only the home rooms (home, loft, cabin) keep `armPad`; every other room keeps its floor rules exactly.
+    static var padNow: Float { (current.id == .home || current.id == .loft || current.id == .cabin) ? armPad : 0 }          // (home rooms only: the park, the camp, the cafe, the beach and the Spa street keep their own floor rules exactly)
+
+    /// The park / home slide's walls are 0.9 high and 0.16 thick: a walker's arm reached 0.24 past the footprint and 11 cm into them, so the slide keeps the walker this much further.
+    /// Round 4: the park slide's lateral pad, its +5 cm floor and its forward arms are the part that turned ParkSlideRoundTests.testWalkRoundWithFriendsRarelyDrops red. They are OFF for the park's slide
+    /// (it behaves exactly as at base) unless `-ParkSlideNoClip 1`; the home slides always have them.
+    nonisolated(unsafe) static var parkSlideNoClip: Bool = {
+        #if targetEnvironment(simulator)
+        return UserDefaults.standard.integer(forKey: "ParkSlideNoClip") != 0
+        #else
+        return false
+        #endif
+    }()
+    static func slideFixes(_ f: DecorFoot) -> Bool { f.uid != ParkToys.slideUID || parkSlideNoClip }
+    static func slidePad(_ f: DecorFoot) -> Float { slideFixes(f) ? slideArmPad : 0 }
+    nonisolated(unsafe) static var slideArmPad: Float = {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "SlideArmPad") != nil { return UserDefaults.standard.float(forKey: "SlideArmPad") }
+        #endif
+        return 0.32
+    }()
+
     /// Pushes a sphere (centre, radius) out of walls, sofa and props; returns the corrected centre (y untouched).
     static func resolve(position p0: SIMD3<Float>, radius: Float, lowPropScale: Float = 1, ignoreDecor: Int? = nil) -> SIMD3<Float> {
         var p = p0
+        let armPad = padNow
         for _ in 0..<2 {
             for w in walls {
                 let dist = simd_dot(w.normal, p) - w.d
@@ -123,18 +154,18 @@ enum RoomLayout {
                 guard p.y - radius < box.centre.y + box.halfExtents.y else { continue }
                 let xz = SIMD2(p.x, p.z)
                 let sd = boxDistance(xz, box)
-                if sd < radius {
+                if sd < radius + armPad {
                     let e: Float = 1e-3
                     var g = SIMD2(boxDistance(xz + SIMD2(e, 0), box) - boxDistance(xz - SIMD2(e, 0), box),
                                   boxDistance(xz + SIMD2(0, e), box) - boxDistance(xz - SIMD2(0, e), box))
                     g = simd_length(g) > 1e-6 ? simd_normalize(g) : SIMD2(0, 1)
-                    let push = g * (radius - sd)
+                    let push = g * (radius + armPad - sd)
                     p.x += push.x; p.z += push.y
                 }
             }
             for c in cylinders where p.y - radius < floorY + c.height {
                 let d = SIMD2(p.x, p.z) - c.centre
-                let len = simd_length(d), need = c.radius + radius
+                let len = simd_length(d), need = c.radius + radius + armPad
                 if len < need {
                     let dir = len > 1e-6 ? d / len : SIMD2(0, 1)
                     p.x = c.centre.x + dir.x * need; p.z = c.centre.y + dir.y * need
@@ -142,7 +173,11 @@ enum RoomLayout {
             }
             for b in dynamicBoxes { pushOut(&p, radius: radius * lowPropScale, box: b) }
             for b in tableBoxes.values { pushOut(&p, radius: radius * lowPropScale, box: b) }
-            for f in decorFeet where f.spec.solid && f.uid != ignoreDecor { pushOut(&p, radius: radius * f.spec.reach, box: f.box) }
+            for f in decorFeet where f.spec.solid && f.uid != ignoreDecor {
+                var bx = f.box
+                if f.kind == .slide { let sp = slidePad(f); if f.quarter & 1 == 0 { bx.half.x += sp } else { bx.half.y += sp } }          // (the slide's SIDES only: the climb spot behind it and the landing in front keep their old distance)
+                pushOut(&p, radius: radius * f.spec.reach + armPad, box: bx)
+            }
             if !ballSpheres.isEmpty { pushOutOfBalls(&p, radius: radius, ignore: ignoreDecor) }
         }
         return p

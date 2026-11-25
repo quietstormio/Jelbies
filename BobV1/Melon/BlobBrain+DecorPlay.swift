@@ -16,8 +16,27 @@ extension BlobBrain {
     private static let slidePath0: [SIMD2<Float>] = [SIMD2(-0.4, 0.66), SIMD2(-0.1, 0.68), SIMD2(0.23, 0.62), SIMD2(0.36, 0.536), SIMD2(0.49, 0.458), SIMD2(0.62, 0.386), SIMD2(0.75, 0.321),
                                             SIMD2(0.88, 0.264), SIMD2(1.01, 0.214), SIMD2(1.14, 0.174), SIMD2(1.27, 0.145), SIMD2(1.4, 0.13), SIMD2(1.75, 0.0)]
     /// The steps: (z, y) he hops to, then the platform.
-    static let slideSteps: [SIMD2<Float>] = slideSteps0.map { $0 * DecorKind.slide.scale }
-    private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.28, 0.22), SIMD2(-1.04, 0.44), SIMD2(-0.4, 0.66)]
+    static var slideSteps: [SIMD2<Float>] { (legacyOff["SlideNoSteps"] == true ? slideStepsOld : slideSteps0).map { $0 * DecorKind.slide.scale } }
+    private static let slideStepsOld: [SIMD2<Float>] = [SIMD2(-1.28, 0.22), SIMD2(-1.04, 0.44), SIMD2(-0.4, 0.66)]
+    private static let slideSteps0: [SIMD2<Float>] = [SIMD2(-1.28, 0.22), SIMD2(-1.04, 0.44), SIMD2(-0.4, 0.66)]          // (no-clip-r1: the exported spots again. Moving the first two hops 0.24 back (to -1.52 / -1.32) fixed the belly in the next riser but turned ParkSlideRoundTests.testWalkRoundWithFriendsRarelyDrops red: drops 20 %, stand-stills; bisected in round 3. -SlideNoSteps 0 is gone, the old spots are the default)
+    nonisolated(unsafe) static var legacyOff: [String: Bool] = {          // (simulator bisect switches: -SlideNoCoast / -SlideNoLift / -SlideNoSteps 1)
+        #if targetEnvironment(simulator)
+        var d: [String: Bool] = [:]; for k in ["SlideNoCoast", "SlideNoLift", "SlideNoSteps"] { d[k] = UserDefaults.standard.integer(forKey: k) != 0 }; return d
+        #else
+        return [:]
+        #endif
+    }()
+    static let slideRunOut: Float = 0
+    /// Off: any 0.2 shift of the landing (the ride's coast, or this skid while squashed) turned ParkSlideRoundTests stand-still / drops red (bisected, round 3). `-SlideSkid 0.2` brings it back for a look.
+    nonisolated(unsafe) static var slideSkid: Float = {
+        #if targetEnvironment(simulator)
+        return UserDefaults.standard.float(forKey: "SlideSkid")
+        #else
+        return 0
+        #endif
+    }()          // (no-clip-r1 round 2: no coast. A 0.2 coast past the lip made ParkSlideRoundTests stand-still / drops red (bisected); the landing belly overlap stays at the measured ~14 cm)
+    /// no-clip-r1: the floor he stands, sits and rides on is this much above the art's surface (his seated belly sank 5 cm into the platform).
+    static func slideLift(_ f: DecorFoot) -> Float { RoomLayout.slideFixes(f) && legacyOff["SlideNoLift"] != true ? 0.05 : 0 }
     static var slideLength: Float {
         var L: Float = 0
         for i in 1..<slidePath.count { L += simd_length(slidePath[i] - slidePath[i - 1]) }
@@ -57,7 +76,7 @@ extension BlobBrain {
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
         if gait.phase == .land, !idleState.decorBooped {
             idleState.decorBooped = true
-            bagFloorOn = true; slideY = Self.slideSteps[idleState.slideStep].y
+            bagFloorOn = true; slideY = Self.slideSteps[idleState.slideStep].y + Self.slideLift(f)
             applyBagFloor(sim, skinner)
             DecorField.shared.kick(f.uid, 0.4)
             AudioHub.shared.play(.footstep, jelly: steerID, x: px, volume: 0.9)
@@ -83,7 +102,15 @@ extension BlobBrain {
     private func slideHop(_ sim: SoftBody, _ f: DecorFoot) {
         let st = Self.slideSteps[idleState.slideStep]
         idleState.slideStage = 1; idleState.decorBooped = false
-        bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y, apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
+        bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y + Self.slideLift(f), apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
+    }
+
+    /// no-clip-r1: while he sits, rides and gets up the arms point forward down the chute: at his sides they lay in the chute's walls and the ladder posts (up to 13 cm).
+    private func slideArmsUp(_ k: Float, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        if let f = DecorField.shared.foot(idleState.decorUID), !RoomLayout.slideFixes(f) { return }          // (the park's slide: the base look unless -ParkSlideNoClip 1)
+        armWalkWant = 1
+        armDirW = smooth01(min(1, 2 * k)); armDirEl = [0.35, 0.35]; armDirSa = [1.25, 1.25]; armDirOut = -0.04          // (the arms point FORWARD down the chute: raised or at his sides the stubs reach 0.85 out, over the rails and posts that stand at 0.77; the chute is as wide as his belly)
+        driveArms(sim, skinner, dt)
     }
 
     /// Stage 0 (turn), 4 (sit down on the platform), 5 (ride), 6 (get up with a squash).
@@ -96,7 +123,7 @@ extension BlobBrain {
             let turning = turnSteps(goal: idleState.goalYaw, tol: 0.08)
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             if !turning && !feet.active && idleState.phaseT > 0.15 {
-                guard f.uid != ParkToys.slideUID || slideHopReady(f) else { idleFinish(skinner); return }          // (the hops start only from behind the slide, next to the climb spot)
+                guard f.kind != .slide || slideHopReady(f) else { idleFinish(skinner); return }          // (the hops start only from behind the slide, next to the climb spot)
                 idleState.slideStep = 0; idleState.phaseT = 0
                 slideHop(sim, f)
             }
@@ -118,6 +145,7 @@ extension BlobBrain {
             idleState.k = k
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             sitPose(skinner, k, slump: false)
+            slideArmsUp(k, sim, skinner, dt)
             skinner.setEyeOpenness(1 - 0.1 * k)
         case 5:
             // the ride: 1.6 -> 3 u/s (ease in); he is carried along the path with his feet (they stay under him), the body tilting to the slope
@@ -125,19 +153,21 @@ extension BlobBrain {
             let speed = 1.6 + 1.4 * smooth01(t / 1.1)
             idleState.slideS += speed * dt
             let at = Self.slideAt(idleState.slideS)
-            let want = c + f.turned(SIMD2(0, at.z))
+            let over = max(0, idleState.slideS - Self.slideLength)          // (no-clip-r1: he coasts on 0.2 past the lip before the squash: his belly is wider than the chute's tail, 14 cm of it was in the tail)
+            let want = c + f.turned(SIMD2(0, at.z + over))
             let d = want - SIMD2(px, pz)
             px = want.x; pz = want.y
             feet.pos[0] += d; feet.pos[1] += d
-            slideY = at.y; bagFloorOn = true
+            slideY = at.y + Self.slideLift(f); bagFloorOn = true
             applyBagFloor(sim, skinner)
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             sitPose(skinner, 1, slump: false)
+            slideArmsUp(1, sim, skinner, dt)
             pitch += at.slope * 0.9
             jellyKick = max(jellyKick, 0.5)
             skinner.setEyeOpenness(0.8)
-            if idleState.slideS >= Self.slideLength {
-                idleState.slideStage = 6; idleState.phase = 1; idleState.phaseT = 0; idleState.steps = 0
+            if idleState.slideS >= Self.slideLength + Self.slideRunOut {
+                idleState.slideStage = 6; idleState.phase = 1; idleState.phaseT = 0; idleState.steps = 0; slideSkidDone = 0
                 bagFloorOn = false; applyBagFloor(sim, skinner)
                 jellyKick = max(jellyKick, 2.4)
                 AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.9)
@@ -147,13 +177,21 @@ extension BlobBrain {
             // lands on the floor: a squash, then gets up
             let phT = idleState.phaseT
             let k = 1 - smooth01((phT - 0.35) / 0.9)
+            // no-clip-r1: he skids 0.2 on past the lip while squashed (before he gets up), so his belly rear is out of the chute's tail (14 cm of it was in the tail); no coast during the ride (that turned the walk-round tests red)
+            let skid = Self.slideSkid * smooth01(min(1, phT / 0.4)), dSkid = skid - slideSkidDone
+            if dSkid > 0 {
+                slideSkidDone = skid
+                let dv = f.turned(SIMD2(0, dSkid)); px += dv.x; pz += dv.y; feet.pos[0] += dv; feet.pos[1] += dv
+            }
             if phT > 0.35, !feet.active && idleState.steps < 2 && phT > 0.35 + Float(idleState.steps) * 0.3 { idleFootStep(reach: 0); idleState.steps += 1 }
             idleState.k = k
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             sitPose(skinner, k, slump: false)
+            slideArmsUp(k, sim, skinner, dt)
             squash *= 1 - 0.14 * sinf(.pi * min(1, phT / 0.4)) * (phT < 0.4 ? 1 : 0)
             if phT >= 1.3 && !feet.active && idleState.steps >= 2 {
                 idleState.k = 0; sitPose(skinner, 0, slump: false)
+                if RoomLayout.slideFixes(f) { armDirW = 0; armDirOut = 0; armWalkWant = 0 }
                 currentPose(sim)
                 // the chute ends only ~0.4 beyond the footprint's edge, less than a body: he walks on to the nearest clear floor (the normal gait) instead of standing half inside
                 // the slide for `decorExitCheck` to drag out. Handed over as its own walk-out is (soft to the slide, its timers charged), so it does not cut this walk short.

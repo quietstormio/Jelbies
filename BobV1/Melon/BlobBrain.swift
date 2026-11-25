@@ -86,6 +86,7 @@ final class BlobBrain {
     var bagFloorOn = false
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
     var slideY: Float = 0
+    var slideSkidDone: Float = 0
     /// The kick scooter ride in progress (BlobBrain+Scooter.swift).
     var ride = ScooterRide()
     /// Tests: force how a throw ends (0 plain arc, 1 bonk, 2 drop).
@@ -1481,7 +1482,7 @@ final class BlobBrain {
         // Autonomous legs (a wander / run / social walk: no job, no voice command) do not wait for a Jelly that blocks them: after a beat they give the leg up
         // and pick another (`steerGiveUp`, read by the walk). A requested walk (come, the meal) keeps the long patience: the blocker is asked to step aside.
         let requested = job != nil || commanded || pending != nil
-        let slideLeg = idleState.kind == .decorSlide && idleState.decorUID == ParkToys.slideUID && idleState.slideStage < 0          // (the way round the park slide: it gives a standing friend 2 s, then the leg is given up and planned the other way round, BlobBrain+Decor.swift)
+        let slideLeg = idleState.kind == .decorSlide && DecorField.shared.foot(idleState.decorUID)?.kind == .slide && idleState.slideStage < 0          // (the way round the park slide: it gives a standing friend 2 s, then the leg is given up and planned the other way round, BlobBrain+Decor.swift)
         var forced = false; if let w = slideFootForceTo, case .goTo(let p)? = job, p == w { forced = true }          // (park-slide-r4: off the slide's foot after his longest wait: on past the friend, as a requested walk did after its 6 s)
         // a LYING body on the leg cannot step aside: a requested walk (the Come here call) did not set off for the whole 6 s of the standing patience (2026-11-21, come-here-r4: the walker stood 2.5 s before anything else moved him)
         let sleeperOnly = Self.sleeperLegWait && requested && standing && !slideLeg && legBlockedOnlyBySleepers(root, target)

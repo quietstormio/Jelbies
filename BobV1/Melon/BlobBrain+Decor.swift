@@ -20,7 +20,10 @@ extension BlobBrain {
     static func decorOffers() -> Set<IdleKind> {
         let f = DecorField.shared
         var s = Set<IdleKind>()
-        for p in f.feet where f.available(p) { if let k = p.kind.activeInteraction { s.insert(k) } }
+        for p in f.feet where f.available(p) {
+            if p.kind == .slide, p.uid != ParkToys.slideUID, !SlideZones.clear(p, among: f.feet) { continue }          // (no-clip-r1: on his own he does not take a home slide that has other furniture on its climb or landing floor: his arms would go through it. The park's slide, a voice command and a tap are not gated)
+            if let k = p.kind.activeInteraction { s.insert(k) }
+        }
         return s
     }
 
@@ -54,7 +57,7 @@ extension BlobBrain {
             // (park-slide-r3: the park slide turns soft only when his CENTRE is inside its box, which no walk can leave with it solid. A body only over its edge (a walk that came near, a
             // spot placed beside it) keeps it solid: his next step is pushed off it. Soft, the walk he was on went on straight through the slide: the real-app probe saw one cut the
             // slide's front corner at 0.25 from the box)
-            let rimOnly = (f.uid == ParkToys.slideUID && Self.slideSoftEndEnabled && f.distance(position) > 0) || (f.kind == .hopscotch && f.distance(position) > 0)          // (park-hopscotch-r1: the court's margin, like the slide's rim: only a centre ON the court turns it soft; a body in the margin is pushed out and walks off with the wall solid)
+            let rimOnly = (f.kind == .slide && Self.slideSoftEndEnabled && f.distance(position) > 0) || (f.kind == .hopscotch && f.distance(position) > 0)          // (park-hopscotch-r1: the court's margin, like the slide's rim: only a centre ON the court turns it soft; a body in the margin is pushed out and walks off with the wall solid)
             if decorIgnore == nil, !rimOnly { decorIgnore = f.uid }
             let footOwned = rimOnly && slideFootWaiting          // (r4: he waits on the slide's foot for his leg to clear, his own pick walks him: no straight ease-out, no walk-out that is held)
             insideDecorT += dt
@@ -280,7 +283,7 @@ extension BlobBrain {
         if slideLegFree(here, gate), avoid.allSatisfy({ simd_distance($0, gate) > 0.3 }) { return (gate, 1) }          // (`avoid`: the leg that has stood still behind a friend is not taken again: round the slide the other way)
         // round the slide: the corners of its footprint, a body's width off the edge (both sides, front and back); the walk's own planner does not go round a slide that long
         let h = f.quarter & 1 == 0 ? f.spec.half : SIMD2(f.spec.half.y, f.spec.half.x)
-        let lat = h.x + footprint * f.spec.reach + 0.1, zf = h.y + footprint * f.spec.reach + 0.1
+        let lat = h.x + footprint * f.spec.reach + 0.1 + RoomLayout.padNow + RoomLayout.slidePad(f), zf = h.y + footprint * f.spec.reach + 0.1 + RoomLayout.padNow          // (no-clip-r1: the corners stand outside the pads the floor rules keep walkers off the slide by, or no leg round it is free)
         var corners: [SIMD2<Float>] = []
         for sx: Float in [-1, 1] {
             for wide: Float in [0, 1.0, 2.0] {          // (the same corners further out: a friend standing beside the way round is gone round on his far side)
@@ -382,7 +385,8 @@ extension BlobBrain {
         for (f, _) in ranked {
             if kind == .decorKick || kind == .soccerKick, field.anim[f.uid]?.moving == true || field.anim[f.uid]?.tumbling == true { continue }
             let seat = f.kind.hopSit ? (field.freeSeat(f, preferring: here.x - f.centre.x) ?? 0) : 0
-            let roundSlide = kind == .decorSlide && f.uid == ParkToys.slideUID          // (the park's slide is a wall on the way to its ladder: legs round it, see slideFirstLeg; the home slide has no room behind it for a gate, it keeps the old walk)
+            let roundSlide = kind == .decorSlide && f.kind == .slide          // (no-clip-r1: the home slide too: it was soft from the start, so he walked straight through it to its ladder: body up to 72 cm, arms 50 cm inside)
+            //          // (the park's slide is a wall on the way to its ladder: legs round it, see slideFirstLeg; the home slide has no room behind it for a gate, it keeps the old walk)
             decorIgnore = (kind == .decorSit || kind == .decorHop || (kind == .decorSlide && !roundSlide) || (kind == .decorHopscotch && HopscotchTuning.guardOn)) ? f.uid : exiting          // (a slide that is not the park's: soft from the start, as before)
             var slideLeg = 0
             var standSpot = kind == .soccerKick && (mix.sessKick != nil || mix.sessDribbleTo != nil || mix.sessFetch || mix.sessShoot) ? soccerStand(f, from: here) : decorStand(kind, f, from: here, seat: seat)          // (soccer-room-r1: a session's directed kick stands exactly where the director planned it: the camera clamp of `decorStand` must not move or refuse it)
@@ -417,7 +421,7 @@ extension BlobBrain {
     /// Every step while a decor behaviour runs (before the gait): the kick lands when the ball is within reach.
     func decorTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let kind = idleState.kind, idleState.decorUID >= 0, let f = DecorField.shared.foot(idleState.decorUID) else { return }
-        if kind == .decorSlide, f.uid == ParkToys.slideUID, idleState.slideStage == -1 || idleState.slideStage == -3 { slideStallReplan(f, dt: dt, skinner: skinner) }          // (the way round the park slide)
+        if kind == .decorSlide, f.kind == .slide, idleState.slideStage == -1 || idleState.slideStage == -3 { slideStallReplan(f, dt: dt, skinner: skinner) }          // (the way round the park slide)
         if kind == .soccerKick { soccerTick(sim, skinner, dt, f); return }
         if kind == .decorKick, idleState.decorGo, !idleState.decorKicked {
             let ball = DecorField.shared.position(f)
