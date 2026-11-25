@@ -137,6 +137,10 @@ extension GameCare {
             // the doorway: arms forward while he is in or near the frame (the opening is 1.40, his belly 1.17, the arms stick out another 0.4); on the pavement he is sent on to his spot
             let fy = GameCare.floorPos(b, a.sim).y, zf = GroomScenery.frontZ
             let inDoor = fy > zf - 1.0 && fy < zf + 2.5 && !book.laneDone.contains(a.id)
+            if inDoor, fy < zf + 0.7 {          // (door round: a lane magnet: the doorway is 1.56 wide for a 1.17 belly, so he is drawn onto the centre line while he is in and just before the frame; the peer steering sometimes swerved the third one 0.5 sideways into the frame / the planter)
+                let dx = (GroomScenery.doorX - b.px) * min(1, 8 * dt)
+                b.px += dx; b.feet.pos[0].x += dx; b.feet.pos[1].x += dx
+            }
             if inDoor { b.armDirW = 1; b.armDirEl = [0.35, 0.35]; b.armDirSa = [1.25, 1.25]; b.armDirOut = 0 }
             else if b.armDirW > 0, book.arrivedAt[a.id] == nil { b.armDirW = 0; b.armDirOut = 0 }
             if !book.laneDone.contains(a.id), fy > zf + 2.5 || groom.cheerT - outAt > 6 {
