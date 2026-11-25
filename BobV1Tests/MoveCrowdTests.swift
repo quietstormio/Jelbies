@@ -11,9 +11,9 @@ import simd
 @MainActor
 final class MoveCrowdTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
-    var was = false
-    override func setUp() { was = MoveCrowd.on }
-    override func tearDown() { MoveCrowd.on = was; GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home) }
+    var was = false, padWas: Float = 0
+    override func setUp() { was = MoveCrowd.on; padWas = RoomLayout.armPad; if let p = ProcessInfo.processInfo.environment["MOVECROWD_ARMPAD"].flatMap({ Float($0) }) { RoomLayout.armPad = p } }          // (round 3: the home arm pad of no-clip-r1 as a seam, to see what it does to the crossing)
+    override func tearDown() { MoveCrowd.on = was; RoomLayout.armPad = padWas; GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home) }
 
     func room() {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
