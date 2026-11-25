@@ -177,6 +177,31 @@ final class GlitchEmoteTests: XCTestCase {
         XCTAssertLessThan(both.filter { $0 >= 6 }.count, Swift.max(1, off.filter { $0 >= 6 }.count))
     }
 
+    /// glitch-hunt-r5: the hop's first crouch takes the anchor / rotation over from the standing pose (GaitDriver.hopStartEase): no anchor step at a hop's start
+    /// (it stepped 4.4 cm in one step: the feet slid in the crouch). The hop-start ARM pop (8.6 cm) is a different cause and is only logged here.
+    func testHopStartAnchorLog() {
+        let saved = GaitDriver.hopStartEase
+        defer { GaitDriver.hopStartEase = saved }
+        func run(_ on: Bool) -> (step: Float, arms: [Float]) {
+            GaitDriver.hopStartEase = on
+            var step: Float = 0, arms: [Float] = []
+            for k in [IdleKind.jacks, .bounce, .joy, .hopscotch, .skipHop] {
+                var last: SIMD3<Float>? = nil
+                arms += pops(k, each: { r, _ in
+                    let a = r.sim.attractor.anchor
+                    if r.brain.gait.phase == .crouch, let l = last { step = Swift.max(step, simd_length(a - l)) }
+                    last = a
+                }).events.filter { $0.hop && $0.part == "arm" }.map(\.cm)
+            }
+            return (step, arms)
+        }
+        let off = run(false), on = run(true)
+        MotionLog.write("GLITCH hop start: largest crouch anchor step \(off.step * 100) -> \(on.step * 100) cm; arm pops \(off.arms.count) (max \(off.arms.max() ?? 0)) -> \(on.arms.count) (max \(on.arms.max() ?? 0))")
+        // (log only: the largest step over a whole crouch, 8.0 cm both ways, is not the first-crouch step this fix removes (4.4 -> 0.3 cm in GLITCH_ARM's dump);
+        //  the in-app jacks A/B is the measure: crouch foot slides 426 -> 5)
+        _ = (off, on)
+    }
+
     /// Log only (GLITCH_ARM=1): jumping jacks, every arm pop with the arm state of the 6 steps before and 3 after.
     func testDumpJacksArm() throws {
         guard ProcessInfo.processInfo.environment["GLITCH_ARM"] == "1" else { throw XCTSkip("GLITCH_ARM=1 runs the arm dump") }
