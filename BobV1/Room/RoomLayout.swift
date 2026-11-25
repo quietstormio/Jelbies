@@ -132,6 +132,18 @@ enum RoomLayout {
         return false
         #endif
     }()
+    /// Round 5: the park slide's arm pose, riser lean and landing lean, each its own switch (`-ParkSlideArms`, `-ParkSlideLean`, `-ParkSlideLand` 0 / 1; `-ParkSlideNoClip 1` turns all three on). None moves a walker or the landing.
+    nonisolated(unsafe) static var parkArms = flag("ParkSlideArms", ParkSlideDefaults.arms), parkLean = flag("ParkSlideLean", ParkSlideDefaults.lean), parkLand = flag("ParkSlideLand", ParkSlideDefaults.land)
+    static func flag(_ k: String, _ d: Bool) -> Bool {
+        #if targetEnvironment(simulator)
+        if parkSlideNoClip { return true }
+        if UserDefaults.standard.object(forKey: k) != nil { return UserDefaults.standard.integer(forKey: k) != 0 }
+        #endif
+        return d
+    }
+    /// Round 6: the walker's near arm held forward beside the park slide's wall (`-ParkSlideWallArms 0 / 1`).
+    nonisolated(unsafe) static var parkWallTuck = flag("ParkSlideWallArms", ParkSlideDefaults.wallArms)
+    static func slideArmsFwd(_ f: DecorFoot) -> Bool { f.uid != ParkToys.slideUID || parkArms }
     static func slideFixes(_ f: DecorFoot) -> Bool { f.uid != ParkToys.slideUID || parkSlideNoClip }
     static func slidePad(_ f: DecorFoot) -> Float { slideFixes(f) ? slideArmPad : 0 }
     nonisolated(unsafe) static var slideArmPad: Float = {
@@ -216,3 +228,6 @@ enum RoomCamera {
         return (r.proj * r.view, r.eye)
     }
 }
+
+/// Shipped defaults of the park slide's round-5 switches.
+nonisolated enum ParkSlideDefaults { static let arms = true, lean = false, land = false, wallArms = false }

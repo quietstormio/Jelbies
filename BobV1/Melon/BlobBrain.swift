@@ -87,6 +87,7 @@ final class BlobBrain {
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
     var slideY: Float = 0
     var slideSkidDone: Float = 0
+    var slideTuckW: Float = 0, slideTuckOwn = false
     /// The kick scooter ride in progress (BlobBrain+Scooter.swift).
     var ride = ScooterRide()
     /// Tests: force how a throw ends (0 plain arc, 1 bonk, 2 drop).
@@ -2349,6 +2350,7 @@ final class BlobBrain {
         skinner.teddyEarScale = teddyEarScale; skinner.teddyPomScale = teddyPomScale; skinner.teddySway = teddySway
         skinner.tailHappy = expr.kind == .happy || expr.kind == .excited || expr.kind == .joyArc || idleState.reaction == .cheer
         tailPlayTick(skinner, dt)          // BlobBrain+TailPlay.swift: what the tail is to do this tick (Pip only)
+        slideWallTuck(dt)
         var list: [ParticleTarget] = []
         let beanLive = beanG > 0 || beanHold > 0 || shoesWorn
         let footOn = feetInit && geom.valid && feetDrive && (poseW > 0 || beanLive) && debugFeet

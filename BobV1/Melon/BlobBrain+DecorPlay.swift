@@ -27,6 +27,14 @@ extension BlobBrain {
         #endif
     }()
     static let slideRunOut: Float = 0
+    nonisolated(unsafe) static var slideLeanMul: Float = simFloat("SlideLeanMul", 2.5)
+    nonisolated(unsafe) static var slideLandLean: Float = simFloat("SlideLandLean", 0.3)
+    static func simFloat(_ k: String, _ d: Float) -> Float {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: k) != nil { return UserDefaults.standard.float(forKey: k) }
+        #endif
+        return d
+    }
     /// Off: any 0.2 shift of the landing (the ride's coast, or this skid while squashed) turned ParkSlideRoundTests stand-still / drops red (bisected, round 3). `-SlideSkid 0.2` brings it back for a look.
     nonisolated(unsafe) static var slideSkid: Float = {
         #if targetEnvironment(simulator)
@@ -70,7 +78,7 @@ extension BlobBrain {
         activity = .playing
         mouthOpen = 0
         idleState.phaseT += dt
-        let hopGoal: Float = -hopTipBack * attentionPitch * amplitude
+        let hopGoal: Float = -hopTipBack * attentionPitch * amplitude * (f.uid == ParkToys.slideUID && RoomLayout.parkLean ? Self.slideLeanMul : 1)          // (round 5: leaning back on the climb hops keeps the belly off the next riser, no step is moved)
         pitchBase += max(-1.2 * dt, min(1.2 * dt, hopGoal - pitchBase))
         gait.basePitch = pitchBase
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
@@ -107,7 +115,7 @@ extension BlobBrain {
 
     /// no-clip-r1: while he sits, rides and gets up the arms point forward down the chute: at his sides they lay in the chute's walls and the ladder posts (up to 13 cm).
     private func slideArmsUp(_ k: Float, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        if let f = DecorField.shared.foot(idleState.decorUID), !RoomLayout.slideFixes(f) { return }          // (the park's slide: the base look unless -ParkSlideNoClip 1)
+        if let f = DecorField.shared.foot(idleState.decorUID), !RoomLayout.slideArmsFwd(f) { return }          // (the park's slide: the base look unless -ParkSlideNoClip 1)
         armWalkWant = 1
         armDirW = smooth01(min(1, 2 * k)); armDirEl = [0.35, 0.35]; armDirSa = [1.25, 1.25]; armDirOut = -0.04          // (the arms point FORWARD down the chute: raised or at his sides the stubs reach 0.85 out, over the rails and posts that stand at 0.77; the chute is as wide as his belly)
         driveArms(sim, skinner, dt)
@@ -164,6 +172,7 @@ extension BlobBrain {
             sitPose(skinner, 1, slump: false)
             slideArmsUp(1, sim, skinner, dt)
             pitch += at.slope * 0.9
+            if f.uid == ParkToys.slideUID, RoomLayout.parkLand { let e = idleState.slideS - (Self.slideLength - 0.25); if e > 0 { pitch += Self.slideLandLean * min(1, e / 0.25) } }          // (round 5: nose down at the lip so the belly rear leaves the chute's tail; the landing itself does not move)
             jellyKick = max(jellyKick, 0.5)
             skinner.setEyeOpenness(0.8)
             if idleState.slideS >= Self.slideLength + Self.slideRunOut {
@@ -177,6 +186,7 @@ extension BlobBrain {
             // lands on the floor: a squash, then gets up
             let phT = idleState.phaseT
             let k = 1 - smooth01((phT - 0.35) / 0.9)
+            if f.uid == ParkToys.slideUID, RoomLayout.parkLand { pitch += Self.slideLandLean * max(0, 1 - phT / 0.35) }
             // no-clip-r1: he skids 0.2 on past the lip while squashed (before he gets up), so his belly rear is out of the chute's tail (14 cm of it was in the tail); no coast during the ride (that turned the walk-round tests red)
             let skid = Self.slideSkid * smooth01(min(1, phT / 0.4)), dSkid = skid - slideSkidDone
             if dSkid > 0 {
@@ -191,7 +201,7 @@ extension BlobBrain {
             squash *= 1 - 0.14 * sinf(.pi * min(1, phT / 0.4)) * (phT < 0.4 ? 1 : 0)
             if phT >= 1.3 && !feet.active && idleState.steps >= 2 {
                 idleState.k = 0; sitPose(skinner, 0, slump: false)
-                if RoomLayout.slideFixes(f) { armDirW = 0; armDirOut = 0; armWalkWant = 0 }
+                if RoomLayout.slideArmsFwd(f) { armDirW = 0; armDirOut = 0; armWalkWant = 0 }
                 currentPose(sim)
                 // the chute ends only ~0.4 beyond the footprint's edge, less than a body: he walks on to the nearest clear floor (the normal gait) instead of standing half inside
                 // the slide for `decorExitCheck` to drag out. Handed over as its own walk-out is (soft to the slide, its timers charged), so it does not cut this walk short.
@@ -208,6 +218,30 @@ extension BlobBrain {
                 }
             }
         default: break
+        }
+    }
+}
+
+
+// MARK: round 6: the near arm of a walker passing the park slide's wall
+extension BlobBrain {
+    /// Walking past the park slide (the way round it, or just beside it) the stubby arm on the slide's side reached into its rail / wall (up to 8.6 cm). Pose only, no path change: while a free walker is within arm's reach
+    /// of the slide's side wall the arms are held forward (the ride's own pose, `armDirEl` / `armDirSa`), blended in and out over 0.2 s; the walk, its route and its arm swing code are untouched.
+    func slideWallTuck(_ dt: Float) {
+        guard RoomLayout.parkWallTuck else { return }
+        var want = false
+        if idleState.kind == nil, social == nil, !held, !isSleeping, case .walk = script, let f = DecorField.shared.foot(ParkToys.slideUID) {
+            let q = SIMD2(px, pz), d = f.distance(q)
+            // beside the walls only (the front / back edges have no rail): inside the slide's length +/- 0.2, and within arm's reach of a side
+            let l = f.local(q - f.centre), h = f.quarter & 1 == 0 ? f.spec.half : SIMD2(f.spec.half.y, f.spec.half.x)
+            want = d < 1.05 && abs(l.y) < h.y + 0.4
+        }
+        if want || slideTuckOwn {
+            slideTuckW = max(0, min(1, slideTuckW + (want ? dt / 0.2 : -dt / 0.2)))
+            slideTuckOwn = slideTuckW > 0
+            armDirW = slideTuckW; armDirEl = [0.35, 0.35]; armDirSa = [1.25, 1.25]; armDirOut = 0
+            armWalkWant = max(armWalkWant, 1)
+            if !slideTuckOwn { armDirW = 0; armDirOut = 0 }
         }
     }
 }
