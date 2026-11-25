@@ -199,3 +199,20 @@ extension MoveCrowd {
     nonisolated(unsafe) static var cafeHoldReach = num("MOVECROWD_CAFE_HOLD_REACH", 2.5)
     nonisolated(unsafe) static var cafeHoldOn = part("cafehold")
 }
+
+extension MoveCrowd {
+    /// move-crowd-r4: when every roam candidate is refused by goal / leg, the refused one with the most clearance that passes every other rule is taken (`MOVECROWD_OFF=fallback` = none).
+    nonisolated(unsafe) static var fallbackOn = part("fallback")
+    nonisolated(unsafe) static var fallbacks = 0
+}
+extension BlobBrain {
+    /// How far a spot is from every other body and from where each is walking to (the smallest).
+    func crowdClearance(_ p: SIMD2<Float>) -> Float {
+        var m: Float = 9
+        for o in socialOthers() where o !== self {
+            m = min(m, simd_distance(o.position, p))
+            if case .walk(let t, _) = o.script { m = min(m, simd_distance(t, p)) }
+        }
+        return m
+    }
+}

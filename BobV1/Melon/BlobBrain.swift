@@ -1087,6 +1087,7 @@ final class BlobBrain {
         var best: (SIMD2<Float>, Float)?
         var valid = 0
         let crowdGoal = MoveCrowd.goalOn && crowdLive          // (move-crowd-r1; read once)
+        var crowdFallback: (SIMD2<Float>, Float)?
         let mixTries = MoveMix.on ? 2 : 1
         for attempt in 0..<mixTries {
         if attempt == 1 { if best != nil { break }; lo = zone != nil ? 2.5 : 1.5; guard maxL > lo else { break }; valid = 0 }
@@ -1096,9 +1097,11 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
-            if crowdGoal, simd_length(cand - raw) < 0.15, d > lo, d < maxL, !crowdGoalFree(cand) || (attempt == 0 && MoveCrowd.legOn && !crowdLegFree(from: here, to: cand)) { continue }          // (move-crowd-r1 goal / leg: cheap, so before the floor and route checks; nobody stands at or walks to within the gap of it, and the leg keeps the gap from the others' walks)
+            var crowdRefused = false
+            if crowdGoal, simd_length(cand - raw) < 0.15, d > lo, d < maxL, !crowdGoalFree(cand) || (attempt == 0 && MoveCrowd.legOn && !crowdLegFree(from: here, to: cand)) { if best != nil || !MoveCrowd.fallbackOn { continue }; crowdRefused = true }          // (move-crowd-r1 goal / leg: cheap, so before the floor and route checks; nobody stands at or walks to within the gap of it, and the leg keeps the gap from the others' walks)
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             if attempt == 0, partActive, !partOK(cand) { continue }          // (best-friend-r1 round 6: the two part after a block)
+            if crowdRefused { if MoveCrowd.fallbackOn { let cl = crowdClearance(cand); if crowdFallback == nil || cl > crowdFallback!.1 { crowdFallback = (cand, cl) } }; continue }          // (move-crowd-r4: a refused goal that passes every other rule is remembered: the one with the most clearance is taken if nothing else passes)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
@@ -1127,6 +1130,7 @@ final class BlobBrain {
             if valid >= (MoveMix.on ? MoveMix.roamCandidates : 6) { break }
         }
         }
+        if best == nil, let f = crowdFallback { best = (f.0, 0); MoveCrowd.fallbacks += 1 }          // (move-crowd-r4: never no goal because of the crowd rules: StuckDetectorTests saw a roamer stand 46 s)
         if best != nil { partDone() }
         if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
