@@ -27,31 +27,24 @@ struct WalkEndState {
 }
 
 extension BlobBrain {
-    static let walkEndWindow: Float = 0.4
-    /// (round 3) the low-pass time constant (s) of the anchor and squash in the window: the stand's rise after the walk (the body rose ~3 cm in two steps 3 steps after the end, and the attached
-    /// feet with it: the probe's 50 ms foot pop) is followed smoothly; the filter hands back to the raw pose over the window's last 0.1 s (it has converged by then: no catch-up).
-    static let walkEndTau: Float = 0.08
+    static let walkEndWindow: Float = 0.3
 
+    /// The hand-off's jump (anchor and squash) is measured on the first stand step and faded out over `walkEndWindow` (smoothstep): continuous, no catch-up at the end.
     func walkEndSquash(_ sq: Float, _ dt: Float) -> Float {
         let walking = isWalkScript
         if social != nil || held { walkEnd.t = 0 }
-        if walkEnd.wasWalk && !walking && social == nil && mealFinalYaw == nil && !isDining { walkEnd.t = Self.walkEndWindow }
+        if walkEnd.wasWalk && !walking && social == nil && mealFinalYaw == nil && !isDining { walkEnd.t = Self.walkEndWindow; walkEnd.fresh = true; walkEnd.offS = (walkEnd.lastSquash ?? sq) - sq }
         walkEnd.wasWalk = walking
         var out = sq
-        if walkEnd.t > 0, let last = walkEnd.lastSquash { out = last + (sq - last) * walkEndAlpha(dt) }
+        if walkEnd.t > 0 { let u = walkEnd.t / Self.walkEndWindow; out = sq + walkEnd.offS * u * u * (3 - 2 * u) }
         walkEnd.lastSquash = out
         walkEnd.t = max(0, walkEnd.t - dt)
         return out
     }
-    /// The filter's step weight: 1 - e^(-dt / tau), rising to 1 over the window's last 0.1 s.
-    func walkEndAlpha(_ dt: Float) -> Float {
-        let a = 1 - expf(-dt / Self.walkEndTau)
-        let tail = min(1, max(0, (0.1 - walkEnd.t) / 0.1))
-        return a + (1 - a) * tail
-    }
     func walkEndAnchor(_ a: SIMD3<Float>) -> SIMD3<Float> {
+        if walkEnd.fresh { walkEnd.offA = (walkEnd.lastAnchor ?? a) - a; walkEnd.fresh = false }
         var out = a
-        if walkEnd.t > 0, let last = walkEnd.lastAnchor { out = last + (a - last) * walkEndAlpha(1.0 / 60) }
+        if walkEnd.t > 0 { let u = min(1, (walkEnd.t + 1.0 / 60) / Self.walkEndWindow); out = a + walkEnd.offA * u * u * (3 - 2 * u) }
         walkEnd.lastAnchor = out
         return out
     }
