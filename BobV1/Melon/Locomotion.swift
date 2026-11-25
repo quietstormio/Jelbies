@@ -105,6 +105,12 @@ struct GaitDriver {
     nonisolated(unsafe) static var hopEase = ProcessInfo.processInfo.environment["HOPEASE_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "HopEase") != nil && UserDefaults.standard.integer(forKey: "HopEase") == 0)
     static let easeTime: Float = 0.06
     private var crouchK0: Float = 0, crouchSy0: Float = 1, landSy0: Float = 1
+    /// glitch-hunt-r5 (2026-11-24): a hop's crouch set the attractor straight to its own grounded anchor and a yaw-only rotation; the pose he stood in had its anchor 4.4 cm lower
+    /// (and his attention pitch), so the attractor stepped 4.4 cm in one step at every hop's start and the arm capsules riding it popped ~9 cm (jacks: 30 a take). The crouch now
+    /// blends from the standing anchor / rotation over `startEaseTime`. `-HopStartEase 0` (env HOPSTART_OFF=1) = the step.
+    nonisolated(unsafe) static var hopStartEase = ProcessInfo.processInfo.environment["HOPSTART_OFF"] != "1" && !(DevArgs.enabled && UserDefaults.standard.object(forKey: "HopStartEase") != nil && UserDefaults.standard.integer(forKey: "HopStartEase") == 0)
+    static let startEaseTime: Float = 0.12
+    private var crouchA0 = SIMD3<Float>.zero, crouchQ0 = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), crouchEaseOK = false
 
     var isBusy: Bool { phase != .idle }
     /// A plain hop is running (crouch, air or landing; not a flip or the belly slide, which have their own bean handling).
@@ -215,6 +221,8 @@ struct GaitDriver {
         yaw0 = pose.yaw
         yaw1 = simd_length(d) > 1e-3 ? atan2f(d.x, d.y) : yaw0
         move = .hop; phase = .crouch; t = 0; tMove = 0
+        crouchA0 = sim.attractor.anchor; crouchQ0 = sim.attractor.rotation          // (glitch-hunt-r5: where the hold was, for `hopStartEase`)
+        crouchEaseOK = sim.attractor.strength > 1 && simd_distance(crouchA0, pose.centroid) < 0.2          // (a body held by nothing / a stale anchor: no blend)
         crouchK0 = Self.hopEase ? sim.attractor.strength : 0; crouchSy0 = sim.attractor.squash          // (glitch-hunt-r1: the hold and squash he had are handed over, not dropped)
         groundFrom = sim.floorY; groundTo = hopToGround ?? sim.floorY; hopToGround = nil
         self.chained = chained
@@ -279,6 +287,12 @@ struct GaitDriver {
             let yawNow = move == .flip ? yaw0 : yawEase(t / (tc + 0.3))
             if move == .flip { flipClock = min(t, tc) }
             setUpright(sim, xz: from, yaw: yawNow, squash: sy, lift: 0, strength: k)
+            let easeT = min(Self.startEaseTime, 0.8 * tc)          // (done inside the crouch: a chained hop's crouch is only 0.05 s, and the take-off must not cut the blend)
+            if Self.hopStartEase, crouchEaseOK, move == .hop, t < easeT {          // (glitch-hunt-r5: the crouch takes the anchor / rotation over from the pose he stood in)
+                let w = smooth(t / easeT)
+                sim.attractor.anchor = crouchA0 + (sim.attractor.anchor - crouchA0) * w
+                sim.attractor.rotation = simd_slerp(crouchQ0, sim.attractor.rotation, w)
+            }
             if move == .flip { tuckFeet(sim, u: 0, amp: 0, ramp: Self.flipFootGrip * smooth(t / tc)) }       // the soles follow the squashed rigid pose from the start of the crouch
             if t >= tc { phase = .air; t = 0; tMove = tc }
 

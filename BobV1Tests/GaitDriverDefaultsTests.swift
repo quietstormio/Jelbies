@@ -30,7 +30,9 @@ final class GaitDriverDefaultsTests: XCTestCase {
     func testOrdinaryHopAndFlipAreUnchangedByTheNewKnobs() {
         let savedEase = GaitDriver.hopEase          // (the digests were frozen before glitch-hunt-r1's eased hop hand-overs: this test pins the trick knobs' defaults, so it compares with that ease off)
         GaitDriver.hopEase = false
-        defer { GaitDriver.hopEase = savedEase }
+        let savedStart = GaitDriver.hopStartEase          // (glitch-hunt-r5's eased hop start: off for the frozen digests too)
+        GaitDriver.hopStartEase = false
+        defer { GaitDriver.hopEase = savedEase; GaitDriver.hopStartEase = savedStart }
         let hop = Self.digest({ $0.brain.startHopPlay(sim: $0.sim) }, seconds: 1.6)
         let flip = Self.digest({ $0.brain.startFlip(sim: $0.sim) }, seconds: 2.4)
         if Self.goldenHop.isEmpty {
