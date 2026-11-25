@@ -427,6 +427,12 @@ extension GameCare {
                         let fx = m.path.first.map { b.fixed($0) }
                         let others = g.members.filter { $0 !== m }.map { o in String(format: "m%d %@ (%.2f,%.2f)", o.actor.id, "\(o.state)", Self.floorPos(o.actor.brain!, o.actor.sim).x, Self.floorPos(o.actor.brain!, o.actor.sim).y) }.joined(separator: "; ")
                         Self.crowdLog(String(format: "t=%.1f HESITATION(visible) member %d at (%.2f,%.2f) held=%d idleNow=%d act=%@ script=%@ restT=%.2f path=%@ firstWpResolved=%@ reqWp=%@ others=[%@]", cs.clock, m.actor.id, pos.x, pos.y, hold ? 1 : 0, idleNow ? 1 : 0, "\(b.activity)", String("\(b.script)".prefix(60)), b.restTimer, m.path.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) }.joined(separator: ">"), fx.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", m.reqWp.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", others))
+                        do {          // (move-crowd-r3 diagnosis: why the walker is slow: held by a body on its leg, a turn on the spot, a wait, the nearest body)
+                            var nd: Float = 9, nw = ""
+                            for (k, o) in book.actors.enumerated() { if let ob = o.brain, ob !== b { let d = simd_distance(Self.floorPos(ob, o.sim), pos); if d < nd { nd = d; nw = "actor \(k) id \(o.id) act \(ob.activity)" } } }
+                            for og in cs.live.values { for om in og.members where om !== m { let d = simd_distance(Self.floorPos(om.actor.brain!, om.actor.sim), pos); if d < nd { nd = d; nw = "member \(om.actor.id) \(om.state)" } } }
+                            Self.crowdLog(String(format: "t=%.1f HESITWHY member %d heldByPeer=%d steerWait=%.2f yieldT=%.2f route=%d spotTurn=%d feetActive=%d planFails=%d stall=%.2f nearest=%.2f (%@) job=%@", cs.clock, m.actor.id, b.heldByPeer ? 1 : 0, b.steerWait, b.yieldT, b.route.count, b.peerClock - b.spotTurnClock < 0.6 ? 1 : 0, b.feet.active ? 1 : 0, b.planFails, b.steerStall, nd, nw, "\(String(describing: b.job))"))
+                        }
                     }
                 } else if speed >= 0.15 { m.slowT = 0; m.slowCounted = false }
                 if hold { if !m.held { m.held = true; b.requestNow(.goTo(pos)) }; continue }
