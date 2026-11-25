@@ -335,6 +335,29 @@ final class GlitchProbe {
         }
     }
 
+    // MARK: props (glitch-hunt-r2): a held / tossed food piece and the play ball. Logged as `kind=prop` when the position deviates from its motion by more than
+    // `propCm` in one step (a held piece snapping), or jumps more than `propJumpU` (a teleport); a prop that appears / disappears is logged as `kind=propshow`.
+    private var propPrev: [String: (p: SIMD3<Float>, v: SIMD3<Float>?)] = [:]
+    var propCm: Float = 3, propJumpU: Float = 0.3
+    func recordProps(_ props: [(key: String, pos: SIMD3<Float>)], steps: Int, scene: String, wipe: Float) {
+        guard GlitchProbe.on, steps > 0 else { return }
+        let now = CACurrentMediaTime()
+        let ctx = "scene=\(scene) wipe=\(String(format: "%.2f", wipe))\(tag.isEmpty ? "" : " tag=\(tag)")"
+        var seen = Set<String>()
+        for (k, p) in props {
+            seen.insert(k)
+            guard let o = propPrev[k] else { propPrev[k] = (p, nil); burst.add(GlitchEvent(kind: "propshow", size: 0, perStep: 0, detail: "prop=\(k) show=1"), who: k, ctx: ctx, now: now); continue }
+            let v = (p - o.p) / Float(steps)
+            if simd_length(v) > propJumpU { burst.add(GlitchEvent(kind: "prop", size: simd_length(v) * 100, perStep: simd_length(v) * 100, detail: "prop=\(k) jump=1"), who: k, ctx: ctx, now: now) }
+            else if let v0 = o.v, k != "ball" {          // (the ball bounces and is kicked: only its teleports count)
+                let err = simd_distance(v, v0) * 100
+                if err > propCm { burst.add(GlitchEvent(kind: "prop", size: err, perStep: err, detail: String(format: "prop=%@ jump=0 move=%.1f was=%.1f", k, simd_length(v) * 100, simd_length(v0) * 100)), who: k, ctx: ctx, now: now) }
+            }
+            propPrev[k] = (p, v)
+        }
+        for k in propPrev.keys where !seen.contains(k) { propPrev[k] = nil; burst.add(GlitchEvent(kind: "propshow", size: 0, perStep: 0, detail: "prop=\(k) show=0"), who: k, ctx: ctx, now: now) }
+    }
+
     private func emit(_ o: GlitchBurst.Open) {
         counts[o.ev.kind, default: 0] += 1
         NSLog("[glitch] kind=%@ who=%@ size=%.3f step=%.3f n=%d %@ %@", o.ev.kind, o.who, o.ev.size, o.ev.perStep, o.n, o.ev.detail, o.ctx)
