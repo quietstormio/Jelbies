@@ -52,12 +52,13 @@ final class ShowStayHomeTests: XCTestCase {
         XCTAssertTrue(care.store.wear(.flowerCrown, on: 2))
         try putToBed(r, 1)
         XCTAssertEqual(head(r, 2), WearLook.flowerCrown.rawValue, "the housemate is dressed before the Show")
-        let sleeper = snap(r, 1), awake = snap(r, 2)
+        let sleeper = snap(r, 1)
+        var awake = snap(r, 2)          // (re-taken every step until the housemate leaves the room: the Show opens with a fade, and an awake housemate lives on normally until the swap under the white)
         var badWear = 0
         care.startShow(jelly: 0, rank: .puddle, seed: 5)
         XCTAssertNil(care.showBook.wait, "a sleeping housemate does not hold the Show up")
         var woke = false
-        run(r, 8) { if !care.showBook.roomAway, head(r, 2) != WearLook.flowerCrown.rawValue { badWear += 1 }; return care.show.onStage }
+        run(r, 8) { if !care.showBook.roomAway { awake = snap(r, 2) }; if !care.showBook.roomAway, head(r, 2) != WearLook.flowerCrown.rawValue { badWear += 1 }; return care.show.onStage }
         XCTAssertTrue(care.show.onStage)
         run(r, 3) { if !r.actors[1].brain!.isSleeping { woke = true }; return false }
         XCTAssertTrue(care.showStaysHome(1) && care.showStaysHome(2))
