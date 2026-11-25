@@ -13,6 +13,10 @@ import Foundation
 import QuartzCore
 import simd
 
+#if targetEnvironment(simulator)
+nonisolated(unsafe) private var laneLogN = 0
+#endif
+
 extension GameCare {
     func wireGroom() {
         groom.onSwap = { [weak self] in self?.groomSwap($0) ?? false }
@@ -134,6 +138,15 @@ extension GameCare {
         }
         for (k, a) in mine.enumerated() {
             guard let b = a.brain, let outAt = book.outAt[a.id] else { continue }
+            #if targetEnvironment(simulator)
+            if ClipProbe.on, !book.laneDone.contains(a.id), k >= 1 {
+                laneLogN += 1
+                if laneLogN % 6 == 0 {
+                    let others = mine.filter { $0.id != a.id }.compactMap { o -> String? in o.brain.map { String(format: "%d@(%.2f,%.2f)", o.id, GameCare.floorPos($0, o.sim).x, GameCare.floorPos($0, o.sim).y) } }
+                    NSLog("[lane] id=%d t=%.2f root=(%.2f,%.2f) floor=(%.2f,%.2f) act=%@ others %@", a.id, groom.cheerT - outAt, b.px, b.pz, GameCare.floorPos(b, a.sim).x, GameCare.floorPos(b, a.sim).y, "\(b.activity)", others.joined(separator: " "))
+                }
+            }
+            #endif
             // the doorway: arms forward while he is in or near the frame (the opening is 1.40, his belly 1.17, the arms stick out another 0.4); on the pavement he is sent on to his spot
             let fy = GameCare.floorPos(b, a.sim).y, zf = GroomScenery.frontZ
             let inDoor = fy > zf - 1.0 && fy < zf + 2.5 && !book.laneDone.contains(a.id)
