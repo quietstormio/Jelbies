@@ -11,7 +11,7 @@ extension BlobBrain {
     nonisolated(unsafe) static var walkEndSettle: Bool = {
         if let e = ProcessInfo.processInfo.environment["WALKENDSETTLE"] { return e != "0" }
         if DevArgs.enabled, UserDefaults.standard.object(forKey: "WalkEndSettle") != nil { return UserDefaults.standard.integer(forKey: "WalkEndSettle") != 0 }
-        return true
+        return false          // (OFF: the rig A/B moved little - 6 walks, pops in the 1.5 s after the end 39 -> 35, >= 5 cm 16 -> 16, worst 6.6 -> 6.6; `-WalkEndSettle 1` to try)
     }()
 }
 
