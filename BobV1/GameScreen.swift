@@ -1106,6 +1106,12 @@ struct GameScreen: View {
             for id in owned where care.store.count(id) < 1 { care.store.grant(id) }
             care.requestClean()
         }
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        if d.object(forKey: "Monkey") != nil || d.string(forKey: "MonkeyScript") != nil {          // no-stuck-r1: the soak monkey (Dev/MonkeySoak.swift), alongside the rest of the script
+            let ui = MonkeySoak.Bindings(open: open, roster: roster, picker: picker, book: book, goOut: goOut)
+            Task { @MainActor in await MonkeySoak.run(care: care, ui: ui) }
+        }
+        #endif
         if d.string(forKey: "FreezeScript") != nil || d.integer(forKey: "FreezeProbe") != 0 { for _ in 0..<600 where LaunchGate.shared.visible || care.lastBrain == nil { await sleep(0.1) }; await DevFreezeScript.run(care: care, script: d.string(forKey: "FreezeScript"), probe: d.integer(forKey: "FreezeProbe") != 0, sleep: sleep) }          // capture aid (DevFreezeScript.swift)
         if let a = d.string(forKey: "GameAction") {
             await sleep(d.double(forKey: "GameActionDelay") > 0 ? d.double(forKey: "GameActionDelay") : 4)
