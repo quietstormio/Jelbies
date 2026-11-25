@@ -71,6 +71,7 @@ enum MonkeySoak {
             var r = g.next(total), pick = menu[0].0
             for (name, w) in menu { if r < w { pick = name; break }; r -= w }
             // legal input only: at home with no trip on, the home buttons; during a trip the monkey waits for it (its own trip step brings it home)
+            if UIApplication.shared.applicationState != .active { await sleep(1); continue }          // (the app is in the background: nobody can press anything)
             if care.tripActive || care.raceBusy || care.bath.active {          // (the bath's own screen: no care menu)
                 // a trip that began after its own step gave up waiting (the park's walk-out procession): the player goes home from it after a while
                 awayT += 2

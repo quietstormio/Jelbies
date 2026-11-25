@@ -21,6 +21,7 @@
 
 #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
 import Foundation
+import QuartzCore
 import simd
 
 @MainActor
@@ -66,8 +67,12 @@ final class StuckDetector {
     }
 
     /// Once per fixed step (GameCare.tick, Jelly 0's stage tick).
+    private var lastTickHost: Double = 0
     func tick(care: GameCare, dt: Float) {
         guard Self.on else { return }
+        let host = CACurrentMediaTime()
+        if lastTickHost > 0, host - lastTickHost > 1, !taps.isEmpty { taps.removeAll() }          // (the stage was paused - the app in the background: a tap made then cannot be judged by the phase counter)
+        lastTickHost = host
         simTime += dt; acc += dt
         let p = care.focus.phase
         if p == phaseAge.0 { phaseAge.1 += dt } else { phaseAge = (p, 0); phaseChanges += 1 }

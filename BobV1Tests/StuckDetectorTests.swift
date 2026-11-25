@@ -53,6 +53,23 @@ final class StuckDetectorTests: XCTestCase {
         XCTAssertEqual(events["autonomy-off", default: 0] + events["motionless", default: 0], 0, dump())
     }
 
+    /// The general release guard (GameCare+StuckRelease.swift) frees the old freeze by itself: the come-here fixes off, the guard on.
+    func testTheGeneralGuardFreesTheOldFreeze() {
+        FocusGroup.handBackFix = false; FocusGroup.netEnabled = false
+        GameCare.stuckReleaseOn = true
+        let r = FocusAnyRun(count: 3, peers: true); Self.keep.append(r); r.run(1.5)          // (the guard sees everyone free first)
+        let released0 = r.care.stuckReleased
+        let a = GameCamera.callSpot
+        r.place(1, at: SIMD2(-2.2, -1.8)); r.place(2, at: SIMD2(2.2, -1.8)); r.place(0, at: SIMD2(a.x, a.y - 0.2))
+        r.care.comeHereEveryone()
+        XCTAssertTrue(r.run(4) { r.care.focusGroup.arrived.contains(0) && r.care.focus.phase == .approaching })
+        r.care.cancelGroupAction()
+        r.run(10)
+        XCTAssertTrue(r.actors[0].brain!.autonomy, "the guard gave Jelly 0 his life back")
+        XCTAssertEqual(r.care.stuckReleased - released0, 1, "one release, logged as [stuck] released")
+        XCTAssertGreaterThanOrEqual(events["released-autonomy-off", default: 0], 1, dump())
+    }
+
     // (b) food / drink dead until a relaunch: a lost Come call left `callRunning` set
     private func room() -> DiningJellyTests.Room {
         let r = DiningJellyTests.Room(count: 3, wander: true)
