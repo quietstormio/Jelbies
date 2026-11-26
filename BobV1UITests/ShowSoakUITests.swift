@@ -151,8 +151,14 @@ final class ShowSoakUITests: XCTestCase {
             let key = "\(phase)#\(turns)#\(pre ? "pre" : "post")"
             if scenario == "bg", bgPhases.contains(phase), fired.insert(phase).inserted {
                 log("[\(tag)] background at \(phase) (turns=\(turns) pre=\(pre))")
-                XCUIDevice.shared.press(.home); sleep(UInt32(2 + rand(3))); app.activate()
-                let tb = Date(); while app.state != .runningForeground, Date().timeIntervalSince(tb) < 20 { usleep(300_000) }
+                XCUIDevice.shared.press(.home); sleep(UInt32(2 + rand(3)))
+                // `app.activate()` leaves this headless simulator's app in .runningBackground (state 3) for good, so the return is asked of the outside driver:
+                // a file at SOAK_OUT/fg.request is answered by `simctl launch <udid> io.mgsllc.BobV1` (an already running app is just brought to the front), and the answer is fg.done
+                try? FileManager.default.removeItem(atPath: "\(out)/fg.done")
+                FileManager.default.createFile(atPath: "\(out)/fg.request", contents: nil)
+                let tb = Date(); while !FileManager.default.fileExists(atPath: "\(out)/fg.done"), Date().timeIntervalSince(tb) < 30 { usleep(300_000) }
+                if app.state != .runningForeground { app.activate() }
+                let tc = Date(); while app.state != .runningForeground, Date().timeIntervalSince(tc) < 20 { usleep(300_000) }
                 log("[\(tag)] foreground again: state=\(app.state.rawValue)"); sleep(2)
                 continue
             }

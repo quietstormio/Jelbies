@@ -150,6 +150,8 @@ final class ShowSoakProbe {
             o["lineFormed"] = care.showLineFormed()
             o["floors"] = care.soakFloors()
             o["allGates"] = care.soakRivalGates()
+            let au = AudioHub.shared.soakAudio()
+            o["aPlay"] = au.trackPlaying; o["aLoud"] = Double(au.loudest); o["aEng"] = au.engineRunning; o["aScene"] = au.directorScene; o["aTrack"] = au.directorTrack; o["aAct"] = au.active
             if let i = show.rivalTurn { o["rGates"] = care.soakWalkGates(i) }
         }
         return o
