@@ -151,7 +151,9 @@ final class ShowSoakUITests: XCTestCase {
             let key = "\(phase)#\(turns)#\(pre ? "pre" : "post")"
             if scenario == "bg", bgPhases.contains(phase), fired.insert(phase).inserted {
                 log("[\(tag)] background at \(phase) (turns=\(turns) pre=\(pre))")
-                XCUIDevice.shared.press(.home); sleep(UInt32(2 + rand(3))); app.activate(); sleep(2)
+                XCUIDevice.shared.press(.home); sleep(UInt32(2 + rand(3))); app.activate()
+                let tb = Date(); while app.state != .runningForeground, Date().timeIntervalSince(tb) < 20 { usleep(300_000) }
+                log("[\(tag)] foreground again: state=\(app.state.rawValue)"); sleep(2)
                 continue
             }
             if scenario == "home", phase == homeAt, fired.insert("home").inserted {
