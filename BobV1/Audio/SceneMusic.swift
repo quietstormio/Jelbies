@@ -239,17 +239,23 @@ final class SceneMusicEngine {
         var offset = 0.0
         var startSeconds = 0.0
         let born = CACurrentMediaTime()
+        /// show-perfect-r1 (the music guard): when it started, and the player's sample position at the last health check (it must move).
+        var readyAt = 0.0
+        var lastSample: Int64?
+        var lastSampleHost = 0.0
         init(track: SceneTrack) { self.track = track }
     }
 
     private let engine = AVAudioEngine()
+    /// show-soak-r1 (dev probe, read-only): the engine is running.
+    var engineRunning: Bool { engine.isRunning }
     private var voices: [Voice] = []
     private var level: Float = 1
     private var configObserver: NSObjectProtocol?
     /// The once-only song that is playing: the wall-clock time its frame 0 would have been (a rebuild carries on from `now - origin`).
     private var songOrigin: (track: SceneTrack, host: Double)?
     /// Always on (a handful of lines per track change, none per frame): the phone's console shows what the engine was asked and what it did.
-    private func nlog(_ s: String) { NSLog("[audio] %@", s) }
+    private func nlog(_ s: String) { NSLog("[audio] %@", s); JLog.audio(s) }
 
     /// `-AudioLog 1`: why a scene voice did not start, how long it took, and what dropped / replayed it (the Jelly Show's dance song fails silently otherwise).
     private func alog(_ s: @autoclosure () -> String) { if AudioHub.audioLog { NSLog("[audio] %@", s()) } }
@@ -309,7 +315,7 @@ final class SceneMusicEngine {
         engine.connect(v.node, to: engine.mainMixerNode, format: r.format)
         if !engine.isRunning {
             engine.prepare()
-            do { try engine.start() } catch {
+            do { try engine.start(); pausedByHub = false; JLog.audio("scene engine started for \(v.track.rawValue)") } catch {
                 // the session can still be held by another app / mid route change: try again in a moment (keeps the decoded buffers), never drop the song at once
                 nlog("scene voice \(v.track.rawValue) engine start failed (attempt \(v.attempts + 1)): \(error)")
                 if EngineStartRetry.shouldRetry(attempt: v.attempts) {
@@ -329,7 +335,7 @@ final class SceneMusicEngine {
         if !v.stopping { v.fader.snap(0); v.fader.ramp(to: 1, over: v.fadeIn) }          // decoding can outlast the fade: fade in from the moment it really starts (never a pop-in)
         v.node.volume = v.stopping ? v.fader.level * level * v.track.gain : 0
         v.node.play()
-        v.ready = true; v.started = true
+        v.ready = true; v.started = true; v.readyAt = CACurrentMediaTime(); v.lastSample = nil
         if v.track.playsOnce { songOrigin = (v.track, CACurrentMediaTime() - v.startSeconds) }
         nlog("scene voice \(v.track.rawValue) started after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms: engineRunning=\(engine.isRunning) playing=\(v.node.isPlaying) nodeVolume=\(String(format: "%.2f", v.node.volume)) masterLevel=\(String(format: "%.2f", level)) fromSong=\(String(format: "%.1f", v.startSeconds)) s")
     }
@@ -363,7 +369,7 @@ final class SceneMusicEngine {
             v.node.volume = v.fader.level * level * v.track.gain
         }
         for v in voices where v.stopping && v.fader.level <= 0.0001 { drop(v) }
-        if voices.isEmpty, engine.isRunning { engine.stop() }
+        if voices.isEmpty, engine.isRunning { engine.stop(); JLog.audio("scene engine stopped (no voices)") }
     }
 
     private func drop(_ v: Voice) {
@@ -376,14 +382,76 @@ final class SceneMusicEngine {
     /// Memory warning: free every voice that is already fading out (the playing track stays).
     func trim() { for v in voices where v.stopping { drop(v) } }
 
-    func pause() { for v in voices where v.ready { v.node.pause() }; if engine.isRunning { engine.pause() } }
+    /// show-perfect-r1: the hub paused the engine itself (the app went to the background): its voices keep their scheduled audio, so a resume just starts them again. An engine that is found
+    /// stopped WITHOUT this (a route change, an interruption, a media services reset) may have lost what its nodes had scheduled, so it is never resumed: the voice is rebuilt.
+    private var pausedByHub = false
+    func pause() { JLog.audio("scene pause"); pausedByHub = true; for v in voices where v.ready { v.node.pause() }; if engine.isRunning { engine.pause() } }
     func resume() {
-        guard !voices.isEmpty else { return }
+        guard !voices.isEmpty else { pausedByHub = false; return }
+        JLog.audio("scene resume engineRunning=\(engine.isRunning) pausedByHub=\(pausedByHub)")
+        let paused = pausedByHub; pausedByHub = false
         if !engine.isRunning {
+            if !paused { restartAfterConfigChange(); return }
             do { try engine.start() } catch { restartAfterConfigChange(); return }
         }
         for v in voices where v.ready { v.node.play() }
     }
+    /// Everything stops and the engine is let go (the hub drops the whole engine after a media services reset, or when restarts keep failing, and makes a new one).
+    func shutdown() {
+        JLog.audio("scene engine shutdown")
+        if let o = configObserver { NotificationCenter.default.removeObserver(o); configObserver = nil }
+        for v in voices { v.cancelled = true; if v.node.engine != nil { v.node.stop(); engine.detach(v.node) } }
+        voices.removeAll()
+        if engine.isRunning { engine.stop() }
+    }
+    /// Test hook: the loudest sample on the mixer over `seconds` (the proof that a recovered voice is really AUDIBLE, not just flagged as playing).
+    func _peak(over seconds: Double) async -> Float {
+        guard engine.isRunning else { return 0 }
+        let box = PeakBox()
+        let mixer = engine.mainMixerNode
+        mixer.installTap(onBus: 0, bufferSize: 2048, format: nil) { buf, _ in
+            guard let d = buf.floatChannelData else { return }
+            var m: Float = 0
+            for c in 0..<Int(buf.format.channelCount) { for i in 0..<Int(buf.frameLength) { m = max(m, abs(d[c][i])) } }
+            box.add(m)
+        }
+        try? await Task.sleep(for: .seconds(seconds))
+        mixer.removeTap(onBus: 0)
+        return box.value
+    }
+    private final class PeakBox: @unchecked Sendable {
+        private let lock = NSLock(); private var m: Float = 0
+        func add(_ x: Float) { lock.lock(); m = max(m, x); lock.unlock() }
+        var value: Float { lock.lock(); defer { lock.unlock() }; return m }
+    }
+
+    /// show-perfect-r1 (the music guard): what the scene voice for `t` is really doing. `.loading`: asked for, decoding or just started (the render clock has not begun: give it a moment).
+    /// `.stalled(why)`: the engine is not running, the node is not playing, or its render clock has stood still since the last check (a stopped engine can leave `isPlaying` true).
+    enum Health: Equatable { case absent, loading, healthy, stalled(String) }
+    func health(of t: SceneTrack) -> Health {
+        guard let v = voices.last(where: { $0.track == t && !$0.stopping }) else { return .absent }
+        let now = CACurrentMediaTime()
+        guard v.ready, v.started else { return now - v.born > 6 ? .stalled("voice never became ready after \(Int(now - v.born)) s") : .loading }
+        if !engine.isRunning { return pausedByHub ? .loading : .stalled("engine not running") }
+        if !v.node.isPlaying { return .stalled("node not playing") }
+        if now - v.readyAt < 0.4 { return .healthy }          // (just started: engine running + node playing is all that can be asked yet)
+        guard let nt = v.node.lastRenderTime, nt.isSampleTimeValid, let pt = v.node.playerTime(forNodeTime: nt) else { return .stalled("no render time") }
+        let sample = Int64(pt.sampleTime)
+        if let last = v.lastSample, last == sample {          // (lastSampleHost = when the position last MOVED)
+            return now - v.lastSampleHost >= 0.9 ? .stalled("render clock stuck at sample \(sample)") : .healthy
+        }
+        v.lastSample = sample; v.lastSampleHost = now
+        return .healthy
+    }
+    /// Rebuilds the voice for the guard: the engine is stopped first, so a half-dead engine starts clean; a once-only song carries on where it has got to.
+    func rebuild(reason: String) {
+        nlog("scene rebuild: \(reason)")
+        if engine.isRunning { engine.stop() }
+        restartAfterConfigChange()
+    }
+    /// Test hooks (the fault injection): the engine stops under the voice, as a route change / media services reset does.
+    func _injectEngineStop() { engine.stop() }
+    var _voiceCount: Int { voices.count }
 
     /// A voice is decoded but not playing (the engine stopped under it): rebuild.
     func recoverIfStalled() {

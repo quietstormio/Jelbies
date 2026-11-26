@@ -127,6 +127,7 @@ final class AudioHub {
     /// `outputVolume` 0 + category `ambient` is the silent switch or the volume down; `playAndRecord` ignores the switch.
     private func slog(_ what: String) {
         let s = AVAudioSession.sharedInstance()
+        JLog.audio("\(what) | cat=\(s.category.rawValue) opts=\(s.categoryOptions.rawValue) vol=\(String(format: "%.2f", s.outputVolume)) other=\(s.isOtherAudioPlaying) mic=\(micSession) ears=\(earsSession) scene=\(director.scene) active=\(active)")
         NSLog("[audio] %@ | category=%@ options=%lu outputVolume=%.2f otherAudio=%d silenceHint=%d | musicOn=%d musicVol=%.2f level=%.3f duck=%.2f danceGain=%.2f stormDuck=%.2f resumeFade=%.2f muted=%d started=%d active=%d mic=%d ears=%d scene=%@",
               what, s.category.rawValue, s.categoryOptions.rawValue, s.outputVolume, s.isOtherAudioPlaying, s.secondaryAudioShouldBeSilencedHint,
               settings.musicOn, settings.musicVolume, musicLevelNow, duck.gain, danceGain, stormDuck, resumeFade, muted, started, active, micSession, earsSession, String(describing: director.scene))
@@ -198,18 +199,24 @@ final class AudioHub {
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             let type = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
-            Task { @MainActor in self?.slog("interruption \(type.map { $0 == .began ? "began" : "ended" } ?? "?")"); if type == .ended { self?.refreshOtherAudio(); self?.resumeAfterInterruption(verify: true) } }
+            let shouldResume = ((n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt).map { AVAudioSession.InterruptionOptions(rawValue: $0).contains(.shouldResume) }) ?? false
+            Task { @MainActor in
+                self?.slog("interruption \(type.map { $0 == .began ? "began" : "ended shouldResume=\(shouldResume)" } ?? "?")")
+                if type == .began { self?.interruptedSince = CACurrentMediaTime() }
+                // show-perfect-r1: an interruption that ends is ALWAYS resumed, shouldResume or not (the game's music mixes with everything: it never waits for the system's say-so); the guard then judges the voice
+                if type == .ended { self?.interruptedSince = nil; self?.refreshOtherAudio(); self?.resumeAfterInterruption(verify: true); self?.guardNudge() }
+            }
         })
         observers.append(nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
             let why = (n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) ?? 99
             let out = AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")
-            Task { @MainActor in self?.slog("route change reason=\(why) outputs=\(out)"); self?.watchdog.nudge() }          // a headphone / Bluetooth change can stop the players without a notification: re-check soon
+            Task { @MainActor in self?.slog("route change reason=\(why) outputs=\(out)"); self?.watchdog.nudge(); self?.guardNudge() }          // a headphone / Bluetooth change can stop the players without a notification: re-check soon
         })
         observers.append(nc.addObserver(forName: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.slog("silenceSecondaryAudioHint"); self?.refreshOtherAudio(); self?.watchdog.nudge() }
         })
         observers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.slog("media services reset"); self?.resumeAfterInterruption(verify: true) }
+            Task { @MainActor in self?.slog("media services reset"); self?.recreateSceneEngine(why: "media services reset"); self?.resumeAfterInterruption(verify: true); self?.guardNudge() }
         })
         lastTick = CACurrentMediaTime()
         let t = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in Task { @MainActor in self?.tick() } }
@@ -1268,6 +1275,7 @@ final class AudioHub {
                 if scene == nil { scene = SceneMusicEngine() }
                 scene?.play(t, fade: fade)
             case .sceneOff(let fade):
+                JLog.audio("scene off ask fade=\(String(format: "%.2f", fade))")
                 scene?.stopAll(fade: fade)
             }
         }
@@ -1312,6 +1320,7 @@ final class AudioHub {
                 if sessionRetry == nil { resumeAfterInterruption(verify: true, fadeIn: false) }          // a session retry in flight resumes by itself: don't hammer it every 5 s
             }
         } else { watchdog.reset() }
+        sceneGuardTick(dt: dt)
         mainSlew.update(mode: director.modeGain(playing: input.playing), duck: director.duckGain, dt: dt)
         for i in decks.indices { decks[i].fader.update(dt: dt) }
         scene?.update(dt: dt)
@@ -1324,6 +1333,89 @@ final class AudioHub {
         if let l = layer, l.fader.level <= 0.0001, l.fader.target == 0, l.player.isPlaying { l.player.pause() }
         applyLevels()
     }
+
+    // MARK: the scene music guard (show-perfect-r1)
+
+    /// While a Show round (or any scene) wants music, the scene voice is checked twice a second: the engine runs, the node plays and its render clock advances. A voice that is not healthy for
+    /// `guardBadSeconds` is rebuilt (never stacked: the rebuild drops the old voice first) and the event is written to JLog. Also: the session category is put back after the voice input / mic changed it.
+    static let guardBadSeconds = 0.75, guardCheckEvery = 0.5
+    @ObservationIgnored private var guardClock = 0.0
+    @ObservationIgnored private var guardBad = 0.0
+    @ObservationIgnored private var guardCooldown = 0.0
+    @ObservationIgnored private var interruptedSince: Double?
+    @ObservationIgnored private(set) var guardRestarts = 0
+    @ObservationIgnored var guardLast = ""
+    func guardNudge() { guardBad = max(guardBad, Self.guardBadSeconds - 0.5); guardClock = Self.guardCheckEvery }
+    @ObservationIgnored private var guardFailStreak = 0
+    @ObservationIgnored private var guardCategoryBad = 0.0
+    @ObservationIgnored private var guardLevelLog = -100.0
+    private func sceneGuardTick(dt: Double) {
+        guard MusicWatchdog.on else { return }
+        guardClock += dt
+        guard guardClock >= Self.guardCheckEvery else { return }
+        let elapsed = guardClock; guardClock = 0
+        if guardCooldown > 0 { guardCooldown -= elapsed; return }
+        if let i = interruptedSince, CACurrentMediaTime() - i > 25 { interruptedSince = nil }          // (an interruption whose end never came: judge again)
+        guard !muted, started, active, !micSession, interruptedSince == nil, sessionRetry == nil, !pendingResume, settings.musicOn,
+              let t = director.sceneTrack, director.scene != .none, director.scene != .results, !_sceneEngineDisabled else { guardBad = 0; guardCategoryBad = 0; return }
+        refreshOtherAudio()          // (a stale "someone else is playing" is what silences the game's music for good)
+        if musicLevelNow <= 0.01 { guardBad = 0; return }
+        let m = musicLevelNow * duck.gain * AudioMix.music * danceGain * stormDuck * resumeFade
+        if m < 0.01, CACurrentMediaTime() - guardLevelLog > 5 {          // wanted, playing at the engine, and still inaudible: say which factor holds it down
+            guardLevelLog = CACurrentMediaTime()
+            JLog.audio("guard: scene \(t.rawValue) wanted but the level is \(String(format: "%.3f", m)): setting=\(String(format: "%.2f", musicLevelNow)) duck=\(String(format: "%.2f", duck.gain)) dance=\(String(format: "%.2f", danceGain)) storm=\(String(format: "%.2f", stormDuck)) resume=\(String(format: "%.2f", resumeFade)) other=\(otherAudioPlaying)")
+        }
+        if !earsSession {          // the voice input / mic changed the category and did not put it back (for 1.5 s: a mic bring-up is allowed its moment): put it back
+            let s = AVAudioSession.sharedInstance()
+            let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
+            if s.category != plan.category || s.categoryOptions != plan.options {
+                guardCategoryBad += elapsed
+                if guardCategoryBad > 1.5 {
+                    guardCategoryBad = 0
+                    JLog.audio("guard: session category is \(s.category.rawValue)/\(s.categoryOptions.rawValue), not \(plan.category.rawValue)/\(plan.options.rawValue): putting it back")
+                    setUpSession(offMain: true)
+                }
+            } else { guardCategoryBad = 0 }
+        }
+        guard let sc = scene else { guardBad += elapsed; if guardBad > Self.guardBadSeconds { guardFix(t, why: "no scene engine", absent: true) }; return }
+        switch sc.health(of: t) {
+        case .healthy, .loading: guardBad = 0; guardFailStreak = 0
+        case .absent:
+            guardBad += elapsed
+            if guardBad > Self.guardBadSeconds { guardFix(t, why: "no voice for \(t.rawValue)", absent: true) }
+        case .stalled(let why):
+            guardBad += elapsed
+            if guardBad > Self.guardBadSeconds { guardFix(t, why: why) }
+        }
+    }
+    private func guardFix(_ t: SceneTrack, why: String, absent: Bool = false) {
+        guardBad = 0; guardCooldown = 1.0; guardRestarts += 1; guardFailStreak += 1
+        guardLast = why
+        JLog.audio("guard restart #\(guardRestarts) (streak \(guardFailStreak)): scene \(t.rawValue) \(why)")
+        NSLog("[audio] guard restart: scene %@ %@", t.rawValue, why)
+        if guardFailStreak >= 3 || scene == nil { recreateSceneEngine(why: "guard restarts keep failing (\(why))"); guardFailStreak = 0 }          // (a dead engine is not asked again and again: a new one)
+        if absent || scene?.current != t { perform([.sceneOn(t, fade: 0.6)]) } else { scene?.rebuild(reason: why) }
+    }
+    /// A new `SceneMusicEngine` (after a media services reset, or restarts that keep failing); the scene's voice is asked for again by the next guard / ensure pass.
+    private func recreateSceneEngine(why: String) {
+        JLog.audio("scene engine recreated: \(why)")
+        scene?.shutdown()
+        scene = _sceneEngineDisabled ? nil : SceneMusicEngine()
+    }
+    /// Test / dev hooks (the fault injection).
+    func _guardHealth(_ t: SceneTrack) -> SceneMusicEngine.Health? { scene?.health(of: t) }
+    func _injectEngineStop() { scene?._injectEngineStop() }
+    func _injectMediaServicesReset() { NotificationCenter.default.post(name: AVAudioSession.mediaServicesWereResetNotification, object: AVAudioSession.sharedInstance()) }
+    func _scenePeak(_ seconds: Double) async -> Float { await scene?._peak(over: seconds) ?? 0 }
+    func _simulateInterruption(began: Bool, shouldResume: Bool) {
+        var info: [AnyHashable: Any] = [AVAudioSessionInterruptionTypeKey: (began ? AVAudioSession.InterruptionType.began : .ended).rawValue]
+        if !began { info[AVAudioSessionInterruptionOptionKey] = shouldResume ? AVAudioSession.InterruptionOptions.shouldResume.rawValue : 0 }
+        NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), userInfo: info)
+    }
+    func _simulateRouteChange(reason: AVAudioSession.RouteChangeReason) {
+        NotificationCenter.default.post(name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance(), userInfo: [AVAudioSessionRouteChangeReasonKey: reason.rawValue])
+    }
+    var _sceneVoiceCount: Int { scene?._voiceCount ?? 0 }
 
     private func applyLevels() {
         guard started else { return }
@@ -1378,3 +1470,24 @@ nonisolated private final class OpeningAudioPlayers: @unchecked Sendable {
         }
     }
 }
+
+#if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+// show-soak-r1: the Jelly Show soak probe's read-only view of the music (Dev/ShowSoakProbe.swift). Reads only.
+extension AudioHub {
+    struct SoakAudio {
+        var muted: Bool, started: Bool, active: Bool, musicOn: Bool, musicVolume: Float
+        var directorScene: String, directorTrack: String, engineCurrent: String, trackPlaying: Bool, loudest: Float
+        var levelNow: Float, duck: Float, danceGain: Float, stormDuck: Float, resumeFade: Float, mainGain: Double
+        var deckPlaying: Bool, inGap: Bool, roomTrack: String, micSession: Bool, otherAudio: Bool, engineRunning: Bool
+    }
+    func soakAudio() -> SoakAudio {
+        let t = director.sceneTrack
+        return SoakAudio(muted: muted, started: started, active: active, musicOn: settings.musicOn, musicVolume: settings.musicVolume,
+                         directorScene: String(describing: director.scene), directorTrack: t?.rawValue ?? "-", engineCurrent: scene?.current?.rawValue ?? "-",
+                         trackPlaying: t.map { scene?.isPlaying($0) ?? false } ?? false, loudest: scene?.loudest ?? 0,
+                         levelNow: musicLevelNow, duck: duck.gain, danceGain: danceGain, stormDuck: stormDuck, resumeFade: resumeFade, mainGain: mainSlew.gain,
+                         deckPlaying: deckPlaying, inGap: director.gapLeft != nil, roomTrack: director.current?.rawValue ?? "-", micSession: micSession,
+                         otherAudio: otherAudioPlaying, engineRunning: scene?.engineRunning ?? false)
+    }
+}
+#endif

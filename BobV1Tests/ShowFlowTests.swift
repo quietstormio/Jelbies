@@ -248,7 +248,7 @@ final class ShowFlowTests: XCTestCase {
             XCTAssertEqual(f.trickStage, .pick)
             var want = ["P:\(t.rawValue)", "aside:true"]
             let per = min(ShowFlow.entrantsPerTurn, n)
-            for i in (0..<per).map({ (turn * per + $0) % n }) { want += ["in:\(i)", "R\(i):\(f.sim!.rivalTurns[i][turn].trick.rawValue)", "out:\(i)"] }
+            for i in f.turnQueue(turn).prefix(per) { want += ["in:\(i)", "R\(i):\(f.sim!.rivalTurns[i][turn].trick.rawValue)", "out:\(i)"] }
             want.append("aside:false")
             XCTAssertEqual(log.a, want, "turn \(turn + 1)")
             XCTAssertEqual(f.sim!.turns.count, turn + 1)

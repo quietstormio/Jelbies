@@ -10,12 +10,12 @@ import QuartzCore
 
 extension GameCare {
     /// Where actor `aid` is meant to stand in the Trick round right now, nil when it has no seat (not a stage body, or not the Trick round).
-    /// Player: the middle, except while the entrants take their turn (the aside seat, then the middle again for `.playerBack`). A rival: the middle while she walks in and performs, else her rest seat.
+    /// Player: the middle, except while the entrants take their turn (the aside seat, then the middle again from the moment the last entrant's trick ends: `playerCalled` / `.playerBack`). A rival: the middle while she walks in and performs, else her rest seat.
     func showSeat(_ aid: Int) -> SIMD2<Float>? {
         guard show.onStage, showBook.trickSet else { return nil }
         let sideways = GameCamera.aspect > 1
         if aid == show.playerID {
-            if show.trickStage == .rivals { return show.rivalStep == .playerBack ? ShowStage.playerSpot : ShowStage.playerAside(sideways: sideways) }
+            if show.trickStage == .rivals { return show.rivalStep == .playerBack || show.playerCalled ? ShowStage.playerSpot : ShowStage.playerAside(sideways: sideways) }
             return ShowStage.playerSpot
         }
         guard let k = showBook.rivalBody.first(where: { $0.value == aid })?.key else { return nil }
@@ -170,7 +170,9 @@ extension GameCare {
             let d = simd_distance(here, seat)
             if d < Self.lineAt, !k.gliding { k.off = 0; k.still = 0; k.probe = here; book.keep[a.id] = k; continue }
             if !k.gliding {
-                let waiting = book.pendingWalks.contains { $0.id == a.id } || book.via[a.id] != nil
+                // show-perfect-r1: a body with a second leg to go is WAITING only while it stands at the end of its first leg (for the gate / the middle to clear). One that is "walking" somewhere short of it and goes nowhere
+                // (an entrant stood 1.0 from the middle for 10 s with `via` set, held the next entrant's walk in and was only freed by the hand-over cap) is just stalled: the keeper counts it and carries it.
+                let waiting = book.pendingWalks.contains { $0.id == a.id } || (book.via[a.id].map { simd_distance(here, $0.at) < 0.6 } ?? false)
                 if waiting { k.waited += dt; if k.waited > Self.lineWaitMax { k.off = max(k.off, k.budget + 1) } } else { k.off += dt }          // (a body waiting its turn for the gate or the middle is not late: the wait is bounded by the one it waits for, who is kept to his own allowance)
                 k.probeT += dt
                 if k.probeT >= Self.lineWindow {          // (net progress over a window, not step by step: a body held by a seated one jiggles a few cm and goes nowhere)

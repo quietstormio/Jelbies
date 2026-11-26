@@ -90,6 +90,9 @@ extension GameCare {
         show.rivalGiveUp = { [weak self] who in self?.showWalkExpired(who) ?? false }
         show.lineFormed = { [weak self] in self?.showLineFormed() ?? true }
         let d = UserDefaults.standard
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        ShowSoakProbe.shared.configure(show: show)          // (show-soak-r1: dev arguments only)
+        #endif
         if ShowCaptureArgs.auto(defaults: d) { show.auto = true }
         if DevArgs.enabled, d.object(forKey: "ShowHomeAfter") != nil { show.autoHomeAfter = Float(d.double(forKey: "ShowHomeAfter")) }
         // capture aid: -ShowRank puddle|pond|lagoon|ocean opens every rank up to it and picks it (dev arguments only: it writes Show progress)
@@ -158,9 +161,16 @@ extension GameCare {
     }
 
     /// The show seed: `-ShowSeed n`, else from the clock (the rivals come from the day, the player's rolls from this).
+    nonisolated(unsafe) static var showSeedListNext = 0
     static var showSeed: UInt64 {
         let d = UserDefaults.standard
         if d.object(forKey: "ShowSeed") != nil { return UInt64(max(d.integer(forKey: "ShowSeed"), 0)) }
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        if DevArgs.enabled, let l = d.string(forKey: "ShowSeedList") {          // show-soak-r1: `-ShowSeedList 3,17,40` = each show of this launch takes the next seed (round and round)
+            let seeds = l.split(separator: ",").compactMap { UInt64($0) }
+            if !seeds.isEmpty { defer { showSeedListNext += 1 }; return seeds[showSeedListNext % seeds.count] }
+        }
+        #endif
         return UInt64(Date().timeIntervalSince1970 * 1000) & 0xFFFFFF
     }
     /// The show's calendar day (`-ShowDay yyyymmdd` for captures).
@@ -249,6 +259,7 @@ extension GameCare {
             book.roomAway = true
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.danceRun = nil; book.flopT = nil; book.turned = []
             book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.winPending = false; book.enterDelay = nil
+            book.heading = [:]; book.via = [:]; book.pendingWalks = []; book.keep = [:]; book.touchT = [:]; book.retryAt = [:]          // (show-perfect-r1: a forfeited Show's walks never carry into the next one)
             let spots = ShowStage.spots(bodies: book.performers.count)
             for (k, aid) in book.performers.enumerated() where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
@@ -299,6 +310,7 @@ extension GameCare {
             book.performers = []; book.parked = []; book.palettes = [:]; book.danceRun = nil
             showRemoveExtras()
             book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.enterDelay = nil
+            book.heading = [:]; book.via = [:]; book.pendingWalks = []; book.keep = [:]; book.touchT = [:]; book.turned = []; book.flopT = nil
         }
     }
 
@@ -455,7 +467,15 @@ extension GameCare {
             let at = leg.at, final = leg.final
             guard let a = showBody(id), let b = a.brain else { book.via[id] = nil; continue }
             let c = a.sim.centroid()
-            guard simd_distance(SIMD2(c.x, c.z), at) < 0.6 else { continue }
+            guard simd_distance(SIMD2(c.x, c.z), at) < 0.6 else {
+                // show-perfect-r1: a walker that STOPPED short of the leg's end (held back by the one before her, or her steering gave up) waited here for good (she stood 1.1 from the middle and held the gate-side
+                // walkers up): ask the leg again, at most every 0.6 s
+                if b.pending == nil, !b.isWalkScript {
+                    let now = Self.showGameClockOn ? book.gameClock : CACurrentMediaTime()
+                    if now - (book.retryAt[id] ?? 0) > 0.6 { book.retryAt[id] = now; showWalk(a, to: at) }
+                }
+                continue
+            }
             if b.pending != nil { continue }
             if case .walk = b.script { continue }
             var next = simd_distance(at, ShowStage.gate) < 0.6 ? (seatWaypoint(final) ?? final) : final
@@ -869,3 +889,66 @@ extension GameCare {
         for a in raceBook.actors { outfitSeen[a.id] = Self.outfitSig(outfit(a.id)) }          // (no "new outfit" admiring for what is only the old outfit coming back)
     }
 }
+
+#if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+// show-soak-r1: read-only accessors for the soak probe (Dev/ShowSoakProbe.swift).
+extension GameCare {
+    /// The player's stage body: its floor point and how far from the middle.
+    func soakPlayerFloor() -> SIMD2<Float>? {
+        guard let a = stageActor(0) else { return nil }
+        let c = a.sim.centroid(); return SIMD2(c.x, c.z)
+    }
+    /// The walk gates of the body that `who` names (nil = the player): pending walk, brain pending / walking, goal, heading age / limit, walk expired, and the line keeper.
+    func soakWalkGates(_ who: Int?) -> String {
+        let book = showBook
+        guard let a = who.map({ showBook.rivalBody[$0].flatMap { id in book.actors.indices.contains(id) ? book.actors[id] : book.extra.first { $0.id == id } } }) ?? stageActor(0), let b = a.brain else { return "nobody" }
+        var walking = false
+        if case .walk = b.script { walking = true }
+        let h = book.heading[a.id]
+        return "pw=\(book.pendingWalks.contains { $0.id == a.id } ? 1 : 0) pend=\(b.pending != nil ? 1 : 0) walk=\(walking ? 1 : 0) goal=\(book.goals[a.id] != nil ? 1 : 0) head=\(h.map { String(format: "%.1f/%.1f", $0.age, $0.limit) } ?? "-") exp=\(showWalkExpired(who) ? 1 : 0) keep=\(book.keep[a.id]?.gliding == true ? "glide" : "-")"
+    }
+    /// Every ShowBook field as "label=count or value" (collections by count): the probe diffs it against the one taken at home before the first show.
+    func soakShowBookDump() -> [String: String] {
+        var out: [String: String] = [:]
+        for ch in Mirror(reflecting: showBook).children {
+            guard let l = ch.label else { continue }
+            let m = Mirror(reflecting: ch.value)
+            switch m.displayStyle {
+            case .collection, .dictionary, .set: out[l] = "n=\(m.children.count)"
+            case .optional: out[l] = m.children.isEmpty ? "nil" : "some"
+            default:
+                if ch.value is Bool || ch.value is Int || ch.value is String { out[l] = "\(ch.value)" } else { out[l] = "·" }
+            }
+        }
+        return out
+    }
+    /// The room bodies' trip-sensitive state: autonomy, idle block, the wall.
+    func soakRoomBodies() -> [String: String] {
+        var out: [String: String] = [:]
+        for a in raceBook.actors { if let b = a.brain { out["actor\(a.id)"] = "auto=\(b.autonomy ? 1 : 0) idleBlocked=\(b.idleBlocked ? 1 : 0) arenaFinite=\(a.sim.arenaRadius.isFinite ? 1 : 0)" } }
+        return out
+    }
+    var soakWardrobeHeld: Bool { showBook.wardrobeHeld }
+    /// Every rival body's walk bookkeeping (index: gates, the second leg it is on, the seat it is sent to).
+    func soakRivalGates() -> String {
+        guard let s = show.sim else { return "" }
+        return s.rivals.indices.map { i -> String in
+            let id = showBook.rivalBody[i]
+            let via = id.flatMap { showBook.via[$0] } != nil ? 1 : 0
+            let retry = id.flatMap { showBook.retryAt[$0] }.map { String(format: "%.1f", showBook.gameClock - $0) } ?? "-"
+            return "r\(i)[\(soakWalkGates(i)) via=\(via) retryAgo=\(retry)]"
+        }.joined(separator: " ")
+    }
+    /// Every stage body: actor id (p = the player's), its distance from the middle, and the walk bookkeeping; whether the middle is clear for the player; the pending walks (id, seconds waited).
+    func soakFloors() -> String {
+        let book = showBook
+        let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+        let who = bodies.map { b -> String in
+            let c = b.sim.centroid()
+            return String(format: "%@%d:%.1f", b.id == show.playerID ? "P" : "r", b.id, simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot))
+        }.joined(separator: " ")
+        let pid = show.playerID
+        return who + " | clearForP=\(middleClear(for: pid) ? 1 : 0) pw=[" + book.pendingWalks.map { String(format: "%d@%.1f", $0.id, $0.waited) }.joined(separator: ",") + "]"
+    }
+}
+#endif
