@@ -97,7 +97,8 @@ final class SceneGuardTests: XCTestCase {
         let h = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
         h.start()
         h.situation(napping: [], playing: false, xs: [], moods: [], scene: .show)
-        try XCTSkipUnless(await waitHealthy(h, within: 12) != nil, "no audio output on this host")
+        let up = await waitHealthy(h, within: 12)
+        try XCTSkipUnless(up != nil, "no audio output on this host")
         func quiet(_ what: String, line: UInt = #line) async {
             let before = h.guardRestarts
             h._injectEngineStop()

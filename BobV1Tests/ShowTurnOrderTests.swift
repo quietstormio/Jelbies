@@ -404,7 +404,10 @@ final class ShowPerfectTests: XCTestCase {
             for k in 0..<2 { let g = (q - pre[k]) + pre[k + 1]; longest = max(longest, g); XCTAssertLessThanOrEqual(g, 3, "seed \(seed): rivals between his turn \(k + 1) and \(k + 2): \(pre)"); XCTAssertNotEqual(g, 6) }
         }
         print("[show-perfect] slot distribution over 40 seeds (entrants before him on turn 1 -> count): \(firsts.sorted { $0.key < $1.key }), longest rival stretch \(longest)")
-        XCTAssertTrue((6...14).contains(firsts[0] ?? 0), "he goes first on turn 1 about 25% of the time: \(firsts)")
+        var big = 0
+        for seed in UInt64(1)...400 { if flowAtTrick(seed: seed).preCount(turn: 0) == 0 { big += 1 } }
+        print("[show-perfect] he goes first on turn 1 in \(big) of 400 seeds")
+        XCTAssertTrue((70...130).contains(big), "he goes first on turn 1 about 25% of the time: \(big) of 400")
         XCTAssertGreaterThan(firsts.count, 2, "the slot still varies")
     }
 

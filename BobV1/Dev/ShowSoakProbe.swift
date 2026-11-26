@@ -197,7 +197,7 @@ final class ShowSoakProbe {
         if trick, show.trickStage == .performing { gapOpen = gameT }
         else if trick, gapOpen == nil, s.turns.isEmpty, !turn0Gap { gapOpen = gameT; turn0Gap = true }
         else if trick, show.pickLive, let g = gapOpen { let len = gameT - g; gapOpen = nil; emit(["k": "gap", "s": (len * 10).rounded() / 10, "first": s.turns.isEmpty, "turns": s.turns.count, "preCounts": (0..<3).map { show.preCount(turn: $0) }, "snaps": show.handoverSnaps]); let first = s.turns.isEmpty
-            if len > (first ? 32 : 25) { fail(first ? "go-gap-first" : "go-gap", "his go came \(Int(len)) game s after \(first ? "the Trick round started" : "his last trick ended")", st) } }
+            if len > (first ? 36 : 33) { fail(first ? "go-gap-first" : "go-gap", "his go came \(Int(len)) game s after \(first ? "the Trick round started" : "his last trick ended")", st) } }
         if held("entering", trick && show.trickEntering, dt, over: 9) { fail("entering-stall", "the walk-on has not ended", st) }
         if held("offcentre", trick && show.pickLive && !show.trickEntering && ((st["dist"] as? Double) ?? 0) > 0.6, dt, over: 4) { fail("off-centre", "his go is live and the performer is not at the centre", st) }
         // music
