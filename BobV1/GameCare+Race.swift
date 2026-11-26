@@ -117,7 +117,7 @@ extension GameCare {
         if volley.active || volleyWork.wait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the beach." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
         if bath.active { return "The clean-up is going on." }
-        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelmiko") is in the close-up. Let go first." }
+        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelmiko") is being cuddled. Let go and try again." }
         if raceWait != nil { return "Waking everybody up." }
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelmiko") is listening to you." }
         if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelmiko") is not in the room." }
