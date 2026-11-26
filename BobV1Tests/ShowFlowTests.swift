@@ -21,7 +21,7 @@ final class ShowFlowTests: XCTestCase {
         return p
     }
     private func flow() -> (ShowFlow, [ShowCue]) {
-        let f = ShowFlow()
+        let f = ShowFlow.classic()
         f.songClock = { _ in nil }
         f.audioReady = { _ in true }
         return (f, [])
@@ -31,7 +31,7 @@ final class ShowFlowTests: XCTestCase {
     }
 
     func testAWholeShowFromFadeToResultsAndHome() {
-        let f = ShowFlow()
+        let f = ShowFlow.classic()
         f.songClock = { _ in nil }; f.audioReady = { _ in true }
         var cues: [ShowCue] = []; f.cue = { cues.append($0) }
         var swaps: [ShowFlow.Dest] = []; f.onSwap = { swaps.append($0) }
@@ -83,7 +83,7 @@ final class ShowFlowTests: XCTestCase {
 
     /// Picking a trick performs it at once (no ring); a pick while he is performing is ignored; the dance with no taps scores 0.
     func testPickingATrickPerformsItAtOnce() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        let f = ShowFlow.classic(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
         var performs: [(VoiceTrick, Bool)] = []; f.onPerform = { performs.append(($0, $1)) }
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .pond, dayKey: 20261022, bodies: 1, seed: 1)
         XCTAssertFalse(f.active, "the Pond is locked until a 1st at the Puddle")
@@ -120,7 +120,7 @@ final class ShowFlowTests: XCTestCase {
 
     /// The Look round is a judged walk-on: there is no wardrobe on the stage, it moves on after about 3 s, or at once on Next.
     func testLookWalkOnAdvancesByItselfOrOnNext() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        let f = ShowFlow.classic(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 20261022, bodies: 1, seed: 1)
         run(f, seconds: 2) { f.phase == .stage }
         f.setOutfit([.head: [f.theme.main]])
@@ -129,7 +129,7 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertEqual(f.round, .look, "still judging after 2 s")
         run(f, seconds: 1.5) { f.round == .dance }
         XCTAssertEqual(f.round, .dance); XCTAssertEqual(f.sim!.lookScore, look, "the outfit he walked on in is the one scored")
-        let g = ShowFlow(); g.songClock = { _ in nil }; g.audioReady = { _ in true }; g.cue = { _ in }
+        let g = ShowFlow.classic(); g.songClock = { _ in nil }; g.audioReady = { _ in true }; g.cue = { _ in }
         g.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 20261022, bodies: 1, seed: 1)
         run(g, seconds: 2) { g.phase == .stage }
         g.finishLook()
@@ -138,7 +138,7 @@ final class ShowFlowTests: XCTestCase {
 
     /// A brand-new Jelbie (no tricks learned) can enter: the default tricks are on his menu, and the show reaches its results.
     func testNoTricksLearnedStillHasTheDefaultsAndFinishesTheShow() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }; f.auto = true
+        let f = ShowFlow.classic(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }; f.auto = true
         var p = ShowPlayerInput(name: "Bob"); p.tricks = [:]
         f.begin(playerID: 0, name: "Bob", character: 0, input: p, rank: .puddle, dayKey: 20261023, bodies: 1, seed: 2)
         XCTAssertEqual(Set(f.sim!.knownTricks), Set(ShowTrickInfo.defaults))
@@ -150,7 +150,7 @@ final class ShowFlowTests: XCTestCase {
     }
 
     func testAbortPutsEverythingBack() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        let f = ShowFlow.classic(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
         var swaps: [ShowFlow.Dest] = []; f.onSwap = { swaps.append($0) }
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 1, bodies: 2, seed: 1)
         run(f, seconds: 2) { f.phase == .stage }
@@ -209,7 +209,7 @@ final class ShowFlowTests: XCTestCase {
     private final class Log { var a: [String] = [] }
     /// A show at the Trick round with nothing automatic; `log` hears every performance in order.
     private func showAtTrick(_ log: Log, day: Int = 20261021, seed: UInt64 = 3, waitWalkOn: Bool = true) -> ShowFlow {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        let f = ShowFlow.classic(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
         f.onPerform = { t, _ in log.a.append("P:\(t.rawValue)") }
         f.onRival = { c in
             switch c {
@@ -218,6 +218,7 @@ final class ShowFlowTests: XCTestCase {
             case .perform(let i, let t, _): log.a.append("R\(i):\(t.rawValue)")
             case .walkOut(let i): log.a.append("out:\(i)")
             case .snap: log.a.append("snap")
+            case .formLine: log.a.append("formLine")
             case .enter: log.a.append("enter")
             }
         }
@@ -356,7 +357,7 @@ final class ShowFlowTests: XCTestCase {
 
     /// A show brought to the first frame of the dance (GO), with the audio stubs given.
     private func danceFlow(clock: @escaping (SceneTrack) -> Double?, ready: @escaping (MusicScene) -> Bool, rank: ShowRank = .puddle, stopAt: ShowFlow.Beat = .dancing) -> ShowFlow {
-        let f = ShowFlow(); f.cue = { _ in }; f.auto = true
+        let f = ShowFlow.classic(); f.cue = { _ in }; f.auto = true
         f.songClock = clock; f.audioReady = ready; f.songClockWhy = { "test: \($0.rawValue) has no clock" }
         for r in ShowRank.allCases where r.index < rank.index { f.progress.record(rank: r, place: 1, theme: .beachGames, character: 0, burst: false, perfectDance: false, hatTrick: false) }          // (opens the rank)
         f.begin(playerID: 1, name: "Bob", character: 1, input: input(), rank: rank, dayKey: 20261021, bodies: 3, seed: 3)

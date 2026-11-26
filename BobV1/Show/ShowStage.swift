@@ -163,7 +163,7 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     static func trick(pad: Bool) -> ShowFrame {
         func dev(_ key: String, _ v: Float) -> Float { DevArgs.enabled && UserDefaults.standard.object(forKey: key) != nil ? Float(UserDefaults.standard.double(forKey: key)) : v }
         return ShowFrame(spots: [ShowStage.playerSpot],
-                         screenY: dev("ShowTrickSY", pad ? 0.47 : 0.44), fill: dev("ShowTrickFill", pad ? 0.27 : 0.29),
+                         screenY: dev("ShowTrickSY", pad ? 0.47 : 0.44), fill: dev("ShowTrickFill", pad ? 0.245 : 0.26),
                          landScreenY: dev("ShowTrickLandSY", 0.50), landFill: dev("ShowTrickLandFill", pad ? 0.42 : 0.52), landLeft: true, landShift: dev("ShowTrickLandShift", pad ? 0.27 : 0.25),
                          elevation: dev("ShowTrickEl", 0.5), landElevation: dev("ShowTrickLandEl", 0.45))
     }

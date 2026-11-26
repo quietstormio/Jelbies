@@ -20,8 +20,8 @@ final class ShowTurnOrderTests: XCTestCase {
         return p
     }
     private final class Log { var a: [String] = [] }
-    private func flowAtTrick(_ log: Log, perTurn: Int, day: Int = 20261021, seed: UInt64 = 3) -> ShowFlow {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+    private func flowAtTrick(_ log: Log, perTurn: Int, day: Int = 20261021, seed: UInt64 = 3, random: Bool = false) -> ShowFlow {
+        let f = ShowFlow.classic(); f.randomTurnOrder = random; f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
         f.entrantsPerTurn = perTurn
         f.onPerform = { t, _ in log.a.append("P:\(t.rawValue)") }
         f.onRival = { c in
@@ -31,6 +31,7 @@ final class ShowTurnOrderTests: XCTestCase {
             case .perform(let i, _, _): log.a.append("R\(i)")
             case .walkOut(let i): log.a.append("out:\(i)")
             case .snap: log.a.append("snap")
+            case .formLine: log.a.append("formLine")
             case .enter: log.a.append("enter")
             }
         }
@@ -53,6 +54,77 @@ final class ShowTurnOrderTests: XCTestCase {
             run(f, seconds: 90) { f.trickStage == .pick }
         }
     }
+
+    // MARK: show-trick-tut-r1: the player's slot in a turn is random
+
+    /// His go can come after entrants (random slot per turn from the seed): over many seeds every slot happens, every entrant still performs once per turn (nine in all), the entrants before him come BEFORE his trick
+    /// of the same turn, his go always opens (never a stall), the pills name the entrant ("<name>'s go") and not "Your go" while she is up, and the placings / totals are exactly the classic order's.
+    func testPlayerSlotIsRandomButEveryEntrantStillPerformsAndTheTotalsAreTheSame() {
+        var slots = Set<Int>()
+        for seed in UInt64(1)...10 {
+            let classic = flowAtTrick(Log(), perTurn: 3, seed: seed)
+            playAllThree(classic)
+            let log = Log()
+            let f = flowAtTrick(log, perTurn: 3, seed: seed, random: true)
+            let pre = (0..<3).map { f.preCount(turn: $0) }
+            pre.forEach { slots.insert($0) }
+            var sawNamedGo = false
+            for t in [VoiceTrick.sit, .jacks, .flip] {
+                for _ in 0..<(120 * 60) {
+                    f.tick(dt: 1 / 60)
+                    if f.trickStage == .rivals, f.rivalStep == .perform, !f.isTrickTurnNow(f.rivalRound) { XCTFail("seed \(seed): the entrant's turn is not the one the pills light") }
+                    if f.trickStage == .rivals, f.rivalTurn != nil { sawNamedGo = true }
+                    if f.pickLive { break }
+                }
+                XCTAssertTrue(f.pickLive, "seed \(seed): his go opens (pre \(pre))")
+                XCTAssertEqual(f.trickTurnNow, f.sim?.turns.count, "seed \(seed): the pills light his turn")
+                f.pick(t)
+            }
+            run(f, seconds: 120) { f.hasResults }
+            XCTAssertTrue(f.hasResults, "seed \(seed): the show reaches the results")
+            _ = sawNamedGo
+            // order in the log: entrants (R) and his tricks (P)
+            var runs: [Int] = [0]
+            for e in log.a { if e.hasPrefix("P:") { runs.append(0) } else if e.hasPrefix("R") { runs[runs.count - 1] += 1 } }
+            XCTAssertEqual(runs, [pre[0], 3 - pre[0] + pre[1], 3 - pre[1] + pre[2], 3 - pre[2]], "seed \(seed): entrants before / after his go in each turn")
+            XCTAssertEqual(f.sim?.entrants.map(\.scores.totalPts), classic.sim?.entrants.map(\.scores.totalPts), "seed \(seed): the same totals as the classic order")
+            XCTAssertEqual(f.sim?.playerPlace, classic.sim?.playerPlace)
+        }
+        XCTAssertGreaterThan(slots.count, 1, "different seeds put him at different slots")
+        XCTAssertTrue(slots.contains(0), "sometimes he still goes first")
+        XCTAssertTrue(slots.contains(where: { $0 > 0 }), "sometimes the entrants go first")
+    }
+
+    /// The tutorial card: up over the walk-out until his first go (or a tap), on every visit until he has picked a move once; then never.
+    func testTrickTutorialShowsUntilAMoveIsPickedOnce() {
+        let suite = "show.tests.tutorial.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: suite)!
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        func newFlow() -> ShowFlow {
+            let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+            f.randomTurnOrder = false; f.tutorialDefaults = d
+            f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 20261021, bodies: 1, seed: 3)
+            run(f, seconds: 2) { f.phase == .stage }
+            f.finishLook(); run(f, seconds: 6) { f.beat == .dancing }; run(f, seconds: 30) { f.beat == .danced }
+            f.finishDance()
+            return f
+        }
+        let a = newFlow()
+        XCTAssertTrue(a.trickEntering); XCTAssertTrue(a.trickTutorialUp, "up while they walk out")
+        run(f: a, 0.5)
+        XCTAssertTrue(a.trickTutorialUp, "held for a readable moment")
+        run(a, seconds: 8) { !a.trickEntering }
+        XCTAssertFalse(a.trickEntering); XCTAssertFalse(a.trickTutorialUp, "gone when his go starts")
+        XCTAssertFalse(d.bool(forKey: ShowFlow.trickTutorialKey), "not picked yet: still owed")
+        let b = newFlow()
+        XCTAssertTrue(b.trickTutorialUp, "next visit: shown again, he never picked")
+        b.dismissTrickTutorial(); XCTAssertFalse(b.trickTutorialUp, "a tap puts it away")
+        run(b, seconds: 8) { !b.trickEntering }
+        b.pick(.sit)
+        XCTAssertTrue(d.bool(forKey: ShowFlow.trickTutorialKey), "a pick lands: remembered")
+        XCTAssertFalse(newFlow().trickTutorialUp, "never again")
+    }
+    private func run(f: ShowFlow, _ s: Float) { run(f, seconds: s) }
 
     /// The header pips and the turn pills read the SAME turn index at every step of a whole Trick round (never two counters), the kicker has no turn count, and
     /// the turn only ever moves forward 0 -> 1 -> 2, ending with every pip filled.
@@ -282,5 +354,17 @@ final class ShowTurnOrderTests: XCTestCase {
             } }
             for m in marks { let b = box(m.1); XCTAssertGreaterThan(b.minX, 0, "\(name) \(m.0) cut left"); XCTAssertLessThan(b.maxX, size.width, "\(name) \(m.0) cut right"); XCTAssertGreaterThan(b.minY, size.height * 0.13, "\(name) \(m.0) under the header"); XCTAssertLessThan(b.maxY, size.height * 0.62, "\(name) \(m.0) over the menu") }
         }
+    }
+}
+
+extension ShowFlow {
+    /// The flow as the older suites assume it: the player always goes first in a turn and no tutorial card is up (show-trick-tut-r1 made the slot random and added the card).
+    static func classic() -> ShowFlow {
+        let f = ShowFlow()
+        f.randomTurnOrder = false
+        let d = UserDefaults(suiteName: "show.tests.classic")!
+        d.set(true, forKey: ShowFlow.trickTutorialKey)
+        f.tutorialDefaults = d
+        return f
     }
 }

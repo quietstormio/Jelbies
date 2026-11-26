@@ -14,7 +14,7 @@ import simd
 final class ShowLineTests: XCTestCase {
     struct Stats {
         var placed = 0, overlaps = 0, hidden = 0, slowReturns = 0, notFormed = 0, turns = 0, returns = 0
-        var worstReturn: Float = 0, minGap: Float = 99
+        var worstReturn: Float = 0, minGap: Float = 99, worstBack: Float = 0, shows = 0, finished = 0, holds = 0
         var tightFrames = 0, tightEvents = 0
         var frames = 0, closeFrames = 0, closeWalkFrames = 0, walkFrames = 0, closeEvents = 0, walkMinGap: Float = 99          // (show-zoom-r1: frames with a pair under 1.3 apart; `walk` = at least one of the pair is walking)
         var notes: [String] = []
@@ -22,6 +22,7 @@ final class ShowLineTests: XCTestCase {
             placed += o.placed
             overlaps += o.overlaps; hidden += o.hidden; slowReturns += o.slowReturns; notFormed += o.notFormed; turns += o.turns; returns += o.returns
             worstReturn = max(worstReturn, o.worstReturn); minGap = min(minGap, o.minGap); notes += o.notes
+            worstBack = max(worstBack, o.worstBack); shows += o.shows; finished += o.finished; holds += o.holds
             tightFrames += o.tightFrames; tightEvents += o.tightEvents; frames += o.frames; closeFrames += o.closeFrames; closeWalkFrames += o.closeWalkFrames; walkFrames += o.walkFrames; closeEvents += o.closeEvents; walkMinGap = min(walkMinGap, o.walkMinGap)
         }
     }
@@ -32,7 +33,7 @@ final class ShowLineTests: XCTestCase {
     private func log(_ s: String) { logHandle?.write((s + "\n").data(using: .utf8)!) }
 
     /// One whole Show (look, dance, trick x3, results) with `per` entrants per turn; returns what went wrong.
-    func oneShow(seed: UInt64, per: Int, sideways: Bool, tag: String = "") -> Stats {
+    func oneShow(seed: UInt64, per: Int, sideways: Bool, tag: String = "", hold: Bool = false) -> Stats {
         GameCamera.aspect = sideways ? 956.0 / 440.0 : 440.0 / 956.0
         defer { GameCamera.aspect = 440.0 / 956.0 }
         let room = RaceThreeTests.Room(count: 1)
@@ -78,6 +79,8 @@ final class ShowLineTests: XCTestCase {
         var pickedInEntrance = false, skipAt: Float? = nil, skippedAll = false
         let stress = ProcessInfo.processInfo.environment["SHOWLINE_STRESS"] == "1" || tag.hasSuffix("!")
         var returnStart: [Int: Float] = [:]          // body id -> when its return began
+        var heldBody: JellyActor? = nil, heldPlacements = 0, heldTurns = Set<Int>(), backStart: Float? = nil          // (show-handover-r1: fault injection `hold`: the entrant that has just performed is kept on the middle until the stage puts her on her seat; `backStart`: when the player's walk back began)
+        st.shows = 1
         var hiddenNow = false, overlapNow = false, closeNow = false, tightNow = false, hidT: Float = 0
         func seat(_ id: Int) -> SIMD2<Float>? {          // where body `id` is meant to stand while nobody is walking (nil = in transit)
             let sw = sideways
@@ -103,6 +106,15 @@ final class ShowLineTests: XCTestCase {
             step(); t += 1 / 60
             let f = care.show
             if f.round == .dance || f.round == .look { continue }
+            if hold {
+                if heldBody == nil, f.trickStage == .rivals, f.rivalStep == .walkOut, let k = f.rivalTurn, k == 2 || k == 0, !heldTurns.contains(f.rivalRound), let id = book.rivalBody[k], let a = bodies().first(where: { $0.id == id }) {
+                    heldBody = a; heldPlacements = book.placements; heldTurns.insert(f.rivalRound); st.holds += 1          // (a leaving entrant stuck on the middle: his walk out never gets him off it)
+                }
+                if let a = heldBody {
+                    if f.trickStage != .rivals || book.placements != heldPlacements { heldBody = nil } else { a.sim.teleport(toXZ: ShowStage.playerSpot) }
+                }
+            }
+            if f.trickStage == .rivals, f.rivalStep == .playerBack { if backStart == nil { backStart = t } } else if let b0 = backStart { st.worstBack = max(st.worstBack, t - b0); backStart = nil }
             if stress, f.round == .trick, f.trickEntering, !pickedInEntrance, rng.next() < 0.01 { pickedInEntrance = true; if let s = f.sim, let tr = s.knownTricks.first { f.pick(tr) } }          // (a tap during the walk-on)
             if stress, f.round == .trick, f.trickStage == .rivals {
                 if f.rivalStep == .walkIn || f.rivalStep == .perform {
@@ -167,6 +179,7 @@ final class ShowLineTests: XCTestCase {
             if f.round == .results && f.trickStage == .pick { break }
         }
         _ = prevEntering
+        if care.show.round == .results { st.finished = 1 }
         st.placed = book.placements
         care.show.abort()
         return st
@@ -207,6 +220,19 @@ final class ShowLineTests: XCTestCase {
         if !stressOn { XCTAssertEqual(tot.overlaps, 0, "no overlaps"); XCTAssertEqual(tot.hidden, 0, "no hidden bodies") }
         XCTAssertEqual(tot.notFormed, 0, "every turn starts with the line formed")
         XCTAssertLessThan(tot.worstReturn, 10, "every return ends within the keeper's allowance (a late or stopped body is carried to its seat)")
+    }
+
+    /// show-handover-r1 (the owner, phone 04644b91: "He's stuck": the leaving entrant stayed on the middle and the player's Jelmiko never reached it, Skip showing, no trick cards): whole Shows with an entrant HELD on the middle
+    /// after her turn (fault injection) and without: every show reaches the results, every "Your go" opens with the player on the middle and the line formed, and the walk back never outlasts the handover ceiling.
+    func testNoHandoverStallEvenWithABodyHeldOnTheMiddle() {
+        let n = UInt64(ProcessInfo.processInfo.environment["SHOWLINE_N"] ?? "") ?? 4
+        var tot = Stats()
+        for s in 500..<(500 + n) { tot.add(oneShow(seed: s, per: 3, sideways: s % 2 == 0, tag: "hold#\(s)", hold: true)) }
+        report("hold", tot)
+        XCTAssertGreaterThan(tot.holds, 0, "the fault was injected")
+        XCTAssertEqual(tot.finished, tot.shows, "every show reaches the results (no stall)")
+        XCTAssertEqual(tot.notFormed, 0, "every turn, the player's go included, opens with the line formed")
+        XCTAssertLessThan(tot.worstBack, ShowFlow.playerBackCap + 1.5, "the player's walk back to the middle is capped")
     }
 
     private func noteNotFormed(_ st: inout Stats, _ what: String, _ all: [JellyActor], _ tag: String, _ t: Float, _ seat: (Int) -> SIMD2<Float>?) {

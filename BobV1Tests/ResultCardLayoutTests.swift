@@ -229,7 +229,7 @@ final class ResultCardLayoutTests: XCTestCase {
 
     /// A Show played (auto) to its results, then dressed with the awards / place the case wants.
     private func showFlow(place: Int, awards: ShowProgress.Awards?, earned: Int, name: String = "Berry", rank: ShowRank = .puddle) -> ShowFlow {
-        let f = ShowFlow()
+        let f = ShowFlow.classic()
         f.songClock = { _ in nil }; f.audioReady = { _ in true }
         f.auto = true
         var p = ShowPlayerInput(name: name)

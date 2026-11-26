@@ -584,6 +584,16 @@ extension GameCare {
             let side = GameCamera.aspect > 1          // (a phone on its side: the view is shifted, all three come from the left)
             for k in s.rivals.indices { if let a = rivalActor(k) { showSnap(a, to: ShowStage.wingSpot(k, sideways: side, wide: PadLayout.isPad)) } }
             book.enterDelay = 0.25
+        case .formLine:          // (show-handover-r1) the backstop: a handover that has run past its ceiling puts every body that is not on its seat for this step ON it (a stall is impossible)
+            let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+            for a in bodies {
+                guard let seat = showSeat(a.id) else { continue }
+                let c = a.sim.centroid()
+                if simd_distance(SIMD2(c.x, c.z), seat) >= Self.lineAt { showSnap(a, to: seat) }
+                book.goals[a.id] = nil; book.heading[a.id] = nil; book.via[a.id] = nil; book.flops[a.id] = nil; book.keep[a.id] = nil
+            }
+            book.pendingWalks = []
+            book.placements += 1
         case .snap:
             guard let s = show.sim else { return }
             book.enterDelay = nil
