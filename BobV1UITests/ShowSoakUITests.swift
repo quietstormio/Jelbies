@@ -118,7 +118,7 @@ final class ShowSoakUITests: XCTestCase {
         let tag = "show\(index)-\(rank)"
         guard openLobby(app) else { XCTFail("[\(tag)] the lobby never opened"); shot("\(tag)_nolobby"); return false }
         let card = el(app, "rank-\(rank)")
-        if card.exists, card.isHittable { card.tap(); sleep(1) }
+        if card.exists, !card.frame.isEmpty { press(card); sleep(1); log("[\(tag)] rank card \(rank) tapped") }
         let go = el(app, "studio-show")
         for _ in 0..<30 where !go.isEnabled { sleep(1) }          // (a sleeper is woken first, a meal out finishes)
         XCTAssertTrue(go.isEnabled, "[\(tag)] Enter Jelly Show is enabled: \(el(app, "studio-why").label)")
