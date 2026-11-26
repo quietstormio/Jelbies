@@ -150,6 +150,8 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         controller?.noteUserTouch()          // any finger restarts the night-idle bedtime clock
         PlayerPresence.touch()
         claim()
+        RoomSwipe.touched(now: CACurrentMediaTime())          // any finger restarts the room swipe's 4 s idle clock
+        controller?.swipeDown(touches: touches, first: activeTouches == 0, in: self)
         activeTouches += touches.count
         if PhotoCam.active { return }          // Photo mode: fingers move the camera, they never touch a Jelbie
         for t in touches {
@@ -158,6 +160,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        controller?.swipeMove(touches: touches, in: self)
         if PhotoCam.active { return }
         for t in touches {
             controller?.pointerMove(id: ObjectIdentifier(t), point: t.location(in: self), size: bounds.size)
@@ -172,6 +175,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     private func sane(_ ts: TimeInterval) -> Double? { abs(CACurrentMediaTime() - ts) < 1.0 ? ts : nil }
 
     private func finish(_ touches: Set<UITouch>) {
+        controller?.swipeUp(touches: touches)
         for t in touches { controller?.pointerUp(id: ObjectIdentifier(t), time: sane(t.timestamp)) }
         activeTouches = max(0, activeTouches - touches.count)
         if activeTouches == 0 { release() }
@@ -1096,7 +1100,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Feeds the idle-rest governor: Bob counts as still with no touch, script, walk, request, focus blend, tray or selection, and low kinetic energy.
     private func updateIdleRest(_ stage: MelonStageView, dt: Double) {
         guard Self.idleRestFlag, Self.adaptiveEnabled || UserDefaults.standard.bool(forKey: "IdleRest") else { return }
-        var active = stage.activeTouches > 0 || mode != .none || sim.grabbing || throwHold > 0 || model.touch.holdsBrain
+        var active = stage.activeTouches > 0 || RoomSwipe.yaw != 0 || mode != .none || sim.grabbing || throwHold > 0 || model.touch.holdsBrain
         for a in actors {            // every Jelly has to be still
             if let brain = a.brain, brain.enabled {
                 active = active || brain.activity != .idle || brain.commanded || brain.pending != nil
@@ -1308,6 +1312,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                   GameCamera.eye.x, GameCamera.eye.y, GameCamera.eye.z, GameCamera.target.x, GameCamera.target.y, GameCamera.target.z, GameCamera.roomWideScale, GameCamera.roomWideLift, actors.count)
             if abs(drawAspect / ptAspect - 1) > 0.01 { NSLog("[melon] camera: WARNING drawable and bounds aspects differ by %.1f%%", Double(abs(drawAspect / ptAspect - 1) * 100)) }
         }
+        if game { RoomSwipe.tick(dt: dt, now: now, allowed: roomSwipeAllowed, touching: stage.activeTouches > 0) }
         let cam = game ? GameCamera.camera(aspect: drawAspect, focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, raceFollow: raceFollow, show: model.care.show.cameraBlend, showFrame: model.care.showFrame) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
@@ -2211,6 +2216,58 @@ final class MelonController: NSObject, MTKViewDelegate {
             model.touch.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.3)       // the release
         } else { model.touch.jellyLetGo(now: CACurrentMediaTime()) }       // dropped: the jelly snaps back and settles, the haptic follows its wobble
         grabSamples = []; liftHeight = 0
+    }
+
+    // MARK: Room swipe (Room/RoomSwipe.swift)
+
+    private var swipeID: ObjectIdentifier?
+    private var swipeStart = CGPoint.zero, swipeLast = CGPoint.zero, swipeLastT = 0.0
+    private var swipeLive = false
+
+    /// The room swipe may run only in the plain home room: no close-up / meal / Play / bath / trip / arrange / wall edit / night skip / launch curtain.
+    var roomSwipeAllowed: Bool {
+        guard game, !RoomSwipe.off, !model.preview, !model.paused, !PhotoCam.active else { return false }
+        let c = model.care
+        if c.focus.isActive || c.focus.blend > 0 || c.bath.active || c.bath.cameraBlend > 0 || c.tripActive || c.raceBusy || c.play.active || c.arranging || c.wallEdit != nil
+            || c.nightSkip.active || c.trayOut || c.meal != nil || c.park.inScene || c.cafe.active || c.race.cameraBlend > 0 || c.show.cameraBlend > 0 { return false }
+        if GameCamera.playBlend > 0 || GameCamera.wallEditBlend > 0 || GameCamera.trophyBlend > 0 || GameCamera.groomOn || GameCamera.beachOn { return false }
+        if c.select.isSelecting || c.select.highlighted != nil { return false }          // (the highlight ring and menu are drawn over a Jelmiko: they stay put)
+        if LaunchGate.shared.visible { return false }
+        return true
+    }
+
+    func swipeDown(touches: Set<UITouch>, first: Bool, in view: UIView) {
+        if swipeID != nil || swipeLive { endSwipe() }          // a second finger: the swipe is over (pinch / two-finger touches never orbit)
+        guard first, touches.count == 1, let t = touches.first, roomSwipeAllowed, view.bounds.width > 1, haveCam else { return }
+        let p = t.location(in: view)
+        if pickJelly(p, view.bounds.size) != nil { return }          // a touch that begins on a Jelmiko is his (petting, close-up)
+        refreshOutlines()
+        if model.care.select.hit(p) != nil || trophyCaseTap(p).item != nil { return }          // (nor on a Jelmiko's outline or a trophy: those are taps)
+        swipeID = ObjectIdentifier(t); swipeStart = p; swipeLast = p; swipeLastT = CACurrentMediaTime()
+    }
+
+    func swipeMove(touches: Set<UITouch>, in view: UIView) {
+        guard let sid = swipeID, let t = touches.first(where: { ObjectIdentifier($0) == sid }) else { return }
+        guard roomSwipeAllowed else { endSwipe(); return }
+        let p = t.location(in: view), now = CACurrentMediaTime()
+        if !swipeLive {
+            let dx = p.x - swipeStart.x, dy = p.y - swipeStart.y
+            if abs(dx) >= RoomSwipe.startDistance, abs(dx) > abs(dy) { swipeLive = true; RoomSwipe.begin(now: now); if DevArgs.enabled { NSLog("[roomswipe] begin yaw %.1f deg", Double(RoomSwipe.yaw * 180 / .pi)) }; swipeLast = swipeStart; swipeLastT = now - 0.016 }
+            else if abs(dy) >= RoomSwipe.startDistance { swipeID = nil; return }          // a vertical drag is not ours
+            else { return }
+        }
+        RoomSwipe.drag(dx: p.x - swipeLast.x, dt: now - swipeLastT, now: now)
+        swipeLast = p; swipeLastT = now
+    }
+
+    func swipeUp(touches: Set<UITouch>) {
+        guard let sid = swipeID, touches.contains(where: { ObjectIdentifier($0) == sid }) else { return }
+        endSwipe()
+    }
+
+    private func endSwipe() {
+        if swipeLive { RoomSwipe.end(now: CACurrentMediaTime()); if DevArgs.enabled { NSLog("[roomswipe] end yaw %.1f deg", Double(RoomSwipe.yaw * 180 / .pi)) } }
+        swipeID = nil; swipeLive = false
     }
 
     func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize, time: Double? = nil) {

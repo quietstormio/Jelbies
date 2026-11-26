@@ -164,6 +164,7 @@ enum GameCamera {
             t += (p.target - t) * show
         }
         if PhotoCam.active, !gamePose { (e, t) = PhotoCam.apply(eye: e, target: t) }
+        if !gamePose, RoomSwipe.yaw != 0 { e = RoomSwipe.apply(eye: e, target: t) }          // the room swipe (Room/RoomSwipe.swift): a little yaw about the room's centre
         if !gamePose, let p = ContactDemo.pose { e = p.eye; t = p.target }          // capture aid (-ContactCam perp|top): a pose tracked on the cast, Melon/ContactDemo.swift          // Photo mode: orbit / zoom / pan over the game pose
         var c = CameraState()
         c.view = M4.lookAt(eye: e, at: t, up: up)
