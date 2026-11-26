@@ -1479,6 +1479,7 @@ extension AudioHub {
         var directorScene: String, directorTrack: String, engineCurrent: String, trackPlaying: Bool, loudest: Float
         var levelNow: Float, duck: Float, danceGain: Float, stormDuck: Float, resumeFade: Float, mainGain: Double
         var deckPlaying: Bool, inGap: Bool, roomTrack: String, micSession: Bool, otherAudio: Bool, engineRunning: Bool
+        var jinglePlaying: Bool, guardRestarts: Int
     }
     func soakAudio() -> SoakAudio {
         let t = director.sceneTrack
@@ -1487,7 +1488,7 @@ extension AudioHub {
                          trackPlaying: t.map { scene?.isPlaying($0) ?? false } ?? false, loudest: scene?.loudest ?? 0,
                          levelNow: musicLevelNow, duck: duck.gain, danceGain: danceGain, stormDuck: stormDuck, resumeFade: resumeFade, mainGain: mainSlew.gain,
                          deckPlaying: deckPlaying, inGap: director.gapLeft != nil, roomTrack: director.current?.rawValue ?? "-", micSession: micSession,
-                         otherAudio: otherAudioPlaying, engineRunning: scene?.engineRunning ?? false)
+                         otherAudio: otherAudioPlaying, engineRunning: scene?.engineRunning ?? false, jinglePlaying: jingle?.isPlaying ?? false, guardRestarts: guardRestarts)
     }
 }
 #endif

@@ -89,6 +89,32 @@ final class SceneGuardTests: XCTestCase {
         await healthyAgain(h, "category put back", within: 4)
     }
 
+    // MARK: the guard never fights an intentional silence
+
+    /// Mute, the music setting off, volume 0, the app in the background (the stage paused), the scene gone, and the mic open: the engine is stopped under the voice in each, and the guard
+    /// must leave it alone (0 restarts, no scene voice brought back).
+    func testGuardNeverFightsAnIntentionalSilence() async throws {
+        let h = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
+        h.start()
+        h.situation(napping: [], playing: false, xs: [], moods: [], scene: .show)
+        try XCTSkipUnless(await waitHealthy(h, within: 12) != nil, "no audio output on this host")
+        func quiet(_ what: String, line: UInt = #line) async {
+            let before = h.guardRestarts
+            h._injectEngineStop()
+            try? await Task.sleep(for: .milliseconds(2600))
+            XCTAssertEqual(h.guardRestarts, before, "\(what): the guard stayed out of it", line: line)
+        }
+        h.settings.musicVolume = 0; await quiet("volume 0"); h.settings.musicVolume = 0.8
+        h.settings.musicOn = false; await quiet("music setting off"); h.settings.musicOn = true
+        h.micSessionBegan(); await quiet("mic open"); _ = h.micSessionEnded()
+        h.setForeground(false); await quiet("app in the background (stage paused)"); h.setForeground(true)
+        h.situation(napping: [], playing: false, xs: [], moods: [], scene: .none); try? await Task.sleep(for: .milliseconds(1800)); await quiet("no scene wanted (room / night music is a deck, not the scene voice)")
+        let muted = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: true)
+        muted.start(); muted.situation(napping: [], playing: false, xs: [], moods: [], scene: .show)
+        try? await Task.sleep(for: .milliseconds(2000))
+        XCTAssertEqual(muted.guardRestarts, 0, "Mute: nothing to guard"); XCTAssertEqual(muted._sceneVoiceCount, 0)
+    }
+
     // MARK: the ring log
 
     func testRingLogKeepsTheLastTwoThousandLines() throws {

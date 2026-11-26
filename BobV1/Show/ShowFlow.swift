@@ -240,9 +240,10 @@ final class ShowFlow {
         _ = g.next()
         return min(Self.preTable[min(Int(g.next() * Float(Self.preTable.count)), Self.preTable.count - 1)][min(max(k, 0), 2)], q)
     }
-    /// show-perfect-r1: the draws a show can have, entrants BEFORE him on turns 1 / 2 / 3 (of three). Chosen so the entrants after him on turn k plus the ones before him on turn k+1 are never more than two (3 - pre(k) + pre(k+1) <= 2):
-    /// he is never off the cards for more than two entrants' turns in a row, and still does not always go first.
-    static let preTable: [[Int]] = [[2, 1, 0], [3, 1, 0], [3, 2, 0], [3, 2, 1]]
+    /// show-perfect-r1: the draws a show can have, entrants BEFORE him on turns 1 / 2 / 3 (of three), eight equally likely rows. Each row is non-increasing, so the entrants after him on turn k plus the ones before him on
+    /// turn k+1 (3 - pre(k) + pre(k+1)) are never more than THREE: the old 3 + 3 chain (six entrants in a row with no card for him) cannot happen. Two rows in eight put him first on turn 1 (25%); with the cards always
+    /// up and a move queueable the whole time, a long stretch is a wait with a pick already made.
+    static let preTable: [[Int]] = [[0, 0, 0], [0, 0, 0], [1, 0, 0], [1, 1, 0], [2, 1, 0], [2, 2, 1], [3, 1, 0], [3, 2, 1]]
     /// The Trick round is at a turn whose entrants-before are still to go (so it is not his go yet: the menu is dim, the pill does not say "Your go").
     var prePending: Bool {
         guard let s = sim, s.round == .trick, !s.tricksDone, phase == .stage, trickStage == .pick, preTurnDone != s.turns.count else { return false }
