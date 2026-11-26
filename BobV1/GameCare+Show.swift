@@ -919,5 +919,16 @@ extension GameCare {
         return out
     }
     var soakWardrobeHeld: Bool { showBook.wardrobeHeld }
+    /// Every stage body: actor id (p = the player's), its distance from the middle, and the walk bookkeeping; whether the middle is clear for the player; the pending walks (id, seconds waited).
+    func soakFloors() -> String {
+        let book = showBook
+        let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+        let who = bodies.map { b -> String in
+            let c = b.sim.centroid()
+            return String(format: "%@%d:%.1f", b.id == show.playerID ? "P" : "r", b.id, simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot))
+        }.joined(separator: " ")
+        let pid = show.playerID
+        return who + " | clearForP=\(middleClear(for: pid) ? 1 : 0) pw=[" + book.pendingWalks.map { String(format: "%d@%.1f", $0.id, $0.waited) }.joined(separator: ",") + "]"
+    }
 }
 #endif

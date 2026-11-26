@@ -104,6 +104,9 @@ final class ShowSoakUITests: XCTestCase {
         return el(app, "studio-show").waitForExistence(timeout: 20)
     }
 
+    /// `isHittable` reads false for every button over the Metal stage on this simulator (dance-next is plainly on screen), so "usable" = exists, enabled, a real frame on the screen;
+    /// the tap is a coordinate tap at its centre (so a card covered by an overlay would still FAIL to be accepted: the turn counter is the proof).
+    private func press(_ e: XCUIElement) { e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
     private struct Row { let el: XCUIElement; let label: String }
     private func trickRows(_ app: XCUIApplication) -> [Row] {
         let q = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'trick-' AND label CONTAINS ' points'"))
@@ -161,18 +164,19 @@ final class ShowSoakUITests: XCTestCase {
             }
             if scenario == "skip", phase == "rival-go" || phase == "player-back" || phase == "walkout" || phase == "pre-wait" {
                 let sk = el(app, "rivals-skip")
-                if sk.exists, sk.isHittable, fired.insert("skip-\(key)").inserted, rand(3) != 0 { log("[\(tag)] Skip at \(phase) turns=\(turns) pre=\(pre)"); sk.tap(); sleep(1); continue }
+                if sk.exists, !sk.frame.isEmpty, fired.insert("skip-\(key)").inserted, rand(3) != 0 { log("[\(tag)] Skip at \(phase) turns=\(turns) pre=\(pre)"); press(sk); sleep(1); continue }
             }
             // the screens ------------------------------------------------------------------------
             let next = el(app, "dance-next")
-            if round == "dance", next.exists, next.isHittable { next.tap(); log("[\(tag)] Next: Trick"); continue }
+            if Int(Date().timeIntervalSince(t0)) % 10 == 0, fired.insert("hb\(Int(Date().timeIntervalSince(t0)))").inserted { log("[\(tag)] poll phase=\(phase) round=\(round) turns=\(turns) next.exists=\(next.exists) hittable=\(next.exists && next.isHittable)") }
+            if round == "dance", next.exists, next.isEnabled, !next.frame.isEmpty { press(next); log("[\(tag)] Next: Trick"); continue }
             if round == "trick", f["tutorialUp"] as? Bool == true, rand(6) == 0, fired.insert("tut\(turns)").inserted { let t = el(app, "trick-tutorial"); if t.exists { t.tap() } }
             if round == "trick", stage == "pick", live, !entering {
                 let rows = trickRows(app)
-                let ok = rows.filter { $0.el.isEnabled && $0.el.isHittable }
+                let ok = rows.filter { $0.el.isEnabled && !$0.el.frame.isEmpty }
                 if let r = ok.first(where: { !$0.label.contains("shown already") }) ?? ok.first {
                     log("[\(tag)] turn \(turns + 1): pick \(r.label.prefix(40))")
-                    r.el.tap(); picks += 1
+                    press(r.el); picks += 1
                     var accepted = false
                     for _ in 0..<12 { usleep(500_000); if (lastFlow()?["turns"] as? Int ?? 0) > turns { accepted = true; break } }
                     if !accepted { XCTFail("[\(tag)] a tap on an enabled, hittable trick was NOT accepted (turn \(turns + 1))"); shot("\(tag)_tapnotaccepted") }
@@ -185,7 +189,7 @@ final class ShowSoakUITests: XCTestCase {
             if round == "results", stage == "pick" {
                 results = true
                 let btn = el(app, again ? "results-again" : "results-done")
-                if btn.waitForExistence(timeout: 20), btn.isHittable { sleep(2); shot("\(tag)_results"); log("[\(tag)] results; \(again ? "Show again" : "Done")"); btn.tap(); sleep(2); continue }
+                if btn.exists, !btn.frame.isEmpty { sleep(2); shot("\(tag)_results"); log("[\(tag)] results; \(again ? "Show again" : "Done")"); press(btn); sleep(2); continue }
             }
             if Date().timeIntervalSince(lastProgress) > 120 { XCTFail("[\(tag)] no progress for 120 s at phase \(phase) turns=\(turns) stage=\(stage) step=\(step)"); shot("\(tag)_stall"); try? app.debugDescription.write(toFile: "\(out)/\(tag)_tree.txt", atomically: false, encoding: .utf8); return false }
             usleep(400_000)

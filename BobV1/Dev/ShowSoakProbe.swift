@@ -141,6 +141,7 @@ final class ShowSoakProbe {
             if let f = care.soakPlayerFloor() { o["dist"] = Double(simd_distance(f, ShowStage.playerSpot)) }
             o["pGates"] = care.soakWalkGates(nil)
             o["lineFormed"] = care.showLineFormed()
+            o["floors"] = care.soakFloors()
             if let i = show.rivalTurn { o["rGates"] = care.soakWalkGates(i) }
         }
         return o
