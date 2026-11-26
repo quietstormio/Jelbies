@@ -94,6 +94,13 @@ final class ShowFlow {
     private(set) var rivalPre = false
     @ObservationIgnored private var preTurnDone = -1
     @ObservationIgnored var randomTurnOrder = true
+    /// show-perfect-r1: the move he tapped while it was not his go yet (the cards are always up in the Trick round). It runs the instant his go starts.
+    private(set) var queuedPick: VoiceTrick?
+    @ObservationIgnored private var queuedWait: Float = 0
+    /// The turn's last entrant has been sent off and his Jelmiko has been called to the middle at the same time (the walk back starts when her trick ends).
+    private(set) var playerCalled = false
+    /// show-perfect-r1 (diagnostics): hand-overs the flow had to form by hand (`.formLine`), and how long the last walk back took from the call.
+    @ObservationIgnored private(set) var handoverSnaps = 0
     /// HOW MANY OTHER ENTRANTS PERFORM ON STAGE AFTER EACH OF THE PLAYER'S TRICKS: the one place to change it (1 = one entrant per turn, in a fixed order: entrant k on turn k;
     /// 3 = all three every turn: 2026-11-17, the owner: "my Jelmiko went three times and the other three went once, they should all go during a round"). Every entrant's three tricks
     /// are rolled and scored whatever this is (ShowSim.rollRivalTurns), so the Results totals do not depend on it. `entrantsPerTurn` of a flow is this unless a test sets it.
@@ -108,7 +115,6 @@ final class ShowFlow {
     @ObservationIgnored private var entranceDone = false
     @ObservationIgnored private var entranceT: Float = 0
     @ObservationIgnored private var entranceTapT: Float = 0
-    @ObservationIgnored private var entrancePick: VoiceTrick?
     /// The entrants are walking on (the wide camera shot, the contestant's menu already usable).
     var trickEntering: Bool { sim?.round == .trick && phase == .stage && !entranceDone }
     @ObservationIgnored private var rivalT: Float = 0
@@ -214,16 +220,29 @@ final class ShowFlow {
         guard let s = sim else { return [] }
         let n = s.rivals.count, per = min(max(entrantsPerTurn, 1), n)
         guard n > 0 else { return [] }
-        return per >= n ? Array(s.rivals.indices) : (0..<per).map { (k * per + $0) % n }          // (one per turn: entrant k on turn k)
+        if per >= n {
+            // show-perfect-r1: with three entrants the order is 0, 2, 1 (2 when two go before him: 2, 0 | 1). Entrant 2's seat is in the BACK row and her walks go through the gate his Jelmiko uses to leave / come back:
+            // the entrant who leaves the middle last must be a front-row one (then his Jelmiko sets off for the middle at once; behind a back-row one he waited her whole walk, 4 s, and the walk back hit its cap).
+            return n == 3 ? (rawPre(k) == 2 ? [2, 0, 1] : [0, 2, 1]) : Array(s.rivals.indices)
+        }
+        return (0..<per).map { (k * per + $0) % n }          // (one per turn: entrant k on turn k)
     }
     /// How many of turn `k`'s entrants go BEFORE the player: 0...all, from the show's seed and the turn alone (its own generator: the player's slip rolls are never touched), so a replay of the seed is the same.
     func preCount(turn k: Int) -> Int {
         guard randomTurnOrder, let s = sim, !s.rivals.isEmpty else { return 0 }
-        let q = turnQueue(k).count
-        var g = RaceRNG(seed: s.seed &* 0x9E3779B97F4A7C15 &+ UInt64(k + 1) &* 0xD1B54A32D192ED03 &+ 0x7A11)
-        _ = g.next()
-        return min(Int(g.next() * Float(q + 1)), q)
+        return rawPre(k)
     }
+    /// The draw for turn `k` (0 when the random order is off or there are no entrants).
+    private func rawPre(_ k: Int) -> Int {
+        guard randomTurnOrder, let s = sim, !s.rivals.isEmpty else { return 0 }
+        let n = s.rivals.count, q = min(max(entrantsPerTurn, 1), n)
+        var g = RaceRNG(seed: s.seed &* 0x9E3779B97F4A7C15 &+ 0xD1B54A32D192ED03 &+ 0x7A11)
+        _ = g.next()
+        return min(Self.preTable[min(Int(g.next() * Float(Self.preTable.count)), Self.preTable.count - 1)][min(max(k, 0), 2)], q)
+    }
+    /// show-perfect-r1: the draws a show can have, entrants BEFORE him on turns 1 / 2 / 3 (of three). Chosen so the entrants after him on turn k plus the ones before him on turn k+1 are never more than two (3 - pre(k) + pre(k+1) <= 2):
+    /// he is never off the cards for more than two entrants' turns in a row, and still does not always go first.
+    static let preTable: [[Int]] = [[2, 1, 0], [3, 1, 0], [3, 2, 0], [3, 2, 1]]
     /// The Trick round is at a turn whose entrants-before are still to go (so it is not his go yet: the menu is dim, the pill does not say "Your go").
     var prePending: Bool {
         guard let s = sim, s.round == .trick, !s.tricksDone, phase == .stage, trickStage == .pick, preTurnDone != s.turns.count else { return false }
@@ -242,7 +261,11 @@ final class ShowFlow {
     /// The walk-out lasts at least this long while the card is up (so it can be read).
     static let tutorialMin: Float = 3.0
     /// The trick menu takes taps: his go, the round not over, no entrant still to go before him.
-    var pickLive: Bool { trickStage == .pick && !(sim?.tricksDone ?? true) && !prePending }
+    var pickLive: Bool { trickStage == .pick && !(sim?.tricksDone ?? true) && !prePending && !trickEntering }
+    /// show-perfect-r1: the trick cards are up and take a tap from the moment the Trick round starts until his third trick is in (a tap that is not his go yet is queued).
+    var cardsTappable: Bool { phase == .stage && sim?.round == .trick && !(sim?.tricksDone ?? true) && wipe == 0 && !leaving }
+    /// "Your go" is on the pill: only when his move runs at once (his Jelmiko is on the middle and the line is formed); while he walks back the pill says "Up next".
+    var yourGoShowing: Bool { pickLive }
     /// The turn being played now (0...2), nil when none is (the round is over, or a pause between turns).
     var trickTurnNow: Int? { (0..<3).first { isTrickTurnNow($0) } }
     /// The rival under the lights and what she shows this turn (her name, trick, stars and points come from this).
@@ -326,6 +349,7 @@ final class ShowFlow {
         resetStage()
         phase = .fade; fadeDest = .stage; fadeStage = .out; holdT = 0; swapped = false; leaving = false
         started += 1
+        JLog.show("show begin rank=\(r.rawValue) seed=\(seed) pre=\((0..<3).map { preCount(turn: $0) })")
         revision += 1
     }
 
@@ -333,8 +357,9 @@ final class ShowFlow {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; goAge = 0
         danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
-        tutorialDismissed = false; entranceStarted = false; entranceDone = false; entranceT = 0; entranceTapT = 0; entrancePick = nil
+        tutorialDismissed = false; entranceStarted = false; entranceDone = false; entranceT = 0; entranceTapT = 0
         rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0; rivalPre = false; preTurnDone = -1; rivalPerformed = []
+        queuedPick = nil; queuedWait = 0; playerCalled = false; handoverSnaps = 0
         earned = 0; awards = nil; settled = false; forfeited = false; cardAge = 0; againWanted = false
         autoDone = 0; autoTrickWait = 0; danceCued = 0
         ShowAssist.refresh()
@@ -348,7 +373,8 @@ final class ShowFlow {
     /// "Go home" in the middle of the show: the usual fade home with no settlement (no Drops, ribbon, trophy or stats) and no win.
     func forfeit() {
         guard canForfeit else { return }
-        forfeited = true; settled = true; leaving = true; againWanted = false
+        forfeited = true; settled = true; leaving = true; againWanted = false; queuedPick = nil
+        JLog.show("forfeit (Home) round=\(round) stage=\(trickStage)")
         onDance(nil, false)
         phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
     }
@@ -356,7 +382,8 @@ final class ShowFlow {
     /// "Done" / "Show again" on the results (or the X on a drill): back to the room.
     func goHome(again: Bool = false) {
         guard phase == .stage, !leaving else { return }
-        leaving = true; againWanted = again
+        leaving = true; againWanted = again; queuedPick = nil
+        JLog.show("go home again=\(again)")
         onDance(nil, false)
         phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
     }
@@ -373,7 +400,7 @@ final class ShowFlow {
     func finishLook() {
         guard var s = sim, s.round == .look, phase == .stage else { return }
         s.finishLook(); sim = s
-        A11yEvents.say("Round 2: Dance", .normal)
+        A11yEvents.say("Round 2: Dance", .normal); JLog.show("round dance")
         beat = .countdown; countdown = 3; countdownLeft = Self.countdownBeat; audioWait = 0; cueSerial += 1; cue(.countdown)
         onDance(s.player.dance, true)
         revision += 1
@@ -496,7 +523,7 @@ final class ShowFlow {
     func finishDance() {
         guard var s = sim, s.round == .dance, phase == .stage, beat == .danced || s.danceDone else { return }
         s.finishDance(); sim = s
-        A11yEvents.say("Round 3: Trick", .normal)
+        A11yEvents.say("Round 3: Trick", .normal); JLog.show("round trick")
         onDance(nil, false)
         beat = .idle
         trickStage = .pick
@@ -507,10 +534,17 @@ final class ShowFlow {
 
     /// A menu row is tapped: he performs it at once (a slip is the cute flop).
     func pick(_ t: VoiceTrick) {
-        guard var s = sim, s.round == .trick, trickStage == .pick, phase == .stage, !s.tricksDone else { return }
-        if trickEntering { if preCount(turn: 0) > 0 { return }; entrancePick = t; return }          // (a rival goes first this turn: not his go yet)
-        guard !prePending else { return }          // (a tap during the walk-on: the walk-on ends within a second, then he performs it)
+        guard var s = sim, s.round == .trick, phase == .stage, !s.tricksDone, wipe == 0, !leaving else { return }
+        guard pickLive else {          // not his go yet (the walk-on, an entrant before him, the entrants after his trick): the tap is QUEUED and runs the instant his go starts
+            if queuedPick != t { queuedPick = t; queuedWait = 0 }          // (a tap on another card swaps the move; the same card stays picked)
+            tutorialDefaults.set(true, forKey: Self.trickTutorialKey)
+            JLog.show("pick queued \(queuedPick?.rawValue ?? "none") stage=\(trickStage) turns=\(s.turns.count)")
+            revision += 1
+            return
+        }
+        queuedPick = nil
         guard let turn = s.perform(t) else { return }
+        JLog.show("pick \(t.rawValue) turn=\(s.turns.count) ok=\(turn.success)")
         sim = s
         tutorialDefaults.set(true, forKey: Self.trickTutorialKey)          // (he has picked a move: the card is never shown again)
         land(turn)
@@ -537,6 +571,10 @@ final class ShowFlow {
             if let s = sim, s.round == .trick, !s.tricksDone, preTurnDone != s.turns.count {          // a new turn: the entrants before him go first (when the draw puts any there)
                 preTurnDone = s.turns.count
                 if !s.rivals.isEmpty, preCount(turn: s.turns.count) > 0 { startRivals(pre: true); return }
+            }
+            if let t = queuedPick, pickLive, let s = sim {          // his go has started: the move he queued runs now (a ready Glow Burst gets 1.5 s to be armed first)
+                queuedWait += dt
+                if !s.burstReady || queuedWait >= 1.5 { queuedPick = nil; pick(t); return }
             }
             if auto, let s = sim, !s.tricksDone {
                 autoTrickWait += dt
@@ -565,13 +603,12 @@ final class ShowFlow {
         guard let s = sim else { return }
         if !entranceStarted { entranceStarted = true; entranceT = 0; entranceTapT = 0; onRival(.enter); revision += 1; return }
         entranceT += dt
-        if entrancePick != nil { entranceTapT += dt }
+        if queuedPick != nil, preCount(turn: 0) == 0 { entranceTapT += dt }
         let arrived = s.rivals.indices.allSatisfy { rivalReady($0, false) }
-        if entranceT >= (trickTutorialUp ? Self.tutorialMin : Self.entranceMin) && arrived && (lineFormed() || entranceT > Self.entranceMax - 1) || entranceT > Self.entranceMax || (entrancePick != nil && entranceTapT >= 1.0) {
+        if entranceT >= (trickTutorialUp ? Self.tutorialMin : Self.entranceMin) && arrived && (lineFormed() || entranceT > Self.entranceMax - 1) || entranceT > Self.entranceMax || (queuedPick != nil && preCount(turn: 0) == 0 && entranceTapT >= 1.0) {
             if !arrived { onRival(.snap) }
             entranceDone = true
             revision += 1
-            if let t = entrancePick { entrancePick = nil; pick(t) }
         }
     }
     static let entranceMin: Float = 1.2, entranceMax: Float = 5.5
@@ -587,13 +624,14 @@ final class ShowFlow {
         if pre { s.rollRivalTurns(turn: rivalRound); sim = s; rivalPerformed = [] }          // (an entrant's turn is rolled the moment it is needed: it never depends on the player's, so the totals are the same whoever goes first)
         rivalPre = pre
         trickStage = .rivals
-        rivalTurn = nil; rivalStep = .playerAway; rivalT = 0
+        rivalTurn = nil; rivalStep = .playerAway; rivalT = 0; playerCalled = false
+        JLog.show("rivals start pre=\(pre) turn=\(rivalRound) entrants=\(rivalQueue.count)")
         onRival(.playerAside(true))          // (he steps back first; the first entrant sets off once he is clear of the middle)
         revision += 1
     }
     private func nextRival() {
         rivalT = 0
-        if rivalQueue.isEmpty, !rivalPre, let s = sim, s.round == .trick, !s.tricksDone, !s.rivals.isEmpty, preCount(turn: s.turns.count) > 0 {          // the next turn opens with entrants: they follow at once (his Jelmiko stays aside: no walk back and out again)
+        if rivalQueue.isEmpty, chainsToNextTurn, let s = sim {          // the next turn opens with entrants: they follow at once (his Jelmiko stays aside: no walk back and out again)
             var s2 = s
             rivalRound = s.turns.count; preTurnDone = s.turns.count; rivalPre = true; rivalPerformed = []
             s2.rollRivalTurns(turn: rivalRound); sim = s2
@@ -601,7 +639,8 @@ final class ShowFlow {
         }
         guard !rivalQueue.isEmpty else {
             rivalTurn = nil; rivalStep = .playerBack
-            onRival(.playerAside(false))
+            if !playerCalled { playerCalled = true; onRival(.playerAside(false)) }
+            JLog.show("player back (turn \(s0Turns))")
             revision += 1
             return
         }
@@ -609,6 +648,18 @@ final class ShowFlow {
         rivalTurn = i; rivalStep = .walkIn
         onRival(.walkIn(i))
         if let s = sim { A11yEvents.say("\(s.rivals[i].name) is up", .normal) }
+        revision += 1
+    }
+    /// The turn's last entrant is done and the next turn opens with entrants too: they follow at once (his Jelmiko stays aside).
+    private var chainsToNextTurn: Bool {
+        guard !rivalPre, let s = sim, s.round == .trick, !s.tricksDone, !s.rivals.isEmpty else { return false }
+        return preCount(turn: s.turns.count) > 0
+    }
+    private var s0Turns: Int { sim?.turns.count ?? -1 }
+    /// show-perfect-r1: an entrant steps back. When she is the LAST of the turn (and no entrants follow), his Jelmiko is sent to the middle at the same moment: the walk back starts when her trick ends, not after her walk-out.
+    private func beginWalkOut(_ i: Int) {
+        rivalStep = .walkOut; rivalT = 0; onRival(.walkOut(i))
+        if rivalQueue.isEmpty, !chainsToNextTurn, !playerCalled { playerCalled = true; onRival(.playerAside(false)) }
         revision += 1
     }
     private func tickRivals(dt: Float) {
@@ -619,24 +670,25 @@ final class ShowFlow {
             nextRival()
         case .walkIn:
             guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalGiveUp(i) || rivalT > Self.walkInCap, lineFormed() || rivalT > Self.lineCap else { return }          // (the turn WAITS for her to arrive: no teleport; past the cap the line is formed by hand and she performs)
-            if rivalT > Self.walkInCap, !rivalReady(i, true) || !lineFormed() { onRival(.formLine) }
+            if rivalT > Self.walkInCap, !rivalReady(i, true) || !lineFormed() { handoverSnaps += 1; JLog.show("entrant walk-in snapped after \(String(format: "%.1f", rivalT)) s"); onRival(.formLine) }
             startRivalPerform(i)
         case .perform:
             guard let i = rivalTurn, rivalT >= Self.rivalSeconds(rivalNow?.turn.trick ?? .sit) else { return }
-            rivalStep = .walkOut; rivalT = 0; onRival(.walkOut(i)); revision += 1
+            beginWalkOut(i)
         case .walkOut:
             guard rivalT >= 0.25, rivalT >= 0.55 || (rivalTurn.map { rivalReady($0, false) } ?? true) else { return }          // (the next entrant sets off while she is still stepping back: they leave and arrive on opposite sides)
             nextRival()
         case .playerBack:
-            guard rivalT >= 0.3, (rivalReady(nil, true) || rivalGiveUp(nil)) && lineFormed() || rivalT > Self.playerBackCap else { return }          // (past the cap the line is formed by hand: "Your go" never waits on a body that cannot get there)
-            if rivalT > Self.playerBackCap, !(rivalReady(nil, true) && lineFormed()) { onRival(.formLine) }
+            let there = rivalReady(nil, true) && lineFormed()
+            guard rivalT >= 0.3, there || rivalGiveUp(nil) || rivalT > Self.playerBackCap else { return }          // (blocked past its own allowance: the line is formed by hand: "Your go" never waits on a body that cannot get there)
+            if !there { handoverSnaps += 1; JLog.show("player walk-back snapped after \(String(format: "%.1f", rivalT)) s (gave up=\(rivalGiveUp(nil)))"); onRival(.formLine) }
             endRivals()
         }
     }
     /// How long the turn waits for an entrant to reach the middle (was 3.5 s, and she was put there when it ran out), and for his Jelmiko to come back (was 3 s): 2.5 s more each.
     /// The most a turn waits for the line to form (the keeper carries any body to its seat within ~3.5 s, so this is a safety net that is never meant to be reached).
     static let lineCap: Float = 10.0
-    static let walkInCap: Float = 10.0, playerBackCap: Float = 8.0          // (hard ceilings only: each walk has its own allowance, `rivalGiveUp`)
+    static let walkInCap: Float = 10.0, playerBackCap: Float = 7.0          // (hard ceilings only: each walk has its own allowance, `rivalGiveUp`)
     /// The entrant who is up after the one performing now (for the glue to start a far one walking early), nil at the end of the turn.
     var nextRivalUp: Int? { rivalQueue.first }
     /// The spotlight's state changed: the screens redraw (the light layer subscribes to `revision`).
@@ -657,7 +709,7 @@ final class ShowFlow {
     /// The turn is over: his again (or the results, after the third).
     private func endRivals() {
         if !rivalPre { rivalPerformed = [] }
-        rivalPre = false
+        rivalPre = false; playerCalled = false
         trickStage = .pick; rivalTurn = nil; rivalQueue = []; rivalT = 0
         if sim?.round == .results { settle() }
         revision += 1
@@ -666,6 +718,7 @@ final class ShowFlow {
     func skipRivals() {
         guard trickStage == .rivals else { return }
         onRival(.snap)
+        JLog.show("Skip pre=\(rivalPre) turn=\(rivalRound)")
         A11yEvents.say("Skipped", .normal)
         if rivalPre { rivalPerformed.formUnion(turnQueue(rivalRound).prefix(preCount(turn: rivalRound))) }          // (the entrants before him are settled by Skip: their points count)
         endRivals()
@@ -673,7 +726,7 @@ final class ShowFlow {
     /// A tap on the banner: only the rival under the lights is skipped (she steps back at once).
     func skipCurrentRival() {
         guard trickStage == .rivals, let i = rivalTurn, rivalStep == .walkIn || rivalStep == .perform else { return }
-        rivalStep = .walkOut; rivalT = 0; onRival(.walkOut(i)); revision += 1
+        beginWalkOut(i)
     }
 
     // MARK: results
@@ -682,6 +735,7 @@ final class ShowFlow {
     private func settle() {
         guard !settled, let s = sim, let place = s.playerPlace else { return }
         settled = true
+        JLog.show("results place=\(place)")
         earned = s.playerDrops
         wallet?.add(earned)
         awards = progress.record(rank: s.rank, place: place, theme: s.theme, character: character, burst: s.entrants.first(where: \.isPlayer)?.burst ?? false,
@@ -746,6 +800,8 @@ final class ShowFlow {
         let id = playerID, again = againWanted
         phase = .off; leaving = false
         sim = nil
+        trickStage = .pick; rivalTurn = nil; rivalQueue = []; rivalPerformed = []; rivalPre = false; preTurnDone = -1; queuedPick = nil; playerCalled = false; rivalStep = .walkIn; rivalRound = 0          // (a forfeit leaves no stale turn state behind)
+        JLog.show("back in the room won=\(won) forfeited=\(forfeited)")
         onReturned(id, won, again)
         revision += 1
     }
@@ -755,7 +811,7 @@ final class ShowFlow {
         guard phase != .off else { return }
         if cameraBlend > 0 || (swapped && fadeDest == .stage) { onSwap(.room) }
         cameraBlend = 0; wipe = 0; phase = .off; sim = nil; leaving = false
-        trickStage = .pick; rivalTurn = nil; rivalQueue = []
+        trickStage = .pick; rivalTurn = nil; rivalQueue = []; rivalPerformed = []; rivalPre = false; preTurnDone = -1; queuedPick = nil; playerCalled = false
         onDance(nil, false)
         revision += 1
     }

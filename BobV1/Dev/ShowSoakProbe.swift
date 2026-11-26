@@ -43,6 +43,8 @@ final class ShowSoakProbe {
     private var returnedChecked = false
     private var roomMusicAge: Double = 0
     private var baseline: [String: String]?
+    private var gapOpen: Double?
+    private var turn0Gap = false
 
     func configure(show: ShowFlow) {
         guard Self.path != nil else { return }
@@ -100,14 +102,14 @@ final class ShowSoakProbe {
         }
         if active, !wasActive {
             lastStarted = show.started
-            showN += 1; fired = []; age = [:]; lastTurns = -1; turnsSince = 0; sawResults = false; showStartT = gameT; returnedAt = nil; returnedChecked = false
+            showN += 1; fired = []; age = [:]; gapOpen = nil; turn0Gap = false; lastTurns = -1; turnsSince = 0; sawResults = false; showStartT = gameT; returnedAt = nil; returnedChecked = false
             if hintEvery { UserDefaults.standard.removeObject(forKey: ShowFlow.trickTutorialKey) }
             emit(["k": "begin", "n": showN, "seed": show.sim.map { String($0.seed) } ?? "?", "rank": show.rank.rawValue, "hintStored": UserDefaults.standard.bool(forKey: ShowFlow.trickTutorialKey),
                   "random": show.randomTurnOrder, "preCounts": (0..<3).map { show.preCount(turn: $0) }, "audio": audioLine()])
         }
         if !active, wasActive {
             returnedAt = gameT; returnedChecked = false; roomMusicAge = 0
-            emit(["k": "end", "n": showN, "results": sawResults, "forfeited": show.forfeited, "audio": audioLine()])
+            emit(["k": "end", "n": showN, "results": sawResults, "forfeited": show.forfeited, "snaps": show.handoverSnaps, "audio": audioLine()])
             if !sawResults, !show.forfeited { fail("no-results", "returned home without the results", state(care)) }
         }
         wasActive = active
@@ -142,6 +144,7 @@ final class ShowSoakProbe {
         }
         o["trickStage"] = String(describing: show.trickStage); o["rivalStep"] = String(describing: show.rivalStep); o["rivalRound"] = show.rivalRound
         o["rivalTurn"] = show.rivalTurn ?? -1; o["pickLive"] = show.pickLive; o["entering"] = show.trickEntering
+        o["cards"] = show.cardsTappable; o["queued"] = show.queuedPick?.rawValue ?? "-"; o["yourGo"] = show.yourGoShowing
         o["musicScene"] = String(describing: show.musicScene)
         o += newFields(show)
         if show.active {
@@ -162,7 +165,7 @@ final class ShowSoakProbe {
          "hintStored": UserDefaults.standard.bool(forKey: ShowFlow.trickTutorialKey)]
     }
     private func flowSig(_ o: [String: Any]) -> String {
-        ["active", "phase", "round", "turns", "beat", "trickStage", "rivalStep", "rivalRound", "rivalTurn", "pickLive", "entering", "musicScene", "rivalPre", "prePending", "tutorialUp", "forfeitAsk", "tricksDone"]
+        ["active", "phase", "round", "turns", "beat", "trickStage", "rivalStep", "rivalRound", "rivalTurn", "pickLive", "entering", "musicScene", "rivalPre", "prePending", "tutorialUp", "forfeitAsk", "tricksDone", "cards", "queued"]
             .map { "\(o[$0] ?? "-")" }.joined(separator: "|")
     }
 
@@ -178,10 +181,19 @@ final class ShowSoakProbe {
         if trick, turnsSince > 45, !s.tricksDone { fail("trick-stall", "no player turn for \(Int(turnsSince)) game s", st) }
         if held("rivals", trick && show.trickStage == .rivals, dt, over: 45) { fail("rivals-stall", "trickStage .rivals for over 45 game s", st) }
         if held("pickdead", trick && show.trickStage == .pick && !s.tricksDone && !show.pickLive && !show.trickEntering, dt, over: 6) { fail("pick-dead", "his go is not live for over 6 game s", st) }
+        // show-perfect-r1: the cards are up and take a tap the whole round; "Your go" never shows without a live pick; the gap between his turns (his trick ends -> his go is live) is short
+        let tricking = trick && !s.tricksDone
+        if held("nopick", tricking && !show.cardsTappable, dt, over: 20) { fail("no-pick-stretch", "no live or queueable pick for over 20 game s", st) }
+        if held("yourgo", tricking && show.yourGoShowing && !show.pickLive, dt, over: 1.5) { fail("go-no-pick", "Your go shows and the pick is not live for over 1.5 game s", st) }
+        // the gap: from the Trick round's start (turn 1) / the end of his last trick, to the moment his go is live (the longest stretch without a go)
+        if trick, show.trickStage == .performing { gapOpen = gameT }
+        else if trick, gapOpen == nil, s.turns.isEmpty, !turn0Gap { gapOpen = gameT; turn0Gap = true }
+        else if trick, show.pickLive, let g = gapOpen { let len = gameT - g; gapOpen = nil; emit(["k": "gap", "s": (len * 10).rounded() / 10, "first": s.turns.isEmpty, "turns": s.turns.count, "preCounts": (0..<3).map { show.preCount(turn: $0) }, "snaps": show.handoverSnaps]); let first = s.turns.isEmpty
+            if len > (first ? 32 : 25) { fail(first ? "go-gap-first" : "go-gap", "his go came \(Int(len)) game s after \(first ? "the Trick round started" : "his last trick ended")", st) } }
         if held("entering", trick && show.trickEntering, dt, over: 9) { fail("entering-stall", "the walk-on has not ended", st) }
         if held("offcentre", trick && show.pickLive && !show.trickEntering && ((st["dist"] as? Double) ?? 0) > 0.6, dt, over: 4) { fail("off-centre", "his go is live and the performer is not at the centre", st) }
         // music
-        if stage, show.musicScene != .none {
+        if stage, show.musicScene != .none, show.musicScene != .results {          // (the results scene has no track: its jingle plays once and the room music stays out)
             let a = AudioHub.shared.soakAudio()
             let wanted = !a.muted && a.started && a.active && a.musicOn && a.musicVolume > 0.01 && !a.otherAudio && !a.micSession
             if held("music", wanted && !a.trackPlaying, dt, over: 8) { var o = st; o["audio"] = audioLine(); fail("music-silent", "show music \(show.musicScene) wanted and not playing", o) }
@@ -222,6 +234,7 @@ final class ShowSoakProbe {
         for (k, v) in care.soakRoomBodies() { d[k] = v }
         d["flow.phase"] = "\(show.phase)"; d["flow.sim"] = show.sim == nil ? "nil" : "some"; d["flow.beat"] = "\(show.beat)"; d["flow.trickStage"] = "\(show.trickStage)"
         d["flow.rivalTurn"] = "\(show.rivalTurn ?? -1)"; d["flow.rivalPre"] = "\(show.rivalPre)"; d["flow.leaving"] = "\(show.leaving)"; d["flow.performed"] = "\(show.rivalPerformed.count)"
+        d["flow.queued"] = show.queuedPick?.rawValue ?? "-"; d["flow.preTurnDone"] = "\(show.soakPreTurnDone)"; d["flow.rivalStep"] = "\(show.rivalStep)"; d["flow.rivalRound"] = "\(show.rivalRound)"
         d["flow.wipe"] = "\(show.wipe)"; d["flow.blend"] = "\(show.cameraBlend)"; d["care.forfeitAsk"] = "\(care.forfeitAsk)"; d["care.tripActive"] = "\(care.tripActive)"
         d["care.wardrobeHeld"] = "\(care.soakWardrobeHeld)"
         return d

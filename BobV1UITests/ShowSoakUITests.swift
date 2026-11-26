@@ -30,6 +30,8 @@ final class ShowSoakUITests: XCTestCase {
     private var logPath: String { "\(out)/soak.log" }
     private var shotN = 0
     private var rng: UInt64 = 0x1234_5678_9ABC
+    private var rngBox = SplitMix(state: 0xBEEF)
+    struct SplitMix: RandomNumberGenerator { var state: UInt64; mutating func next() -> UInt64 { state &+= 0x9E3779B97F4A7C15; var z = state; z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27)) &* 0x94D049BB133111EB; return z ^ (z >> 31) } }
 
     private func rand(_ n: Int) -> Int { rng = rng &* 6364136223846793005 &+ 1442695040888963407; return Int((rng >> 33) % UInt64(max(n, 1))) }
     private func log(_ s: String) {
@@ -107,10 +109,25 @@ final class ShowSoakUITests: XCTestCase {
     /// `isHittable` reads false for every button over the Metal stage on this simulator (dance-next is plainly on screen), so "usable" = exists, enabled, a real frame on the screen;
     /// the tap is a coordinate tap at its centre (so a card covered by an overlay would still FAIL to be accepted: the turn counter is the proof).
     private func press(_ e: XCUIElement) { e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
-    private struct Row { let el: XCUIElement; let label: String }
+    /// A card as the screen showed it a moment ago (a snapshot: an element that disappears mid-read - the turn moved on - is skipped instead of aborting the run under load).
+    private struct Row { let el: XCUIElement; let label: String; let enabled: Bool; let frame: CGRect }
     private func trickRows(_ app: XCUIApplication) -> [Row] {
         let q = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'trick-' AND label CONTAINS ' points'"))
-        return (0..<q.count).map { Row(el: q.element(boundBy: $0), label: q.element(boundBy: $0).label) }
+        // only the cards INSIDE the menu's own frame (the list scrolls: a row beyond it is not on the screen, a tap there lands on something else)
+        let box = (try? el(app, "trick-cards").snapshot())?.frame ?? .zero
+        return q.allElementsBoundByIndex.compactMap { e in
+            guard let s = try? e.snapshot() else { return nil }
+            if !box.isEmpty, s.frame.minY < box.minY - 2 || s.frame.maxY > box.maxY + 2 { return nil }
+            return Row(el: e, label: s.label, enabled: s.isEnabled, frame: s.frame)
+        }
+    }
+    /// A tap at a card's snapshot position (no element lookup at tap time).
+    private func tapRow(_ app: XCUIApplication, _ r: Row) {
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: r.frame.midX, dy: r.frame.midY)).tap()
+    }
+    private func pillLabel(_ app: XCUIApplication) -> String {
+        guard let s = try? el(app, "trick-turns").snapshot() else { return "" }
+        return s.label
     }
 
     /// Runs one Show end to end; returns false when the app is gone / the Show never reached its results (reported).
@@ -128,7 +145,8 @@ final class ShowSoakUITests: XCTestCase {
         var returned = false, turnsDone = -1, lastProgress = Date(), results = false, picks = 0
         var fired = Set<String>()
         let bgPhases = ["walkout", "rival-go", "player-go", "results"]
-        let homeAt = ["walkout", "rival-go", "player-go", "player-trick", "results"][rand(5)]
+        var cardsSeenAt = Date(), cardsCheckedAt = Date.distantPast, queuedTurns = Set<Int>(), yourGoSince: Date?
+        let homeAt = ["walkout", "rival-go", "player-go", "player-trick", "player-back"][rand(5)]          // (no Home pill on the results card: Done is the way home there)
         while Date().timeIntervalSince(t0) < 480 {
             guard app.state == .runningForeground else { XCTFail("[\(tag)] the app is not in the foreground (crashed?): \(app.state.rawValue)"); shot("\(tag)_gone"); return false }
             reportFails(tag)
@@ -167,6 +185,7 @@ final class ShowSoakUITests: XCTestCase {
                 let pill = el(app, "forfeit-home")
                 if pill.waitForExistence(timeout: 5) { pill.tap(); if el(app, "forfeit-go").waitForExistence(timeout: 5) { if rand(2) == 0 { el(app, "forfeit-keep").tap(); sleep(1); pill.tap() }; el(app, "forfeit-go").tap() } } else { XCTFail("[\(tag)] no Home pill at \(phase)"); shot("\(tag)_nohome") }
                 for _ in 0..<30 where count("end") < count("begin") { sleep(1) }
+                sleep(10)          // (the probe judges the room 6 s after the return: the next Show must not start before it has)
                 reportFails(tag)
                 return true
             }
@@ -179,17 +198,39 @@ final class ShowSoakUITests: XCTestCase {
             if Int(Date().timeIntervalSince(t0)) % 10 == 0, fired.insert("hb\(Int(Date().timeIntervalSince(t0)))").inserted { log("[\(tag)] poll phase=\(phase) round=\(round) turns=\(turns) next.exists=\(next.exists) hittable=\(next.exists && next.isHittable)") }
             if round == "dance", next.exists, next.isEnabled, !next.frame.isEmpty { press(next); log("[\(tag)] Next: Trick"); continue }
             if round == "trick", f["tutorialUp"] as? Bool == true, rand(6) == 0, fired.insert("tut\(turns)").inserted { let t = el(app, "trick-tutorial"); if t.exists { t.tap() } }
+            // show-perfect-r1: the cards are up and enabled from the first second of the Trick round (every 3 s the screen is asked); not his go yet = a tap QUEUES the move ("Up next"), once per turn at random
+            if round != "trick" { cardsSeenAt = Date(); yourGoSince = nil }
+            // "Your go" on the pill without a live pick for over 1.5 s is a FAIL (the screen's own label, asked on every poll while the probe says it is not his go)
+            if round == "trick", !live, !entering, f["tricksDone"] as? Bool != true, f["wipe"] as? Double == 0 {
+                if pillLabel(app).contains("Your go") { if yourGoSince == nil { yourGoSince = Date() } else if Date().timeIntervalSince(yourGoSince!) > 1.5 { XCTFail("[\(tag)] the pill says Your go but the pick is not live (\(phase), turns \(turns))"); shot("\(tag)_yourgo_notlive"); yourGoSince = nil } } else { yourGoSince = nil }
+            } else { yourGoSince = nil }
+            if round == "trick", f["tricksDone"] as? Bool != true, f["wipe"] as? Double == 0, Date().timeIntervalSince(cardsCheckedAt) > 3 {
+                cardsCheckedAt = Date()
+                let ok = trickRows(app).filter { $0.enabled && !$0.frame.isEmpty }
+                if !ok.isEmpty { cardsSeenAt = Date() }
+                else if Date().timeIntervalSince(cardsSeenAt) > 20 { XCTFail("[\(tag)] no enabled trick card for over 20 s (phase \(phase), turns \(turns))"); shot("\(tag)_nocards20"); cardsSeenAt = Date() }
+                if !live, scenario != "skip", !queuedTurns.contains(turns), phase == "rival-go" || phase == "walkout" || phase == "pre-wait" || phase == "player-back", rand(2) == 0, let r = ok.randomElement(using: &rngBox) {
+                    queuedTurns.insert(turns)
+                    log("[\(tag)] turn \(turns + 1): QUEUE \(r.label.prefix(40)) at \(phase)")
+                    tapRow(app, r)
+                    var queued = false
+                    for _ in 0..<8 { usleep(400_000); let q = lastFlow()?["queued"] as? String ?? "-"; if q != "-" || (lastFlow()?["pickLive"] as? Bool ?? false) || (lastFlow()?["turns"] as? Int ?? 0) > turns { queued = true; break } }
+                    if !queued { XCTFail("[\(tag)] a tap on a dim trick card was NOT queued (turn \(turns + 1), \(phase))"); shot("\(tag)_notqueued") }
+                    continue
+                }
+            }
+            if round == "trick", stage == "pick", live, !entering, (f["queued"] as? String ?? "-") != "-" { usleep(300_000); continue }          // (the queued move runs by itself)
             if round == "trick", stage == "pick", live, !entering {
                 let rows = trickRows(app)
-                let ok = rows.filter { $0.el.isEnabled && !$0.el.frame.isEmpty }
+                let ok = rows.filter { $0.enabled && !$0.frame.isEmpty }
                 if let r = ok.first(where: { !$0.label.contains("shown already") }) ?? ok.first {
                     log("[\(tag)] turn \(turns + 1): pick \(r.label.prefix(40))")
-                    press(r.el); picks += 1
+                    tapRow(app, r); picks += 1
                     var accepted = false
                     for _ in 0..<12 { usleep(500_000); if (lastFlow()?["turns"] as? Int ?? 0) > turns { accepted = true; break } }
                     if !accepted { XCTFail("[\(tag)] a tap on an enabled, hittable trick was NOT accepted (turn \(turns + 1))"); shot("\(tag)_tapnotaccepted") }
                 } else if Date().timeIntervalSince(lastProgress) > 8 {
-                    XCTFail("[\(tag)] turn \(turns + 1): the probe says his go is live but no trick card is enabled+hittable (\(rows.count) rows: \(rows.map { $0.el.isEnabled ? "on" : "off" }))")
+                    XCTFail("[\(tag)] turn \(turns + 1): the probe says his go is live but no trick card is enabled+hittable (\(rows.count) rows: \(rows.map { $0.enabled ? "on" : "off" }))")
                     shot("\(tag)_nocards"); try? app.debugDescription.write(toFile: "\(out)/\(tag)_tree.txt", atomically: false, encoding: .utf8); lastProgress = Date()
                 }
                 continue

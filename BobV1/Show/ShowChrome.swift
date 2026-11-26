@@ -621,15 +621,17 @@ struct TrickRound: View {
     private func bottomStack(full: CGSize, rowCap: Int?, burstHeight: CGFloat) -> some View {
         let picking = show.trickStage == .pick && !(show.sim?.tricksDone ?? true)
         return VStack(spacing: 8 * sc) {
-            ZStack {
-                if let s = show.sim, s.burstReady, picking, show.pickLive { burst(height: burstHeight) }
-                else { toast }
+            HStack(spacing: 8 * sc) {
+                ZStack {
+                    if let s = show.sim, s.burstReady, picking, show.pickLive { burst(height: burstHeight) }
+                    else { toast }
+                }
+                .frame(maxWidth: .infinity, minHeight: toastHeight)
+                .overlay(alignment: .top) { if show.trickTutorialUp { tutorialCard.offset(y: -(70 * sc)) } }          // (over the stage's lower floor, above the menu it points at: nothing moves)
+                if rivalsOn { skipButton }          // (show-perfect-r1: Skip is a small chip beside the entrant's banner; the trick cards stay up below)
             }
-            .frame(maxWidth: .infinity, minHeight: toastHeight)
-            .overlay(alignment: .top) { if show.trickTutorialUp { tutorialCard.offset(y: -(70 * sc)) } }          // (over the stage's lower floor, above the menu it points at: nothing moves)
             ScoreStrip(care: care, scale: sc, compact: compact)
-            if rivalsOn { skipButton }
-            else if picking { menuBox(rowCap: rowCap) }
+            if show.cardsTappable || picking { menuBox(rowCap: rowCap) }          // (show-perfect-r1: the cards are up from the first second of the round; before his go they are dim and a tap queues the move: "Up next")
             else { Color.clear.frame(height: (compact ? 46 : 50) * sc) }          // (the action slot: kept so the strip stays where it is while nothing is asked of him)
         }
     }
@@ -637,11 +639,11 @@ struct TrickRound: View {
 
     private var skipButton: some View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); show.skipRivals() } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "forward.fill").font(.system(size: 18 * sc, weight: .black))
-                Text("Skip").font(SK.font(19 * sc, .black))
+            HStack(spacing: 6) {
+                Image(systemName: "forward.fill").font(.system(size: 14 * sc, weight: .black))
+                Text("Skip").font(SK.font(16 * sc, .black))
             }
-            .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: (compact ? 46 : 50) * sc)
+            .foregroundStyle(SK.ink).padding(.horizontal, 16 * sc).frame(minHeight: toastHeight)
             .background(Capsule().fill(ShowUI.gold))
             .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 3))
         }
@@ -738,7 +740,7 @@ struct TrickRound: View {
                         return "\(tag) \u{00B7} Rivals"
                     }
                     if let turn { return "\(tag) \u{00B7} +\(turn.points)" }
-                    return now ? "\(tag) \u{00B7} Your go" : tag
+                    return now ? "\(tag) \u{00B7} \(show.pickLive ? "Your go" : "Up next")" : tag          // (show-perfect-r1: "Your go" only when the move he taps runs at once; his Jelmiko still walking back = "Up next")
                 }()
                 TurnChip(text: text, now: now, scale: sc, height: 34, font: 15)
                     .accessibilityElement(children: .combine)
@@ -772,7 +774,7 @@ struct TrickRound: View {
     private func menuBox(rowCap: Int?) -> some View {
         let s = show.sim
         let known = s?.knownTricks ?? []
-        let live = show.pickLive          // (dim and dead while an entrant is still to go before him)
+        let live = show.pickLive          // (his go: full colour; before it the cards are dim and a tap queues the move)
         let cap = rowCap ?? 4
         return ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: compact ? 5 : 6) { ForEach(known, id: \.rawValue) { t in row(t, live: live) } }.padding(.vertical, 2)
@@ -792,7 +794,8 @@ struct TrickRound: View {
         let s = show.sim!
         let used = s.usedTricks.contains(t), pts = s.points(t), stars = ShowTrickInfo.difficulty(t)
         let tag = ShowTrickInfo.tags(t).first { $0 == show.theme.main } ?? ShowTrickInfo.tags(t).first { $0 == show.theme.friend }
-        return Button { if live { AudioHub.shared.uiTap(); show.pick(t) } } label: {
+        let queued = show.queuedPick == t && !live
+        return Button { if show.cardsTappable { AudioHub.shared.uiTap(); show.pick(t) } } label: {
             HStack(spacing: 12 * sc) {
                 Image(systemName: ShowTrickInfo.symbol(t)).font(.system(size: 22 * sc, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 30 * sc)
                 VStack(alignment: .leading, spacing: 2) {
@@ -803,17 +806,19 @@ struct TrickRound: View {
                     StarRow(n: stars, size: 13 * sc)
                 }
                 Spacer(minLength: 4)
-                if let tag { Text(tag.title).font(SK.font(13 * sc, .black)).foregroundStyle(SK.ink).padding(.horizontal, 10 * sc).padding(.vertical, 3 * sc).background(Capsule().fill(ShowUI.tag(tag))) }
+                if queued { Text("Up next").font(SK.font(13 * sc, .black)).foregroundStyle(SK.ink).padding(.horizontal, 10 * sc).padding(.vertical, 3 * sc).background(Capsule().fill(ShowUI.gold)) }
+                else if let tag { Text(tag.title).font(SK.font(13 * sc, .black)).foregroundStyle(SK.ink).padding(.horizontal, 10 * sc).padding(.vertical, 3 * sc).background(Capsule().fill(ShowUI.tag(tag))) }
                 Text("+\(pts)").font(SK.font(24 * sc, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(minWidth: 52 * sc, alignment: .trailing)
             }
             .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity, minHeight: (compact ? 48 : 54) * sc)
             .background(RoundedRectangle(cornerRadius: 20 * sc, style: .continuous).fill(SK.cream.opacity(0.97)))
-            .opacity(!live ? 0.4 : (used ? 0.6 : 1))
+            .overlay { if queued { RoundedRectangle(cornerRadius: 20 * sc, style: .continuous).strokeBorder(ShowUI.gold, lineWidth: 3) } }
+            .opacity(queued ? 1 : (!live ? 0.55 : (used ? 0.6 : 1)))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain).disabled(!live)
+        .buttonStyle(.plain).disabled(!show.cardsTappable)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(t.title), \(stars) star\(stars == 1 ? "" : "s"), \(pts) points\(tag.map { ", matches \($0.title)" } ?? "")\(used ? ", shown already" : "")")
+        .accessibilityLabel("\(t.title), \(stars) star\(stars == 1 ? "" : "s"), \(pts) points\(tag.map { ", matches \($0.title)" } ?? "")\(used ? ", shown already" : "")\(queued ? ", picked, up next" : "")")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("trick-\(t.rawValue)")
     }

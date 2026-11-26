@@ -259,6 +259,7 @@ extension GameCare {
             book.roomAway = true
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.danceRun = nil; book.flopT = nil; book.turned = []
             book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.winPending = false; book.enterDelay = nil
+            book.heading = [:]; book.via = [:]; book.pendingWalks = []; book.keep = [:]; book.touchT = [:]; book.retryAt = [:]          // (show-perfect-r1: a forfeited Show's walks never carry into the next one)
             let spots = ShowStage.spots(bodies: book.performers.count)
             for (k, aid) in book.performers.enumerated() where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
@@ -309,6 +310,7 @@ extension GameCare {
             book.performers = []; book.parked = []; book.palettes = [:]; book.danceRun = nil
             showRemoveExtras()
             book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.enterDelay = nil
+            book.heading = [:]; book.via = [:]; book.pendingWalks = []; book.keep = [:]; book.touchT = [:]; book.turned = []; book.flopT = nil
         }
     }
 
@@ -465,7 +467,15 @@ extension GameCare {
             let at = leg.at, final = leg.final
             guard let a = showBody(id), let b = a.brain else { book.via[id] = nil; continue }
             let c = a.sim.centroid()
-            guard simd_distance(SIMD2(c.x, c.z), at) < 0.6 else { continue }
+            guard simd_distance(SIMD2(c.x, c.z), at) < 0.6 else {
+                // show-perfect-r1: a walker that STOPPED short of the leg's end (held back by the one before her, or her steering gave up) waited here for good (she stood 1.1 from the middle and held the gate-side
+                // walkers up): ask the leg again, at most every 0.6 s
+                if b.pending == nil, !b.isWalkScript {
+                    let now = Self.showGameClockOn ? book.gameClock : CACurrentMediaTime()
+                    if now - (book.retryAt[id] ?? 0) > 0.6 { book.retryAt[id] = now; showWalk(a, to: at) }
+                }
+                continue
+            }
             if b.pending != nil { continue }
             if case .walk = b.script { continue }
             var next = simd_distance(at, ShowStage.gate) < 0.6 ? (seatWaypoint(final) ?? final) : final

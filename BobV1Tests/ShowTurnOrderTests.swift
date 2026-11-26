@@ -172,7 +172,8 @@ final class ShowTurnOrderTests: XCTestCase {
             run(f, seconds: 5) { f.trickStage == .rivals }
             XCTAssertEqual(f.rivalRound, turn)
             run(f, seconds: 90) { f.trickStage == .pick }
-            XCTAssertEqual(log.a, ["P:\(t.rawValue)", "aside:true", "in:0", "R0", "out:0", "in:1", "R1", "out:1", "in:2", "R2", "out:2", "aside:false"], "turn \(turn + 1)")
+            XCTAssertEqual(f.turnQueue(turn), [0, 2, 1], "show-perfect-r1: entrant 2 (the back-row seat) is in the middle of the turn")
+            XCTAssertEqual(log.a, ["P:\(t.rawValue)", "aside:true"] + f.turnQueue(turn).flatMap { ["in:\($0)", "R\($0)", "out:\($0)"] } + ["aside:false"], "turn \(turn + 1)")
         }
         XCTAssertEqual(f.sim!.round, .results)
     }
@@ -366,5 +367,106 @@ extension ShowFlow {
         d.set(true, forKey: ShowFlow.trickTutorialKey)
         f.tutorialDefaults = d
         return f
+    }
+}
+
+// MARK: show-perfect-r1: no long wait without a pick
+
+@MainActor
+final class ShowPerfectTests: XCTestCase {
+    private func input() -> ShowPlayerInput {
+        var p = ShowPlayerInput(name: "Bob")
+        for t in WearTag.allCases { p.condition[t] = 0.5 }
+        p.glow = 0.8; p.dirt = 0; p.dance = .sway
+        p.tricks = [.sit: 0.9, .jacks: 0.9, .flip: 0.9]; p.care = 1
+        return p
+    }
+    private func run(_ f: ShowFlow, seconds: Float, until: () -> Bool = { false }) {
+        for _ in 0..<Int(seconds * 60) { f.tick(dt: 1 / 60); if until() { return } }
+    }
+    private func flowAtTrick(seed: UInt64) -> ShowFlow {
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 20261021, bodies: 1, seed: seed)
+        run(f, seconds: 2) { f.phase == .stage }
+        f.finishLook(); run(f, seconds: 6) { f.beat == .dancing }; run(f, seconds: 30) { f.beat == .danced }
+        f.finishDance()
+        return f
+    }
+
+    /// The draw: entrants after him on turn k plus entrants before him on turn k+1 are never more than two, over many seeds, and he still goes first sometimes / later sometimes.
+    func testRivalStretchBetweenHisTurnsIsAtMostTwo() {
+        var firsts = Set<Int>()
+        for seed in UInt64(1)...60 {
+            let f = flowAtTrick(seed: seed)
+            let pre = (0..<3).map { f.preCount(turn: $0) }
+            let q = f.turnQueue(0).count
+            firsts.insert(pre[0])
+            for k in 0..<2 { XCTAssertLessThanOrEqual((q - pre[k]) + pre[k + 1], 2, "seed \(seed): rivals between his turn \(k + 1) and \(k + 2): \(pre)") }
+        }
+        XCTAssertGreaterThan(firsts.count, 1, "the slot still varies")
+        XCTAssertTrue(firsts.contains(3) || firsts.contains(2), "sometimes entrants go before his first go")
+    }
+
+    /// The cards take a tap from the first second of the round: before his go it QUEUES (another card swaps it), the move runs the instant his go starts, "Your go" shows only with a live pick,
+    /// and the walk back never waits past the cap.
+    func testTapBeforeHisGoIsQueuedAndRunsAtOnce() {
+        for seed in UInt64(1)...6 {
+            let f = flowAtTrick(seed: seed)
+            XCTAssertTrue(f.trickEntering); XCTAssertTrue(f.cardsTappable, "seed \(seed): the cards are up while the entrants walk on")
+            XCTAssertFalse(f.pickLive)
+            f.pick(.jacks); XCTAssertEqual(f.queuedPick, .jacks)
+            f.pick(.jacks); XCTAssertEqual(f.queuedPick, .jacks, "a second tap on the same card keeps it picked")
+            f.pick(.flip); XCTAssertEqual(f.queuedPick, .flip, "another card swaps the move")
+            var sawUpNext = false
+            for _ in 0..<(60 * 60) {
+                f.tick(dt: 1 / 60)
+                if f.trickStage == .rivals { XCTAssertTrue(f.cardsTappable, "seed \(seed): cards stay up while the entrants go"); sawUpNext = true }
+                XCTAssertFalse(f.yourGoShowing && !f.pickLive)
+                if f.sim?.turns.count == 1 { break }
+            }
+            XCTAssertEqual(f.sim?.turns.first?.trick, .flip, "seed \(seed): the queued move ran when his go began")
+            XCTAssertNil(f.queuedPick)
+            _ = sawUpNext
+            // a tap while his own trick shows queues the NEXT turn's move
+            f.pick(.sit); XCTAssertEqual(f.queuedPick, .sit)
+            run(f, seconds: 120) { f.sim?.turns.count == 2 }
+            XCTAssertEqual(f.sim?.turns.count, 2, "seed \(seed): the second queued move ran")
+            run(f, seconds: 120) { f.pickLive }
+            f.pick(.jacks)
+            run(f, seconds: 120) { f.hasResults }
+            XCTAssertTrue(f.hasResults)
+            XCTAssertTrue(f.cardsTappable == false)
+            f.pick(.sit); XCTAssertNil(f.queuedPick, "nothing to queue after the third trick")
+        }
+    }
+
+    /// Longest stretch between his tricks (his trick ends -> his go is live), on the pure flow with instant walkers: under 20 s.
+    func testGapBetweenHisTurnsIsShort() {
+        for seed in UInt64(1)...8 {
+            let f = flowAtTrick(seed: seed)
+            var gap: Float = 0, worst: Float = 0, open = false
+            for t in [VoiceTrick.sit, .jacks, .flip] {
+                for _ in 0..<(120 * 60) {
+                    f.tick(dt: 1 / 60)
+                    if open { gap += 1 / 60 }
+                    if f.pickLive { if open { worst = max(worst, gap) }; open = false; break }
+                }
+                XCTAssertTrue(f.pickLive, "seed \(seed): his go opens")
+                f.pick(t); open = true; gap = 0
+                run(f, seconds: 5) { f.trickStage != .performing }
+            }
+            XCTAssertLessThan(worst, 20, "seed \(seed): the longest stretch between his turns was \(worst) s")
+        }
+    }
+
+    /// A forfeit leaves nothing behind: the next show begins clean.
+    func testForfeitLeavesNoStaleTurnState() {
+        let f = flowAtTrick(seed: 2)
+        run(f, seconds: 4) { f.trickStage == .rivals || f.trickStage == .performing }
+        f.pick(.sit)
+        f.forfeit()
+        run(f, seconds: 5) { !f.active }
+        XCTAssertFalse(f.active)
+        XCTAssertEqual(f.trickStage, .pick); XCTAssertNil(f.rivalTurn); XCTAssertTrue(f.rivalPerformed.isEmpty); XCTAssertNil(f.queuedPick); XCTAssertEqual(f.soakPreTurnDone, -1)
     }
 }
