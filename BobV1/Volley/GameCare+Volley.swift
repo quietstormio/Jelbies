@@ -116,7 +116,7 @@ extension GameCare {
         if cafe.active || park.active { return "\(jelly(id)?.name ?? "Your Jelmiko") is out already." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
         if bath.active { return "The clean-up is going on." }
-        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelmiko") is in the close-up. Let go first." }
+        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelmiko") is being cuddled. Let go and try again." }
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelmiko") is listening to you." }
         if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelmiko") is not in the room." }
         if match, let m = volleyPartnerBlocker(jelly: id) { return m }
