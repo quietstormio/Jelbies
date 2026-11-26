@@ -32,6 +32,7 @@ final class ShowSoakProbe {
     // per show
     private var showN = 0
     private var wasActive = false
+    private var lastStarted = 0
     private var fired = Set<String>()
     private var age: [String: Double] = [:]
     private var lastTurns = -1
@@ -92,7 +93,13 @@ final class ShowSoakProbe {
         ticks += 1; gameT += dtd
         let active = show.active
         // show start / end edges
+        if wasActive, show.started != lastStarted {          // (a new show began before a tick saw the last one end: the lobby / room do not tick the stage)
+            emit(["k": "end", "n": showN, "results": sawResults, "forfeited": show.forfeited, "late": true])
+            if !sawResults, !show.forfeited { fail("no-results", "returned home without the results", state(care)) }
+            wasActive = false
+        }
         if active, !wasActive {
+            lastStarted = show.started
             showN += 1; fired = []; age = [:]; lastTurns = -1; turnsSince = 0; sawResults = false; showStartT = gameT; returnedAt = nil; returnedChecked = false
             if hintEvery { UserDefaults.standard.removeObject(forKey: ShowFlow.trickTutorialKey) }
             emit(["k": "begin", "n": showN, "seed": show.sim.map { String($0.seed) } ?? "?", "rank": show.rank.rawValue, "hintStored": UserDefaults.standard.bool(forKey: ShowFlow.trickTutorialKey),

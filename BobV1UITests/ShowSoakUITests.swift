@@ -125,7 +125,7 @@ final class ShowSoakUITests: XCTestCase {
         let begins = count("begin")
         go.tap()
         let t0 = Date()
-        var turnsDone = -1, lastProgress = Date(), results = false, picks = 0
+        var returned = false, turnsDone = -1, lastProgress = Date(), results = false, picks = 0
         var fired = Set<String>()
         let bgPhases = ["walkout", "rival-go", "player-go", "results"]
         let homeAt = ["walkout", "rival-go", "player-go", "player-trick", "results"][rand(5)]
@@ -133,7 +133,7 @@ final class ShowSoakUITests: XCTestCase {
             guard app.state == .runningForeground else { XCTFail("[\(tag)] the app is not in the foreground (crashed?): \(app.state.rawValue)"); shot("\(tag)_gone"); return false }
             reportFails(tag)
             if count("begin") <= begins { usleep(500_000); if Date().timeIntervalSince(t0) > 40 { XCTFail("[\(tag)] the Show never began"); shot("\(tag)_nobegin"); return false }; continue }
-            if count("end") >= count("begin") { break }          // (home again)
+            if count("end") >= count("begin") { break }          // (home again: after a Forfeit)
             let f = lastFlow() ?? [:]
             let round = f["round"] as? String ?? "-", stage = f["trickStage"] as? String ?? "-", step = f["rivalStep"] as? String ?? "-"
             let live = f["pickLive"] as? Bool ?? false, entering = f["entering"] as? Bool ?? false, pre = f["rivalPre"] as? Bool ?? false
@@ -189,13 +189,18 @@ final class ShowSoakUITests: XCTestCase {
             if round == "results", stage == "pick" {
                 results = true
                 let btn = el(app, again ? "results-again" : "results-done")
-                if btn.exists, !btn.frame.isEmpty { sleep(2); shot("\(tag)_results"); log("[\(tag)] results; \(again ? "Show again" : "Done")"); press(btn); sleep(2); continue }
+                if btn.exists, !btn.frame.isEmpty { sleep(2); shot("\(tag)_results"); log("[\(tag)] results; \(again ? "Show again" : "Done")"); press(btn)
+                // back in the lobby (Show again) or the room (Done): the probe only learns of it at its next stage tick, so the screens are the signal
+                let t1 = Date(); while Date().timeIntervalSince(t1) < 40, !(again ? el(app, "studio-show").exists : app.buttons["go-out"].exists) { usleep(500_000) }
+                if !(again ? el(app, "studio-show").exists : app.buttons["go-out"].exists) { XCTFail("[\(tag)] after results the \(again ? "lobby" : "room") never came back"); shot("\(tag)_noreturn"); return false }
+                returned = true; break
+                }
             }
             if Date().timeIntervalSince(lastProgress) > 120 { XCTFail("[\(tag)] no progress for 120 s at phase \(phase) turns=\(turns) stage=\(stage) step=\(step)"); shot("\(tag)_stall"); try? app.debugDescription.write(toFile: "\(out)/\(tag)_tree.txt", atomically: false, encoding: .utf8); return false }
             usleep(400_000)
         }
         reportFails(tag)
-        if count("end") < count("begin") { XCTFail("[\(tag)] the Show did not finish in 8 minutes"); shot("\(tag)_timeout"); return false }
+        if !returned, count("end") < count("begin") { XCTFail("[\(tag)] the Show did not finish in 8 minutes"); shot("\(tag)_timeout"); return false }
         XCTAssertTrue(results, "[\(tag)] reached the results (picks=\(picks))")
         // the room is back: music restored (the probe judges it 4-40 s after the return)
         sleep(10)
