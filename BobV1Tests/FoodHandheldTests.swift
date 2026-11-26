@@ -94,7 +94,7 @@ final class FoodHandheldTests: XCTestCase {
         // rewritten once: the stored record already holds the new ids
         let stored = try JSONDecoder().decode([String: JellyTraits].self, from: try XCTUnwrap(d.data(forKey: JellyTraitsBook.key)))
         XCTAssertEqual(stored["1"]?.snack, "cinnamonroll"); XCTAssertEqual(stored["3"]?.snack, "fruitskewer")
-        XCTAssertEqual(loaded[1]?.summary, "Brave · loves Cinnamon roll")
+        XCTAssertEqual(loaded[1]?.summary, "Brave · Loves cinnamon roll")
         // new Jelmiko can only pick foods that are sold
         for p in [JellyPersonality.cuddly, .brave, .gentle, .bouncy, .curious, .sleepy, .giggly, .cheeky] {
             for f in p.snacks { XCTAssertNotNil(StoreCatalog.item(f), "\(p) likes \(f), which is not sold"); XCTAssertFalse(retired.contains(f)) }

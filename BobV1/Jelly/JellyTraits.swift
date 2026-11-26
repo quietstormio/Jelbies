@@ -76,8 +76,8 @@ nonisolated struct JellyTraits: Codable, Equatable, Sendable {
     var snack: String
     /// The favourite snack as the store names it ("Bedtime cookie").
     var snackName: String { Consumables.with(id: snack)?.name ?? snack.capitalized }
-    /// "Cuddly · loves Bedtime cookie" (the roster card and the Bag).
-    var summary: String { "\(personality.title) · loves \(snackName)" }
+    /// "Cuddly · Loves bedtime cookie" (the roster card and the Bag): "Loves" capitalised, the food lower-cased here only.
+    var summary: String { "\(personality.title) · Loves \(snackName.lowercased(with: .current))" }
 }
 
 nonisolated struct JellyCandidate: Equatable, Sendable {
