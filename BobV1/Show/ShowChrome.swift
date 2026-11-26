@@ -625,7 +625,7 @@ struct TrickRound: View {
                 if let s = show.sim, s.burstReady, picking, show.pickLive { burst(height: burstHeight) }
                 else { toast }
             }
-            .frame(minHeight: toastHeight)
+            .frame(maxWidth: .infinity, minHeight: toastHeight)
             .overlay(alignment: .top) { if show.trickTutorialUp { tutorialCard.offset(y: -(70 * sc)) } }          // (over the stage's lower floor, above the menu it points at: nothing moves)
             ScoreStrip(care: care, scale: sc, compact: compact)
             if rivalsOn { skipButton }
