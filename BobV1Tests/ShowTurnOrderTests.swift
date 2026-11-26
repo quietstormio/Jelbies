@@ -393,18 +393,22 @@ final class ShowPerfectTests: XCTestCase {
         return f
     }
 
-    /// The draw: entrants after him on turn k plus entrants before him on turn k+1 are never more than two, over many seeds, and he still goes first sometimes / later sometimes.
-    func testRivalStretchBetweenHisTurnsIsAtMostTwo() {
-        var firsts = Set<Int>()
-        for seed in UInt64(1)...60 {
+    /// The draw: entrants after him on turn k plus entrants before him on turn k+1 are never more than three (no 3 + 3 chain), over 40 seeds; he goes first on turn 1 about a quarter of the time.
+    func testRivalStretchBetweenHisTurnsIsAtMostThree() {
+        var firsts = [Int: Int](), longest = 0
+        for seed in UInt64(1)...40 {
             let f = flowAtTrick(seed: seed)
             let pre = (0..<3).map { f.preCount(turn: $0) }
             let q = f.turnQueue(0).count
-            firsts.insert(pre[0])
-            for k in 0..<2 { XCTAssertLessThanOrEqual((q - pre[k]) + pre[k + 1], 2, "seed \(seed): rivals between his turn \(k + 1) and \(k + 2): \(pre)") }
+            firsts[pre[0], default: 0] += 1
+            for k in 0..<2 { let g = (q - pre[k]) + pre[k + 1]; longest = max(longest, g); XCTAssertLessThanOrEqual(g, 3, "seed \(seed): rivals between his turn \(k + 1) and \(k + 2): \(pre)"); XCTAssertNotEqual(g, 6) }
         }
-        XCTAssertGreaterThan(firsts.count, 1, "the slot still varies")
-        XCTAssertTrue(firsts.contains(3) || firsts.contains(2), "sometimes entrants go before his first go")
+        print("[show-perfect] slot distribution over 40 seeds (entrants before him on turn 1 -> count): \(firsts.sorted { $0.key < $1.key }), longest rival stretch \(longest)")
+        var big = 0
+        for seed in UInt64(1)...400 { if flowAtTrick(seed: seed).preCount(turn: 0) == 0 { big += 1 } }
+        print("[show-perfect] he goes first on turn 1 in \(big) of 400 seeds")
+        XCTAssertTrue((70...130).contains(big), "he goes first on turn 1 about 25% of the time: \(big) of 400")
+        XCTAssertGreaterThan(firsts.count, 2, "the slot still varies")
     }
 
     /// The cards take a tap from the first second of the round: before his go it QUEUES (another card swaps it), the move runs the instant his go starts, "Your go" shows only with a live pick,

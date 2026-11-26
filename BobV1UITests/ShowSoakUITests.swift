@@ -185,7 +185,6 @@ final class ShowSoakUITests: XCTestCase {
                 let pill = el(app, "forfeit-home")
                 if pill.waitForExistence(timeout: 5) { pill.tap(); if el(app, "forfeit-go").waitForExistence(timeout: 5) { if rand(2) == 0 { el(app, "forfeit-keep").tap(); sleep(1); pill.tap() }; el(app, "forfeit-go").tap() } } else { XCTFail("[\(tag)] no Home pill at \(phase)"); shot("\(tag)_nohome") }
                 for _ in 0..<30 where count("end") < count("begin") { sleep(1) }
-                sleep(10)          // (the probe judges the room 6 s after the return: the next Show must not start before it has)
                 reportFails(tag)
                 return true
             }
@@ -197,7 +196,12 @@ final class ShowSoakUITests: XCTestCase {
             let next = el(app, "dance-next")
             if Int(Date().timeIntervalSince(t0)) % 10 == 0, fired.insert("hb\(Int(Date().timeIntervalSince(t0)))").inserted { log("[\(tag)] poll phase=\(phase) round=\(round) turns=\(turns) next.exists=\(next.exists) hittable=\(next.exists && next.isHittable)") }
             if round == "dance", next.exists, next.isEnabled, !next.frame.isEmpty { press(next); log("[\(tag)] Next: Trick"); continue }
-            if round == "trick", f["tutorialUp"] as? Bool == true, rand(6) == 0, fired.insert("tut\(turns)").inserted { let t = el(app, "trick-tutorial"); if t.exists { t.tap() } }
+            if round == "trick", f["tutorialUp"] as? Bool == true, env["SOAK_SHOTS"] != "1", rand(6) == 0, fired.insert("tut\(turns)").inserted { let t = el(app, "trick-tutorial"); if t.exists { t.tap() } }
+            // evidence frames (SOAK_SHOTS=1): the hint card over a first-ever Show, and the always-up cards while the entrants go
+            if env["SOAK_SHOTS"] == "1" {
+                if round == "trick", f["tutorialUp"] as? Bool == true, fired.insert("shot-hint").inserted { usleep(1_200_000); shot("\(tag)_hintcard"); usleep(2_500_000); shot("\(tag)_hintcard_later") }
+                if round == "trick", phase == "rival-go", turns >= 1, fired.insert("shot-cards").inserted { usleep(900_000); shot("\(tag)_cards_while_rivals_go") }
+            }
             // show-perfect-r1: the cards are up and enabled from the first second of the Trick round (every 3 s the screen is asked); not his go yet = a tap QUEUES the move ("Up next"), once per turn at random
             if round != "trick" { cardsSeenAt = Date(); yourGoSince = nil }
             // "Your go" on the pill without a live pick for over 1.5 s is a FAIL (the screen's own label, asked on every poll while the probe says it is not his go)
@@ -209,7 +213,7 @@ final class ShowSoakUITests: XCTestCase {
                 let ok = trickRows(app).filter { $0.enabled && !$0.frame.isEmpty }
                 if !ok.isEmpty { cardsSeenAt = Date() }
                 else if Date().timeIntervalSince(cardsSeenAt) > 20 { XCTFail("[\(tag)] no enabled trick card for over 20 s (phase \(phase), turns \(turns))"); shot("\(tag)_nocards20"); cardsSeenAt = Date() }
-                if !live, scenario != "skip", !queuedTurns.contains(turns), phase == "rival-go" || phase == "walkout" || phase == "pre-wait" || phase == "player-back", rand(2) == 0, let r = ok.randomElement(using: &rngBox) {
+                if !live, scenario != "skip", env["SOAK_NOQUEUE"] != "1" || index > 1, !queuedTurns.contains(turns), phase == "rival-go" || phase == "walkout" || phase == "pre-wait" || phase == "player-back", rand(2) == 0, let r = ok.randomElement(using: &rngBox) {
                     queuedTurns.insert(turns)
                     log("[\(tag)] turn \(turns + 1): QUEUE \(r.label.prefix(40)) at \(phase)")
                     tapRow(app, r)

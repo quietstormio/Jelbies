@@ -45,6 +45,8 @@ final class ShowSoakProbe {
     private var baseline: [String: String]?
     private var gapOpen: Double?
     private var turn0Gap = false
+    private var jingleSeen = false
+    private var guardSeen = 0
 
     func configure(show: ShowFlow) {
         guard Self.path != nil else { return }
@@ -102,14 +104,20 @@ final class ShowSoakProbe {
         }
         if active, !wasActive {
             lastStarted = show.started
-            showN += 1; fired = []; age = [:]; gapOpen = nil; turn0Gap = false; lastTurns = -1; turnsSince = 0; sawResults = false; showStartT = gameT; returnedAt = nil; returnedChecked = false
+            showN += 1; fired = []; age = [:]; gapOpen = nil; turn0Gap = false; jingleSeen = false; lastTurns = -1; turnsSince = 0; sawResults = false; showStartT = gameT; returnedAt = nil; returnedChecked = false
             if hintEvery { UserDefaults.standard.removeObject(forKey: ShowFlow.trickTutorialKey) }
+            if let b = baseline {          // every Show must BEGIN clean: the walk bookkeeping of the last one (a forfeit included) is gone before the stage is set
+                let now = homeDump(care)
+                let keys = ["book.heading", "book.via", "book.pendingWalks", "book.goals", "book.flops", "book.keep", "book.touchT", "book.turned", "book.trickSet", "book.enterDelay", "book.winPending", "flow.trickStage", "flow.rivalTurn", "flow.rivalPre", "flow.performed", "flow.queued", "flow.preTurnDone", "flow.rivalStep", "flow.rivalRound"]
+                let dirty = keys.filter { now[$0] != nil && b[$0] != nil && now[$0] != b[$0] }.map { "\($0): \(b[$0]!) -> \(now[$0]!)" }
+                if !dirty.isEmpty { fail("dirty-start", dirty.joined(separator: "; "), state(care)) }
+            }
             emit(["k": "begin", "n": showN, "seed": show.sim.map { String($0.seed) } ?? "?", "rank": show.rank.rawValue, "hintStored": UserDefaults.standard.bool(forKey: ShowFlow.trickTutorialKey),
                   "random": show.randomTurnOrder, "preCounts": (0..<3).map { show.preCount(turn: $0) }, "audio": audioLine()])
         }
         if !active, wasActive {
             returnedAt = gameT; returnedChecked = false; roomMusicAge = 0
-            emit(["k": "end", "n": showN, "results": sawResults, "forfeited": show.forfeited, "snaps": show.handoverSnaps, "audio": audioLine()])
+            emit(["k": "end", "n": showN, "results": sawResults, "forfeited": show.forfeited, "snaps": show.handoverSnaps, "guard": AudioHub.shared.soakAudio().guardRestarts, "audio": audioLine()])
             if !sawResults, !show.forfeited { fail("no-results", "returned home without the results", state(care)) }
         }
         wasActive = active
@@ -131,7 +139,7 @@ final class ShowSoakProbe {
         return ["muted": a.muted, "started": a.started, "active": a.active, "musicOn": a.musicOn, "musicVol": Double(a.musicVolume), "dScene": a.directorScene, "dTrack": a.directorTrack,
                 "engCur": a.engineCurrent, "trackPlaying": a.trackPlaying, "engineRunning": a.engineRunning, "loudest": Double(a.loudest), "level": Double(a.levelNow), "duck": Double(a.duck),
                 "danceGain": Double(a.danceGain), "storm": Double(a.stormDuck), "resume": Double(a.resumeFade), "main": a.mainGain, "deckPlaying": a.deckPlaying, "gap": a.inGap,
-                "roomTrack": a.roomTrack, "mic": a.micSession, "otherAudio": a.otherAudio]
+                "roomTrack": a.roomTrack, "mic": a.micSession, "otherAudio": a.otherAudio, "jingle": a.jinglePlaying, "guardRestarts": a.guardRestarts]
     }
 
     private func state(_ care: GameCare) -> [String: Any] {
@@ -189,7 +197,7 @@ final class ShowSoakProbe {
         if trick, show.trickStage == .performing { gapOpen = gameT }
         else if trick, gapOpen == nil, s.turns.isEmpty, !turn0Gap { gapOpen = gameT; turn0Gap = true }
         else if trick, show.pickLive, let g = gapOpen { let len = gameT - g; gapOpen = nil; emit(["k": "gap", "s": (len * 10).rounded() / 10, "first": s.turns.isEmpty, "turns": s.turns.count, "preCounts": (0..<3).map { show.preCount(turn: $0) }, "snaps": show.handoverSnaps]); let first = s.turns.isEmpty
-            if len > (first ? 32 : 25) { fail(first ? "go-gap-first" : "go-gap", "his go came \(Int(len)) game s after \(first ? "the Trick round started" : "his last trick ended")", st) } }
+            if len > (first ? 36 : 33) { fail(first ? "go-gap-first" : "go-gap", "his go came \(Int(len)) game s after \(first ? "the Trick round started" : "his last trick ended")", st) } }
         if held("entering", trick && show.trickEntering, dt, over: 9) { fail("entering-stall", "the walk-on has not ended", st) }
         if held("offcentre", trick && show.pickLive && !show.trickEntering && ((st["dist"] as? Double) ?? 0) > 0.6, dt, over: 4) { fail("off-centre", "his go is live and the performer is not at the centre", st) }
         // music
@@ -199,6 +207,16 @@ final class ShowSoakProbe {
             if held("music", wanted && !a.trackPlaying, dt, over: 8) { var o = st; o["audio"] = audioLine(); fail("music-silent", "show music \(show.musicScene) wanted and not playing", o) }
             if held("musicgain", wanted && a.trackPlaying && a.loudest < 0.004, dt, over: 8) { var o = st; o["audio"] = audioLine(); fail("music-zero-gain", "show music plays at zero gain", o) }
         } else { age["music"] = 0; age["musicgain"] = 0 }
+        // the results' music is the one-shot jingle (the scene has no track): it must have been heard within 2.5 s of the results card, when the music is audible
+        if stage, show.musicScene == .results, show.trickStage == .pick {
+            let a = AudioHub.shared.soakAudio()
+            if a.jinglePlaying { jingleSeen = true }
+            let wanted = !a.muted && a.started && a.active && a.musicOn && a.musicVolume > 0.01 && !a.otherAudio && !a.micSession
+            if held("resultsage", true, dt, over: 2.5), wanted, !jingleSeen { var o = st; o["audio"] = audioLine(); fail("results-jingle-silent", "the results jingle never played", o) }
+        } else { age["resultsage"] = 0 }
+        // the music guard must never fire in a soak (no faults are injected): a restart is a FAIL
+        let gr = AudioHub.shared.soakAudio().guardRestarts
+        if gr > guardSeen { guardSeen = gr; var o = st; o["audio"] = audioLine(); fail("guard-fired", "the music guard restarted the scene voice (\(gr) in all)", o) }
     }
 
     // MARK: at home
@@ -217,6 +235,7 @@ final class ShowSoakProbe {
         if since > 6, !returnedChecked {
             returnedChecked = true
             let now = homeDump(care)
+            if now["book.wardrobeHeld"] != baseline?["book.wardrobeHeld"] || now["care.wardrobeHeld"] != baseline?["care.wardrobeHeld"], since < 30 { returnedChecked = false; return }          // (the next Show is being set up from the lobby: its own start judges "begins clean"; a real leftover still shows 30 s on)
             var diffs: [String: String] = [:]
             if let b = baseline { for (k, v) in now where b[k] != v { diffs[k] = "\(b[k] ?? "∅") -> \(v)" } }
             emit(["k": "leftover", "n": showN, "diffs": diffs])
