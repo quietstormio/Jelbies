@@ -223,7 +223,7 @@ nonisolated struct ShowSim: Sendable {
         return want[Int(g.next() * Float(want.count)) % want.count]
     }
     /// Every rival takes her turn `k`: the player's rule (stars, theme, a repeat, the cap) with the miss chance at the rivals' care.
-    private mutating func rollRivalTurns(turn k: Int) {
+    mutating func rollRivalTurns(turn k: Int) {
         for i in rivals.indices where rivalTurns[i].count == k {
             let t = rivalPick(i, turn: k)
             var g = rivalRNG(i, k)

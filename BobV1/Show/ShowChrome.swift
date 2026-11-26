@@ -622,10 +622,11 @@ struct TrickRound: View {
         let picking = show.trickStage == .pick && !(show.sim?.tricksDone ?? true)
         return VStack(spacing: 8 * sc) {
             ZStack {
-                if let s = show.sim, s.burstReady, picking { burst(height: burstHeight) }
+                if let s = show.sim, s.burstReady, picking, show.pickLive { burst(height: burstHeight) }
                 else { toast }
             }
-            .frame(minHeight: toastHeight)
+            .frame(maxWidth: .infinity, minHeight: toastHeight)
+            .overlay(alignment: .top) { if show.trickTutorialUp { tutorialCard.offset(y: -(70 * sc)) } }          // (over the stage's lower floor, above the menu it points at: nothing moves)
             ScoreStrip(care: care, scale: sc, compact: compact)
             if rivalsOn { skipButton }
             else if picking { menuBox(rowCap: rowCap) }
@@ -646,6 +647,29 @@ struct TrickRound: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Skip").accessibilityIdentifier("rivals-skip")
+    }
+
+    /// "Pick a move": a cream card, a title and one short line, an arrow down to the trick cards. A tap puts it away.
+    private var tutorialCard: some View {
+        Button { AudioHub.shared.uiTap(); show.dismissTrickTutorial() } label: {
+            HStack(spacing: 12 * sc) {
+                Image(systemName: "hand.tap.fill").font(.system(size: 26 * sc, weight: .heavy)).foregroundStyle(SK.ink)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Pick a move").font(SK.font(20 * sc, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    Text("More stars, more points.").font(SK.font(14 * sc, .heavy)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                Spacer(minLength: 2)
+                Image(systemName: "arrow.down").font(.system(size: 24 * sc, weight: .black)).foregroundStyle(ShowUI.brownGold)
+            }
+            .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity).frame(height: 64 * sc)
+            .background(RoundedRectangle(cornerRadius: 22 * sc, style: .continuous).fill(SK.cream.opacity(0.97)))
+            .overlay(RoundedRectangle(cornerRadius: 22 * sc, style: .continuous).strokeBorder(ShowUI.gold, lineWidth: 3))
+            .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore).accessibilityLabel("Pick a move. More stars, more points.").accessibilityHint("Tap to hide").accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("trick-tutorial")
+        .transition(.opacity)
     }
 
     private var rivalsOn: Bool { show.trickStage == .rivals }
@@ -710,7 +734,7 @@ struct TrickRound: View {
                 let text: String = {
                     let tag = "Turn \(k + 1)"
                     if entrantNow {
-                        if let i = show.rivalTurn, let s { return "\(tag) \u{00B7} \(ScoreStrip.shortName(s.rivals[i].name))" }
+                        if let i = show.rivalTurn, let s { return "\(tag) \u{00B7} \(ScoreStrip.shortName(s.rivals[i].name))'s go" }
                         return "\(tag) \u{00B7} Rivals"
                     }
                     if let turn { return "\(tag) \u{00B7} +\(turn.points)" }
@@ -748,7 +772,7 @@ struct TrickRound: View {
     private func menuBox(rowCap: Int?) -> some View {
         let s = show.sim
         let known = s?.knownTricks ?? []
-        let live = show.trickStage == .pick && !(s?.tricksDone ?? true)
+        let live = show.pickLive          // (dim and dead while an entrant is still to go before him)
         let cap = rowCap ?? 4
         return ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: compact ? 5 : 6) { ForEach(known, id: \.rawValue) { t in row(t, live: live) } }.padding(.vertical, 2)
@@ -784,7 +808,7 @@ struct TrickRound: View {
             }
             .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity, minHeight: (compact ? 48 : 54) * sc)
             .background(RoundedRectangle(cornerRadius: 20 * sc, style: .continuous).fill(SK.cream.opacity(0.97)))
-            .opacity(used ? 0.6 : 1)
+            .opacity(!live ? 0.4 : (used ? 0.6 : 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain).disabled(!live)

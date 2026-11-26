@@ -30,7 +30,8 @@ final class ShowFlow {
     /// What one rival is doing now (and, last, the player's Jelbie walking back to the centre).
     enum RivalStep: Equatable { case playerAway, walkIn, perform, walkOut, playerBack }
     /// What the bodies are asked to do (GameCare+Show.swift): the player steps aside / back, rival `i` walks up / performs / steps back, everybody snaps home (Skip).
-    enum RivalCue: Equatable { case playerAside(Bool), walkIn(Int), perform(Int, VoiceTrick, Bool), walkOut(Int), snap, enter }
+    enum RivalCue: Equatable { case playerAside(Bool), walkIn(Int), perform(Int, VoiceTrick, Bool), walkOut(Int), snap, enter, formLine }
+    /// `formLine` (show-handover-r1): the hard backstop of a handover: every stage body that is not on its seat for the step under way is put on it, at once (the glue clears every pending walk).
 
     private(set) var phase: Phase = .off
     /// 0...1 white overlay opacity (the view draws it).
@@ -88,6 +89,11 @@ final class ShowFlow {
     private(set) var rivalStep: RivalStep = .walkIn
     private(set) var rivalRound = 0
     @ObservationIgnored private var rivalQueue: [Int] = []
+    /// show-trick-tut-r1: WHERE THE PLAYER GOES IN EACH TURN. The turn's entrants (`turnQueue`) are `preCount(turn:)` before him and the rest after (so he sometimes goes first, sometimes last). `rivalPre`: the
+    /// entrants on the stage now are the ones BEFORE his go (his Jelmiko walks back after them, to a go of the SAME turn, not the next); `preTurnDone`: the turn whose "before" part is handled. Off = he always goes first (tests).
+    private(set) var rivalPre = false
+    @ObservationIgnored private var preTurnDone = -1
+    @ObservationIgnored var randomTurnOrder = true
     /// HOW MANY OTHER ENTRANTS PERFORM ON STAGE AFTER EACH OF THE PLAYER'S TRICKS: the one place to change it (1 = one entrant per turn, in a fixed order: entrant k on turn k;
     /// 3 = all three every turn: 2026-11-17, the owner: "my Jelmiko went three times and the other three went once, they should all go during a round"). Every entrant's three tricks
     /// are rolled and scored whatever this is (ShowSim.rollRivalTurns), so the Results totals do not depend on it. `entrantsPerTurn` of a flow is this unless a test sets it.
@@ -196,9 +202,43 @@ final class ShowFlow {
         let done = s.turns.count
         let playerBack = trickStage == .rivals && rivalStep == .playerBack
         let entrantNow = trickStage == .rivals && rivalRound == k && !playerBack
-        let nextGo = playerBack && k == rivalRound + 1
-        return entrantNow || nextGo || (trickStage == .performing && k == done - 1) || (trickStage == .pick && !s.tricksDone && k == done)
+        let nextGo = playerBack && k == rivalRound + (rivalPre ? 0 : 1)
+        return entrantNow || nextGo || (trickStage == .performing && k == done - 1) || (trickStage == .pick && !s.tricksDone && k == done && !prePending)
     }
+    /// The entrants of turn `k` (the ones who perform on it, in a fixed order: all of them, or `entrantsPerTurn` of them).
+    func turnQueue(_ k: Int) -> [Int] {
+        guard let s = sim else { return [] }
+        let n = s.rivals.count, per = min(max(entrantsPerTurn, 1), n)
+        guard n > 0 else { return [] }
+        return per >= n ? Array(s.rivals.indices) : (0..<per).map { (k * per + $0) % n }          // (one per turn: entrant k on turn k)
+    }
+    /// How many of turn `k`'s entrants go BEFORE the player: 0...all, from the show's seed and the turn alone (its own generator: the player's slip rolls are never touched), so a replay of the seed is the same.
+    func preCount(turn k: Int) -> Int {
+        guard randomTurnOrder, let s = sim, !s.rivals.isEmpty else { return 0 }
+        let q = turnQueue(k).count
+        var g = RaceRNG(seed: s.seed &* 0x9E3779B97F4A7C15 &+ UInt64(k + 1) &* 0xD1B54A32D192ED03 &+ 0x7A11)
+        _ = g.next()
+        return min(Int(g.next() * Float(q + 1)), q)
+    }
+    /// The Trick round is at a turn whose entrants-before are still to go (so it is not his go yet: the menu is dim, the pill does not say "Your go").
+    var prePending: Bool {
+        guard let s = sim, s.round == .trick, !s.tricksDone, phase == .stage, trickStage == .pick, preTurnDone != s.turns.count else { return false }
+        return preCount(turn: s.turns.count) > 0
+    }
+    /// show-trick-tut-r1 (the owner: "as competitors walk out add a tutorial screen that says like pick a move"): the small "Pick a move" card over the Trick round's first seconds (the walk-out, and any entrants who go
+    /// before him on turn 1), until his first go starts or a tap on it. Shown on every visit until he has picked a move once (that flag is stored under `trickTutorialKey`, the way the Volley's one-time hint is).
+    static let trickTutorialKey = "show.hint.pickMove"
+    @ObservationIgnored var tutorialDefaults: UserDefaults = .standard
+    private(set) var tutorialDismissed = false
+    var trickTutorialUp: Bool {
+        guard let s = sim, s.round == .trick, phase == .stage, s.turns.isEmpty, !tutorialDismissed, !tutorialDefaults.bool(forKey: Self.trickTutorialKey) else { return false }
+        return trickEntering || prePending || (trickStage == .rivals && rivalPre)
+    }
+    func dismissTrickTutorial() { tutorialDismissed = true; revision += 1 }
+    /// The walk-out lasts at least this long while the card is up (so it can be read).
+    static let tutorialMin: Float = 3.0
+    /// The trick menu takes taps: his go, the round not over, no entrant still to go before him.
+    var pickLive: Bool { trickStage == .pick && !(sim?.tricksDone ?? true) && !prePending }
     /// The turn being played now (0...2), nil when none is (the round is over, or a pause between turns).
     var trickTurnNow: Int? { (0..<3).first { isTrickTurnNow($0) } }
     /// The rival under the lights and what she shows this turn (her name, trick, stars and points come from this).
@@ -210,8 +250,8 @@ final class ShowFlow {
     func rivalShownTurns(_ i: Int) -> Int {
         guard let s = sim else { return 0 }
         switch trickStage {
-        case .pick: return min(s.turns.count, s.rivalTurns.indices.contains(i) ? s.rivalTurns[i].count : 0)
-        case .performing: return max(s.turns.count - 1, 0)
+        case .pick: return min(s.turns.count + (rivalPerformed.contains(i) ? 1 : 0), s.rivalTurns.indices.contains(i) ? s.rivalTurns[i].count : 0)          // (an entrant who went before him this turn has shown it)
+        case .performing: return max(s.turns.count - 1, 0) + (rivalPerformed.contains(i) ? 1 : 0)
         case .rivals: return rivalRound + (rivalPerformed.contains(i) ? 1 : 0)
         }
     }
@@ -289,8 +329,8 @@ final class ShowFlow {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; goAge = 0
         danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
-        entranceStarted = false; entranceDone = false; entranceT = 0; entranceTapT = 0; entrancePick = nil
-        rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0
+        tutorialDismissed = false; entranceStarted = false; entranceDone = false; entranceT = 0; entranceTapT = 0; entrancePick = nil
+        rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0; rivalPre = false; preTurnDone = -1; rivalPerformed = []
         earned = 0; awards = nil; settled = false; forfeited = false; cardAge = 0; againWanted = false
         autoDone = 0; autoTrickWait = 0; danceCued = 0
         ShowAssist.refresh()
@@ -463,9 +503,11 @@ final class ShowFlow {
     /// A menu row is tapped: he performs it at once (a slip is the cute flop).
     func pick(_ t: VoiceTrick) {
         guard var s = sim, s.round == .trick, trickStage == .pick, phase == .stage, !s.tricksDone else { return }
-        if trickEntering { entrancePick = t; return }          // (a tap during the walk-on: the walk-on ends within a second, then he performs it)
+        if trickEntering { if preCount(turn: 0) > 0 { return }; entrancePick = t; return }          // (a rival goes first this turn: not his go yet)
+        guard !prePending else { return }          // (a tap during the walk-on: the walk-on ends within a second, then he performs it)
         guard let turn = s.perform(t) else { return }
         sim = s
+        tutorialDefaults.set(true, forKey: Self.trickTutorialKey)          // (he has picked a move: the card is never shown again)
         land(turn)
     }
     /// The Glow Burst button.
@@ -487,6 +529,10 @@ final class ShowFlow {
         if trickEntering { tickEntrance(dt: dt); return }
         switch trickStage {
         case .pick:
+            if let s = sim, s.round == .trick, !s.tricksDone, preTurnDone != s.turns.count {          // a new turn: the entrants before him go first (when the draw puts any there)
+                preTurnDone = s.turns.count
+                if !s.rivals.isEmpty, preCount(turn: s.turns.count) > 0 { startRivals(pre: true); return }
+            }
             if auto, let s = sim, !s.tricksDone {
                 autoTrickWait += dt
                 if autoTrickWait > Self.autoPickAfter {
@@ -499,7 +545,7 @@ final class ShowFlow {
         case .performing:
             performLeft -= dt
             if performLeft <= 0 {
-                if let s = sim, !s.rivals.isEmpty { startRivals() }
+                if let s = sim, !s.rivals.isEmpty { startRivals(pre: false) }
                 else { trickStage = .pick; if sim?.round == .results { settle() }; revision += 1 }
             }
         case .rivals: tickRivals(dt: dt)
@@ -516,7 +562,7 @@ final class ShowFlow {
         entranceT += dt
         if entrancePick != nil { entranceTapT += dt }
         let arrived = s.rivals.indices.allSatisfy { rivalReady($0, false) }
-        if entranceT >= Self.entranceMin && arrived && (lineFormed() || entranceT > Self.entranceMax - 1) || entranceT > Self.entranceMax || (entrancePick != nil && entranceTapT >= 1.0) {
+        if entranceT >= (trickTutorialUp ? Self.tutorialMin : Self.entranceMin) && arrived && (lineFormed() || entranceT > Self.entranceMax - 1) || entranceT > Self.entranceMax || (entrancePick != nil && entranceTapT >= 1.0) {
             if !arrived { onRival(.snap) }
             entranceDone = true
             revision += 1
@@ -528,19 +574,26 @@ final class ShowFlow {
     // MARK: the rivals' turns
 
     /// The player's trick is over: each rival in turn walks up to the middle, shows the trick she rolled for this turn and steps back (his Jelbie waits aside).
-    private func startRivals() {
-        guard let s = sim else { return }
-        rivalRound = max(s.turns.count - 1, 0)
-        let n = s.rivals.count, per = min(max(entrantsPerTurn, 1), n)
-        rivalQueue = per >= n ? Array(s.rivals.indices) : (0..<per).map { (rivalRound * per + $0) % n }          // (one per turn: entrant k on turn k)
+    private func startRivals(pre: Bool) {
+        guard var s = sim else { return }
+        rivalRound = pre ? s.turns.count : max(s.turns.count - 1, 0)
+        let q = turnQueue(rivalRound), p = min(preCount(turn: rivalRound), q.count)
+        rivalQueue = pre ? Array(q.prefix(p)) : Array(q.dropFirst(p))
+        if pre { s.rollRivalTurns(turn: rivalRound); sim = s; rivalPerformed = [] }          // (an entrant's turn is rolled the moment it is needed: it never depends on the player's, so the totals are the same whoever goes first)
+        rivalPre = pre
         trickStage = .rivals
-        rivalPerformed = []
         rivalTurn = nil; rivalStep = .playerAway; rivalT = 0
         onRival(.playerAside(true))          // (he steps back first; the first entrant sets off once he is clear of the middle)
         revision += 1
     }
     private func nextRival() {
         rivalT = 0
+        if rivalQueue.isEmpty, !rivalPre, let s = sim, s.round == .trick, !s.tricksDone, !s.rivals.isEmpty, preCount(turn: s.turns.count) > 0 {          // the next turn opens with entrants: they follow at once (his Jelmiko stays aside: no walk back and out again)
+            var s2 = s
+            rivalRound = s.turns.count; preTurnDone = s.turns.count; rivalPre = true; rivalPerformed = []
+            s2.rollRivalTurns(turn: rivalRound); sim = s2
+            rivalQueue = Array(turnQueue(rivalRound).prefix(min(preCount(turn: rivalRound), turnQueue(rivalRound).count)))
+        }
         guard !rivalQueue.isEmpty else {
             rivalTurn = nil; rivalStep = .playerBack
             onRival(.playerAside(false))
@@ -560,7 +613,8 @@ final class ShowFlow {
             guard rivalT >= 0.3, rivalReady(nil, false) || rivalT > 0.9 else { return }
             nextRival()
         case .walkIn:
-            guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalGiveUp(i) || rivalT > Self.walkInCap, lineFormed() || rivalT > Self.lineCap else { return }          // (the turn WAITS for her to arrive: no teleport; past the cap she performs where she stands)
+            guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalGiveUp(i) || rivalT > Self.walkInCap, lineFormed() || rivalT > Self.lineCap else { return }          // (the turn WAITS for her to arrive: no teleport; past the cap the line is formed by hand and she performs)
+            if rivalT > Self.walkInCap, !rivalReady(i, true) || !lineFormed() { onRival(.formLine) }
             startRivalPerform(i)
         case .perform:
             guard let i = rivalTurn, rivalT >= Self.rivalSeconds(rivalNow?.turn.trick ?? .sit) else { return }
@@ -569,14 +623,15 @@ final class ShowFlow {
             guard rivalT >= 0.25, rivalT >= 0.55 || (rivalTurn.map { rivalReady($0, false) } ?? true) else { return }          // (the next entrant sets off while she is still stepping back: they leave and arrive on opposite sides)
             nextRival()
         case .playerBack:
-            guard rivalT >= 0.3, rivalReady(nil, true) || rivalGiveUp(nil) || rivalT > Self.playerBackCap, lineFormed() || rivalT > Self.lineCap else { return }
+            guard rivalT >= 0.3, (rivalReady(nil, true) || rivalGiveUp(nil)) && lineFormed() || rivalT > Self.playerBackCap else { return }          // (past the cap the line is formed by hand: "Your go" never waits on a body that cannot get there)
+            if rivalT > Self.playerBackCap, !(rivalReady(nil, true) && lineFormed()) { onRival(.formLine) }
             endRivals()
         }
     }
     /// How long the turn waits for an entrant to reach the middle (was 3.5 s, and she was put there when it ran out), and for his Jelmiko to come back (was 3 s): 2.5 s more each.
     /// The most a turn waits for the line to form (the keeper carries any body to its seat within ~3.5 s, so this is a safety net that is never meant to be reached).
-    static let lineCap: Float = 30.0
-    static let walkInCap: Float = 15.0, playerBackCap: Float = 15.0          // (hard ceilings only: each walk has its own allowance, `rivalGiveUp`)
+    static let lineCap: Float = 10.0
+    static let walkInCap: Float = 10.0, playerBackCap: Float = 8.0          // (hard ceilings only: each walk has its own allowance, `rivalGiveUp`)
     /// The entrant who is up after the one performing now (for the glue to start a far one walking early), nil at the end of the turn.
     var nextRivalUp: Int? { rivalQueue.first }
     /// The spotlight's state changed: the screens redraw (the light layer subscribes to `revision`).
@@ -596,7 +651,9 @@ final class ShowFlow {
     }
     /// The turn is over: his again (or the results, after the third).
     private func endRivals() {
-        trickStage = .pick; rivalTurn = nil; rivalQueue = []; rivalT = 0; rivalPerformed = []
+        if !rivalPre { rivalPerformed = [] }
+        rivalPre = false
+        trickStage = .pick; rivalTurn = nil; rivalQueue = []; rivalT = 0
         if sim?.round == .results { settle() }
         revision += 1
     }
@@ -605,6 +662,7 @@ final class ShowFlow {
         guard trickStage == .rivals else { return }
         onRival(.snap)
         A11yEvents.say("Skipped", .normal)
+        if rivalPre { rivalPerformed.formUnion(turnQueue(rivalRound).prefix(preCount(turn: rivalRound))) }          // (the entrants before him are settled by Skip: their points count)
         endRivals()
     }
     /// A tap on the banner: only the rival under the lights is skipped (she steps back at once).
