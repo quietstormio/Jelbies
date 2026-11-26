@@ -1,8 +1,9 @@
 //
 //  RaceTrophiesSection.swift
-//  The race half of a Jelbie's Trophies sheet (the sheet opens from the "Trophies" row of his condition card): a ribbon row per course tier with how many
-//  1st / 2nd / 3rd places he has (the place is written out, so it never rests on colour alone), and the milestone trophies as chips, dimmed with what
-//  earns them until they are won. The contest ribbons (Show cups) are the sheet's own "Cups" row above it.
+//  The race section of a Jelmiko's Trophies sheet (the sheet opens from the "Trophies" card of his Profile). trophy-look-r1: one rosette per course tier, coloured by the best place won there
+//  (gold 1st, silver 2nd, bronze 3rd, the place numeral in the middle so it never rests on colour alone), a small "x N" count when that place was won more than once, a faint silhouette until
+//  a place is won; then the milestone badges (5 / 10 / 25 wins, Champion), faint with a small lock until won. The first win on a tier is the tier's gold rosette (the "<tier> winner" trophy is
+//  always earned with it); the 2nd / 3rd counts and what earns a locked badge are in each tile's VoiceOver label. The contest cups (Show) are the Show section above.
 //
 
 import SwiftUI
@@ -11,53 +12,27 @@ struct RaceTrophiesSection: View {
     let care: GameCare
     var who: Int
 
-    private static let medal: [Color] = [Color(red: 0.98, green: 0.80, blue: 0.35), Color(red: 0.80, green: 0.84, blue: 0.90), Color(red: 0.90, green: 0.68, blue: 0.52)]
     private static let ords = ["1st", "2nd", "3rd"]
 
     var body: some View {
         let shelf = care.race.trophies.shelf(character: care.jelly(who)?.character ?? who)
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Jelly Race ribbons").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
-            VStack(spacing: 6) {
+        CabinetSection(title: "Jelly Race", symbol: "flag.checkered", tint: Color(hex: 0x3FA7E8), identifier: "race-trophies") {
+            CabinetRow {
                 ForEach(CourseTier.allCases, id: \.rawValue) { t in
                     let r = shelf.raceRibbons(t)
-                    HStack(spacing: 6) {
-                        Text(t.title).font(SK.font(13, .black)).foregroundStyle(SK.ink).frame(width: 74, alignment: .leading)
-                        ForEach(0..<3, id: \.self) { k in
-                            HStack(spacing: 3) {
-                                Image(systemName: UIImage(systemName: "rosette") != nil ? "rosette" : "seal.fill").font(.system(size: 12, weight: .black))
-                                Text("\(Self.ords[k]) \u{00D7}\(r[k])").font(SK.font(11, .heavy)).monospacedDigit()
-                            }
-                            .foregroundStyle(r[k] > 0 ? SK.ink : SK.muted)
-                            .padding(.horizontal, 7).padding(.vertical, 4)
-                            .frame(maxWidth: .infinity)
-                            .background(Capsule().fill(r[k] > 0 ? Self.medal[k] : Color.white.opacity(0.5)))
-                        }
+                    let best = shelf.bestRace(t)
+                    let n = best.map { r[$0 - 1] } ?? 0
+                    let tone = CabinetTone.place(best ?? 1)
+                    CabinetTile(label: t.title, earned: best != nil, count: n, glow: tone.base,
+                                a11y: best == nil ? "\(t.title) ribbon, not yet" : "\(t.title) ribbons: \(r[0]) first, \(r[1]) second, \(r[2]) third. Best: \(Self.ords[(best ?? 1) - 1])",
+                                id: "ribbons-\(t.rawValue)") {
+                        CabinetRosette(base: tone.base, text: best.map(String.init) ?? "1")
                     }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(t.title) ribbons: \(r[0]) first, \(r[1]) second, \(r[2]) third")
-                    .accessibilityIdentifier("ribbons-\(t.rawValue)")
                 }
             }
-            Text("Jelly Race trophies").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
-            FlowLayout(spacing: 6) {
-                ForEach(Trophy.all) { t in
-                    let has = shelf.has(t)
-                    HStack(spacing: 4) {
-                        Image(systemName: has ? "trophy.fill" : "lock.fill").font(.system(size: 11, weight: .black))
-                        Text(has ? t.title : t.detail).font(SK.font(12, .black))
-                    }
-                    .foregroundStyle(has ? SK.ink : SK.muted)
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(has ? Self.medal[0] : Color.white.opacity(0.5)))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(has ? "\(t.title), earned" : "\(t.detail), not yet")
-                    .accessibilityIdentifier("trophy-\(t.id)")
-                }
+            CabinetRow {
+                ForEach([Trophy.wins5, .wins10, .wins25, .champion]) { t in CabinetMilestone.tile(t, has: shelf.has(t)) }
             }
-            Text(shelf.raceWins == 0 ? "No Jelly Race wins yet." : "\(shelf.raceWins) Jelly Race win\(shelf.raceWins == 1 ? "" : "s") so far.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("race-trophies")
     }
 }

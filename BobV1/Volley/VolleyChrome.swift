@@ -399,36 +399,27 @@ struct VolleyResultsCard: View {
     }
 }
 
-/// The volleyball half of a Jelbie's Trophies sheet.
+/// The volleyball section of a Jelmiko's Trophies sheet (trophy-look-r1): one rosette per court in the court's colour with a volleyball in the middle (faint until a match is won there, a small
+/// "x N" when it was won more than once), then the 5 / 10 / 25 match-win badges (faint with a lock until won). The first win on a court is that court's rosette.
 struct VolleyTrophiesSection: View {
     let care: GameCare
     var who: Int
+    private static let courts: [Color] = [Color(hex: 0xF0B84F), Color(hex: 0x2FB6C8), Color(hex: 0xF2705F), Color(hex: 0x4A78E8)]          // sand, aqua, coral, deep blue
     var body: some View {
         let shelf = care.race.trophies.shelf(character: care.jelly(who)?.character ?? who)
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Jelly Volleyball").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
-            FlowLayout(spacing: 6) {
-                ForEach(VolleyTier.allCases, id: \.rawValue) { t in
+        CabinetSection(title: "Jelly Volleyball", symbol: "figure.volleyball", tint: Color(hex: 0xF2A03D), identifier: "volley-trophies") {
+            CabinetRow {
+                ForEach(Array(VolleyTier.allCases.enumerated()), id: \.element.rawValue) { k, t in
                     let n = shelf.volleyWon(t)
-                    HStack(spacing: 4) {
-                        Image(systemName: UIImage(systemName: "rosette") != nil ? "rosette" : "seal.fill").font(.system(size: 12, weight: .black))
-                        Text("\(t.title) \u{00D7}\(n)").font(SK.font(12, .black))
+                    let c = Self.courts[min(k, Self.courts.count - 1)]
+                    CabinetTile(label: t.title, earned: n > 0, count: n, glow: c, a11y: n > 0 ? "\(t.title) Jelly Volleyball ribbon: \(n) win\(n == 1 ? "" : "s")" : "\(t.title) Jelly Volleyball ribbon, not yet", id: "volley-\(t.rawValue)") {
+                        CabinetRosette(base: c, symbol: "figure.volleyball")
                     }
-                    .foregroundStyle(n > 0 ? SK.ink : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(n > 0 ? Color(red: 0.98, green: 0.80, blue: 0.35) : Color.white.opacity(0.5)))
-                    .accessibilityElement(children: .ignore).accessibilityLabel("\(t.title) Jelly Volleyball ribbon: \(n) win\(n == 1 ? "" : "s")")
-                }
-                ForEach(Trophy.allVolley.filter { $0.id.hasPrefix("vwins") }) { t in
-                    let has = shelf.has(t)
-                    HStack(spacing: 4) {
-                        Image(systemName: has ? "trophy.fill" : "lock.fill").font(.system(size: 11, weight: .black))
-                        Text(has ? t.title : t.detail).font(SK.font(12, .black))
-                    }
-                    .foregroundStyle(has ? SK.ink : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(has ? Color(red: 0.98, green: 0.80, blue: 0.35) : Color.white.opacity(0.5)))
-                    .accessibilityElement(children: .ignore).accessibilityLabel(has ? "\(t.title), earned" : "\(t.detail), not yet")
                 }
             }
-        }.accessibilityIdentifier("volley-trophies")
+            CabinetRow {
+                ForEach(Trophy.allVolley.filter { $0.id.hasPrefix("vwins") }) { t in CabinetMilestone.tile(t, has: shelf.has(t)) }
+            }
+        }
     }
 }

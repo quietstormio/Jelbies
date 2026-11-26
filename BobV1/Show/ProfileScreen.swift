@@ -367,7 +367,12 @@ struct ProfileScreen: View {
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
         .background(ShowUI.sand.ignoresSafeArea())
         .accessibilityIdentifier("condition-screen")
-        .sheet(isPresented: $trophiesOpen) { TrophiesSheet(care: care, who: who) { trophiesOpen = false }.presentationDetents([.medium, .large]).presentationBackground(SK.cream) }
+        .sheet(isPresented: $trophiesOpen) { TrophiesSheet(care: care, who: who) { trophiesOpen = false }.presentationDetents(DevArgs.enabled && UserDefaults.standard.integer(forKey: "OpenTrophies") != 0 ? [.large] : [.medium, .large]).presentationBackground(SK.cream) }
+        .task {          // capture aid (dev arguments only, trophy-look-r1): `-OpenTrophies 1` opens the Trophies sheet (full height) a few seconds in
+            guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "OpenTrophies") != 0 else { return }
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            trophiesOpen = true
+        }
         .sheet(isPresented: $stylesOpen) {
             ConditionScreen(care: care, who: $who, back: { stylesOpen = false }, show: { stylesOpen = false; show() }, bath: { stylesOpen = false; bath?() }, feed: feed, drink: drink, sheetMode: true)
                 .presentationDetents([.large]).presentationBackground(ShowUI.sand)

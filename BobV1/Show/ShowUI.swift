@@ -1249,13 +1249,16 @@ struct JellyFill: SwiftUI.Shape {
     }
 }
 
-/// The trophy shelf: a cup per rank (bronze / silver / gold for the best placing), a rosette per theme stat won, and the stickers.
+/// The trophy cabinet (trophy-look-r1): a section per event (Jelly Show, Jelly Race, Jelly Volleyball), each a few rows of big coloured icons (Trophies/TrophyCabinet.swift), earned ones in full
+/// colour and the rest faint, with only a one-word label under each. Show: a cup per rank, a rosette per theme stat, the four stickers as round badges.
 struct TrophiesSheet: View {
     let care: GameCare
     var who: Int
     var close: () -> Void
     var body: some View {
         let t = care.show.progress.trophies(character: care.jelly(who)?.character ?? who)
+        let shelf = care.race.trophies.shelf(character: care.jelly(who)?.character ?? who)
+        let any = t.cupCount > 0 || !t.rosettes.isEmpty || !t.stickers.isEmpty || shelf.raceRibbonCount > 0 || !shelf.earned.isEmpty || shelf.volleyTotal > 0
         ScrollView(showsIndicators: false) { VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("\(care.rosterName(who))'s trophies").font(SK.font(26, .black)).foregroundStyle(SK.ink)
@@ -1264,46 +1267,48 @@ struct TrophiesSheet: View {
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("trophies-close")
             }
             TrophyCaseToggle(care: care)
-            Text("Cups").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
-            HStack(spacing: 10) {
-                ForEach(ShowRank.allCases, id: \.rawValue) { r in
-                    let place = t.cup(r)
-                    VStack(spacing: 4) {
-                        Image(systemName: "trophy.fill").font(.system(size: 30, weight: .black))
-                            .foregroundStyle(place == 1 ? ShowUI.goldDeep : place == 2 ? Color(hex: 0xC9CFD8) : place == 3 ? Color(hex: 0xC98B55) : SK.muted.opacity(0.25))
-                        Text(r.title).font(SK.font(12, .black)).foregroundStyle(SK.ink)
-                        Text(place.map { ShowUI.ordinal($0) } ?? "\u{2014}").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+            CabinetSection(title: "Jelly Show", symbol: "star.fill", tint: Color(hex: 0xA77BEA), identifier: "show-trophies") {
+                CabinetRow {
+                    ForEach(ShowRank.allCases, id: \.rawValue) { r in
+                        let place = t.cup(r)
+                        let tone: CabinetTone = [CabinetTone.bronze, .silver, .gold, .rainbow][min(r.index, 3)]
+                        CabinetTile(label: r.title, earned: place != nil, place: place ?? 0, glow: tone.base, a11y: place.map { "\(r.title) cup, \(ShowUI.ordinal($0)) place" } ?? "\(r.title) cup, not yet", id: "cup-\(r.rawValue)") { CabinetCup(tone: tone) }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 84).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.8)))
-                    .accessibilityElement(children: .combine).accessibilityIdentifier("cup-\(r.rawValue)")
                 }
-            }
-            Text("Rosettes").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
-            HStack(spacing: 8) {
-                ForEach(WearTag.jarOrder, id: \.rawValue) { tag in
-                    let has = t.hasRosette(tag)
-                    VStack(spacing: 3) {
-                        Image(systemName: "seal.fill").font(.system(size: 26, weight: .black)).foregroundStyle(has ? ShowUI.tag(tag) : SK.muted.opacity(0.2))
-                        Text(tag.title).font(SK.font(11, .black)).foregroundStyle(has ? SK.ink : SK.muted)
+                CabinetRow {
+                    ForEach(WearTag.jarOrder, id: \.rawValue) { tag in
+                        let has = t.hasRosette(tag)
+                        CabinetTile(label: tag.title, earned: has, glow: ShowUI.tag(tag), a11y: has ? "\(tag.title) rosette, earned" : "\(tag.title) rosette, not yet", id: "rosette-\(tag.rawValue)") {
+                            CabinetRosette(base: ShowUI.tag(tag), symbol: "star.fill")
+                        }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 60).background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(has ? 0.85 : 0.45)))
-                    .accessibilityElement(children: .combine).accessibilityIdentifier("rosette-\(tag.rawValue)")
+                }
+                CabinetRow {
+                    ForEach(ShowProgress.Sticker.allCases, id: \.rawValue) { s in
+                        let has = t.stickers.contains(s.rawValue)
+                        let look = Self.look(s)
+                        CabinetTile(label: look.word, earned: has, locked: true, glow: look.color, a11y: has ? "\(s.title) sticker, earned" : "\(s.title) sticker, not yet", id: "sticker-\(s.rawValue)") {
+                            CabinetBadge(color: look.color, symbol: look.symbol)
+                        }
+                    }
                 }
             }
-            Text("Stickers").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
-            FlowLayout(spacing: 6) {
-                ForEach(ShowProgress.Sticker.allCases, id: \.rawValue) { s in
-                    let has = t.stickers.contains(s.rawValue)
-                    Text(s.title).font(SK.font(12, .black)).foregroundStyle(has ? ShowUI.brownGold : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Capsule().fill(has ? ShowUI.light : .white.opacity(0.45)))
-                }
-            }
-            Text(t.shows == 0 ? "No Jelly Shows yet. The first one earns a sticker." : "\(t.shows) Jelly Show\(t.shows == 1 ? "" : "s") so far.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
-            RaceTrophiesSection(care: care, who: who)          // (race ribbons and trophies: Trophies/)
-            VolleyTrophiesSection(care: care, who: who)          // (beach volleyball ribbons and trophies: Volley/)
-        } }
+            RaceTrophiesSection(care: care, who: who)          // (race rosettes and milestone badges: Trophies/)
+            VolleyTrophiesSection(care: care, who: who)          // (beach volleyball rosettes and badges: Volley/)
+            if !any { Text("Win a Show, a race or a match to fill the cabinet.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity) }
+        }
+        .frame(maxWidth: 520).frame(maxWidth: .infinity) }
         .padding(16)
         .accessibilityIdentifier("trophies-sheet")
+    }
+    /// A sticker's round badge: its colour, its symbol and its one-word label (its full title is in the VoiceOver label).
+    private static func look(_ s: ShowProgress.Sticker) -> (color: Color, symbol: String, word: String) {
+        switch s {
+        case .firstShow: return (Color(hex: 0xF5B82E), "star.fill", "First")
+        case .perfectDance: return (Color(hex: 0xEE5FA0), "music.note", "Dance")
+        case .glowBurst: return (Color(hex: 0x2FB6C8), "sparkles", "Glow")
+        case .hatTrick: return (Color(hex: 0x8B5CD6), "medal.fill", "Hat-trick")
+        }
     }
 }
 

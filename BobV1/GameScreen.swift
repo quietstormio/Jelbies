@@ -1059,6 +1059,11 @@ struct GameScreen: View {
                 for _ in 0..<2 { care.race.progress.record(tier: .ripple, place: 1); care.race.trophies.recordRace(character: c, tier: .ripple, place: 1) }
                 if care.jellies.count > 1 { care.race.trophies.recordRace(character: care.jellies[1].character, tier: .ripple, place: 1) }
             }
+            if m.contains("trophymix") {          // capture aid (trophy-look-r1): the Trophies sheet with mixed awards: 1st on every race tier (5 wins, Champion), a Sandcastle volleyball win (the owner's screenshots)
+                for t in CourseTier.allCases { care.race.trophies.recordRace(character: c, tier: t, place: 1) }
+                care.race.trophies.recordVolleyWin(character: c, tier: .sandcastle)
+                if m.contains("trophyshow") { care.show.progress.record(rank: .puddle, place: 1, theme: ShowSchedule.theme(dayKey: GameCare.showDay), character: c, burst: false, perfectDance: false, hatTrick: false) }          // ("trophymix trophyshow": also a Puddle Show cup + rosette + sticker)
+            }
             if m.contains("trophycase") {          // capture aid: wins on every course + a Show cup on the wall case; "trophycard" opens its card, "trophyfocus" looks at the Puddle cup, "trophyoff" hides the case
                 let one = m.contains("trophyone")          // "trophyone": a shelf with the Puddle cup only (the owner's real save)
                 for t in (one ? [CourseTier.puddle] : CourseTier.allCases) { care.race.trophies.recordRace(character: c, tier: t, place: 1) }
