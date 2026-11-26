@@ -115,10 +115,16 @@ struct BlobCard: View {
     let blob: SelectBlob
     let needs: BlobNeeds
     var perks: [(kind: PerkKind, left: TimeInterval)] = []          // active power-ups (Perks model), shown as chips with the time left
-    var personality: String? = nil          // "Cuddly · loves Bedtime cookie" (a picked Jelbie; nil for the older ones)
+    var personality: String? = nil          // "Cuddly · Loves bedtime cookie" (a picked Jelbie; nil for the older ones)
     var profile: (() -> Void)? = nil          // the Profile button at the card's top right (home only); nil = none
     let action: () -> Void
     @State private var openPerk: PerkKind?          // the boost whose one-line explanation is showing (derived against `perks` below)
+
+    /// Concentric corner (Apple HIG, "Corner radius / concentricity": an inner shape's radius = the outer radius minus the inset between them, so both curves share one centre).
+    /// The Profile circle (36 pt, radius 18) sits `buttonInset` from the card's top and trailing edges; the card's corner radius is circle radius + inset, so the circle's
+    /// centre is exactly the corner arc's centre (24 pt from both edges). Hand-computed: ConcentricRectangle needs a container shape the circle is nested in, and the card is a plain overlay.
+    static let buttonDiameter: CGFloat = 36, buttonInset: CGFloat = 6
+    static let cornerRadius: CGFloat = buttonDiameter / 2 + buttonInset          // 24
 
     static func moodColor(_ m: BlobMood) -> Color {
         switch m {
@@ -142,7 +148,7 @@ struct BlobCard: View {
         card.overlay(alignment: .topTrailing) {          // (a sibling of the combined card element, so VoiceOver and UI tests reach it)
             if let profile {
                 ProfileEntryButton(name: blob.name, identifier: "roster-profile-\(blob.id)", action: profile)
-                    .padding(.top, -4).padding(.trailing, 4)
+                    .padding(.top, Self.buttonInset - 4).padding(.trailing, Self.buttonInset - 4)          // (the 44 pt hit frame is 4 pt bigger than the 36 pt circle on every side)
             }
         }
     }
@@ -157,7 +163,7 @@ struct BlobCard: View {
                     .background(Capsule().fill(Self.moodColor(needs.mood)))
                 let stackMood = dts.isAccessibilitySize          // largest text: the mood chip drops under the name so the name keeps its room beside the Profile button
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 8) {          // 36 pt tall when the Profile button is there: the name + chip centre on the button's centre (24 pt from the top)
                         Circle().fill(Color(red: Double(blob.tint.x), green: Double(blob.tint.y), blue: Double(blob.tint.z)))
                             .frame(width: 18, height: 18)
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
@@ -167,6 +173,7 @@ struct BlobCard: View {
                         if !stackMood { moodChip }
                         if profile != nil { Color.clear.frame(width: 40, height: 1) }          // room for the Profile button
                     }
+                    .frame(minHeight: profile != nil ? Self.buttonDiameter : 0)
                     if stackMood { moodChip }
                 }
                 if let personality { Text(personality).jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.7) }
@@ -200,10 +207,10 @@ struct BlobCard: View {
                 }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.6)))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(needs.wantedNeed != nil ? FocusStyle.pink.opacity(0.55) : Color.clear, lineWidth: 1.5))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, profile != nil ? Self.buttonInset : 8)          // with the button, the 36 pt name row starts at the button's inset
+        .background(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous).fill(Color.white.opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous).strokeBorder(needs.wantedNeed != nil ? FocusStyle.pink.opacity(0.55) : Color.clear, lineWidth: 1.5))
+        .contentShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .onTapGesture(perform: action)          // the whole card opens the Jelbie; the chip Buttons above take their own taps first
         .accessibilityElement(children: .ignore)          // one element per row: "<name>, <mood>, boosts: ..."
         .accessibilityLabel("\(blob.name), \(personality.map { $0 + ", " } ?? "")\(needs.mood.word), boosts: \(boostSummary)")
