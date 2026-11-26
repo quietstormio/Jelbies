@@ -243,6 +243,8 @@ final class SceneMusicEngine {
     }
 
     private let engine = AVAudioEngine()
+    /// show-soak-r1 (dev probe, read-only): the engine is running.
+    var engineRunning: Bool { engine.isRunning }
     private var voices: [Voice] = []
     private var level: Float = 1
     private var configObserver: NSObjectProtocol?

@@ -1378,3 +1378,24 @@ nonisolated private final class OpeningAudioPlayers: @unchecked Sendable {
         }
     }
 }
+
+#if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+// show-soak-r1: the Jelly Show soak probe's read-only view of the music (Dev/ShowSoakProbe.swift). Reads only.
+extension AudioHub {
+    struct SoakAudio {
+        var muted: Bool, started: Bool, active: Bool, musicOn: Bool, musicVolume: Float
+        var directorScene: String, directorTrack: String, engineCurrent: String, trackPlaying: Bool, loudest: Float
+        var levelNow: Float, duck: Float, danceGain: Float, stormDuck: Float, resumeFade: Float, mainGain: Double
+        var deckPlaying: Bool, inGap: Bool, roomTrack: String, micSession: Bool, otherAudio: Bool, engineRunning: Bool
+    }
+    func soakAudio() -> SoakAudio {
+        let t = director.sceneTrack
+        return SoakAudio(muted: muted, started: started, active: active, musicOn: settings.musicOn, musicVolume: settings.musicVolume,
+                         directorScene: String(describing: director.scene), directorTrack: t?.rawValue ?? "-", engineCurrent: scene?.current?.rawValue ?? "-",
+                         trackPlaying: t.map { scene?.isPlaying($0) ?? false } ?? false, loudest: scene?.loudest ?? 0,
+                         levelNow: musicLevelNow, duck: duck.gain, danceGain: danceGain, stormDuck: stormDuck, resumeFade: resumeFade, mainGain: mainSlew.gain,
+                         deckPlaying: deckPlaying, inGap: director.gapLeft != nil, roomTrack: director.current?.rawValue ?? "-", micSession: micSession,
+                         otherAudio: otherAudioPlaying, engineRunning: scene?.engineRunning ?? false)
+    }
+}
+#endif

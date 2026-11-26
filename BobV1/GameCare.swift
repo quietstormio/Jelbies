@@ -1062,6 +1062,7 @@ final class GameCare {
         if !isPreview { stuckReleaseTick(dt: dt) }          // (the general release guard: GameCare+StuckRelease.swift)
         #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
         if !isPreview { StuckDetector.shared.tick(care: self, dt: dt) }          // (no-stuck-r1: dev builds only, `-StuckProbe 1`)
+        if !isPreview { ShowSoakProbe.shared.tick(care: self, dt: dt) }          // (show-soak-r1: dev builds only, `-ShowSoakLog <file>`)
         #endif
     }
 }

@@ -90,6 +90,9 @@ extension GameCare {
         show.rivalGiveUp = { [weak self] who in self?.showWalkExpired(who) ?? false }
         show.lineFormed = { [weak self] in self?.showLineFormed() ?? true }
         let d = UserDefaults.standard
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        ShowSoakProbe.shared.configure(show: show)          // (show-soak-r1: dev arguments only)
+        #endif
         if ShowCaptureArgs.auto(defaults: d) { show.auto = true }
         if DevArgs.enabled, d.object(forKey: "ShowHomeAfter") != nil { show.autoHomeAfter = Float(d.double(forKey: "ShowHomeAfter")) }
         // capture aid: -ShowRank puddle|pond|lagoon|ocean opens every rank up to it and picks it (dev arguments only: it writes Show progress)
@@ -158,9 +161,16 @@ extension GameCare {
     }
 
     /// The show seed: `-ShowSeed n`, else from the clock (the rivals come from the day, the player's rolls from this).
+    nonisolated(unsafe) static var showSeedListNext = 0
     static var showSeed: UInt64 {
         let d = UserDefaults.standard
         if d.object(forKey: "ShowSeed") != nil { return UInt64(max(d.integer(forKey: "ShowSeed"), 0)) }
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        if DevArgs.enabled, let l = d.string(forKey: "ShowSeedList") {          // show-soak-r1: `-ShowSeedList 3,17,40` = each show of this launch takes the next seed (round and round)
+            let seeds = l.split(separator: ",").compactMap { UInt64($0) }
+            if !seeds.isEmpty { defer { showSeedListNext += 1 }; return seeds[showSeedListNext % seeds.count] }
+        }
+        #endif
         return UInt64(Date().timeIntervalSince1970 * 1000) & 0xFFFFFF
     }
     /// The show's calendar day (`-ShowDay yyyymmdd` for captures).
@@ -869,3 +879,45 @@ extension GameCare {
         for a in raceBook.actors { outfitSeen[a.id] = Self.outfitSig(outfit(a.id)) }          // (no "new outfit" admiring for what is only the old outfit coming back)
     }
 }
+
+#if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+// show-soak-r1: read-only accessors for the soak probe (Dev/ShowSoakProbe.swift).
+extension GameCare {
+    /// The player's stage body: its floor point and how far from the middle.
+    func soakPlayerFloor() -> SIMD2<Float>? {
+        guard let a = stageActor(0) else { return nil }
+        let c = a.sim.centroid(); return SIMD2(c.x, c.z)
+    }
+    /// The walk gates of the body that `who` names (nil = the player): pending walk, brain pending / walking, goal, heading age / limit, walk expired, and the line keeper.
+    func soakWalkGates(_ who: Int?) -> String {
+        let book = showBook
+        guard let a = who.map({ showBook.rivalBody[$0].flatMap { id in book.actors.indices.contains(id) ? book.actors[id] : book.extra.first { $0.id == id } } }) ?? stageActor(0), let b = a.brain else { return "nobody" }
+        var walking = false
+        if case .walk = b.script { walking = true }
+        let h = book.heading[a.id]
+        return "pw=\(book.pendingWalks.contains { $0.id == a.id } ? 1 : 0) pend=\(b.pending != nil ? 1 : 0) walk=\(walking ? 1 : 0) goal=\(book.goals[a.id] != nil ? 1 : 0) head=\(h.map { String(format: "%.1f/%.1f", $0.age, $0.limit) } ?? "-") exp=\(showWalkExpired(who) ? 1 : 0) keep=\(book.keep[a.id]?.gliding == true ? "glide" : "-")"
+    }
+    /// Every ShowBook field as "label=count or value" (collections by count): the probe diffs it against the one taken at home before the first show.
+    func soakShowBookDump() -> [String: String] {
+        var out: [String: String] = [:]
+        for ch in Mirror(reflecting: showBook).children {
+            guard let l = ch.label else { continue }
+            let m = Mirror(reflecting: ch.value)
+            switch m.displayStyle {
+            case .collection, .dictionary, .set: out[l] = "n=\(m.children.count)"
+            case .optional: out[l] = m.children.isEmpty ? "nil" : "some"
+            default:
+                if ch.value is Bool || ch.value is Int || ch.value is String { out[l] = "\(ch.value)" } else { out[l] = "·" }
+            }
+        }
+        return out
+    }
+    /// The room bodies' trip-sensitive state: autonomy, idle block, the wall.
+    func soakRoomBodies() -> [String: String] {
+        var out: [String: String] = [:]
+        for a in raceBook.actors { if let b = a.brain { out["actor\(a.id)"] = "auto=\(b.autonomy ? 1 : 0) idleBlocked=\(b.idleBlocked ? 1 : 0) arenaFinite=\(a.sim.arenaRadius.isFinite ? 1 : 0)" } }
+        return out
+    }
+    var soakWardrobeHeld: Bool { showBook.wardrobeHeld }
+}
+#endif

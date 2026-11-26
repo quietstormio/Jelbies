@@ -167,6 +167,10 @@ final class ShowFlow {
     @ObservationIgnored var auto = false
     /// Capture aid (`-ShowHomeAfter s`, with `-ShowAuto`): the auto player presses Done this many seconds after the Results card is up (nil = never).
     @ObservationIgnored var autoHomeAfter: Float?
+    /// show-soak-r1 (dev arguments only, off by default; Dev/ShowSoakProbe.swift): the dance is played for him (the tricks are NOT), and / or cut short this many song seconds in (the soak's fast lane).
+    @ObservationIgnored var soakAutoDance = false
+    @ObservationIgnored var soakFastDance: Double?
+    var soakPreTurnDone: Int { preTurnDone }
     @ObservationIgnored private var autoDone = 0
     /// Dance prompts whose left / right audio cue has played (accessibility; PlayAssist.swift).
     @ObservationIgnored var danceCued = 0
@@ -410,7 +414,8 @@ final class ShowFlow {
             flashAge += dt; goAge += dt
             if flashAge > 0.7, flash != nil { flash = nil }
             now = danceClock(dt: dt)
-            if auto || ShowAssist.autoDance { autoPlay(now) }
+            if let f = soakFastDance, danceT > f, !(sim?.danceDone ?? false) { beat = .danced; dancedAge = 0; danceMusicOn = false; revision += 1; return }
+            if auto || soakAutoDance || ShowAssist.autoDance { autoPlay(now) }
             promptCues(now: now)
             guard var s = sim else { return }
             let ev = s.tickDance(songTime: now)
