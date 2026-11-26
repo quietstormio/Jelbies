@@ -40,6 +40,9 @@ struct GameScreen: View {
     @State private var welcomeTask: Task<Void, Never>?
     @State private var welcomeSafety: Task<Void, Never>?
     static let welcomeMax: TimeInterval = 3.0, welcomeAway: TimeInterval = 8          // cover: hard max, and the shortest absence that shows it
+    /// The "Welcome back" cover is only for a long absence with the room on screen. With the stage paused (a Town screen / Profile is open) the room is hidden and the stage draws no frames,
+    /// so the cover would only wait out its 3 s cap over the menu the player came back to.
+    static func welcomeCoverSkipped(away: TimeInterval, stagePaused: Bool) -> Bool { away <= welcomeAway || stagePaused }
     @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
     @State private var hudInfoH: CGFloat = 0          // measured: the info row (sleep-until-morning) under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
@@ -486,13 +489,13 @@ struct GameScreen: View {
                 guard let left = welcomeLeftAt else { break }
                 welcomeLeftAt = nil
                 welcomeTask?.cancel()
-                if Date().timeIntervalSince(left) <= GameScreen.welcomeAway { welcomeSafety?.cancel(); welcomeCover = false; AudioHub.shared.holdEffects(false); break }
+                if GameScreen.welcomeCoverSkipped(away: Date().timeIntervalSince(left), stagePaused: model.paused) { welcomeSafety?.cancel(); welcomeCover = false; AudioHub.shared.holdEffects(false); break }          // (a full-screen screen such as the Profile / its trophies sheet pauses the stage: no frames will come, and the room is not showing; trophy-loading-r1)
                 let ticks0 = ResumeFrames.ticks
                 welcomeTask = Task { @MainActor in
                     let t0 = Date()
                     try? await Task.sleep(for: .milliseconds(600))          // min 0.6 s: never a flash
                     // ready = music/session back AND the stage drew at least 2 fresh frames since we came back; hard max 3.0 s
-                    while !Task.isCancelled, Date().timeIntervalSince(t0) < GameScreen.welcomeMax, !(AudioHub.shared.resumeReady && ResumeFrames.ticks >= ticks0 &+ 2) { try? await Task.sleep(for: .milliseconds(50)) }
+                    while !Task.isCancelled, Date().timeIntervalSince(t0) < GameScreen.welcomeMax, !(model.paused || (AudioHub.shared.resumeReady && ResumeFrames.ticks >= ticks0 &+ 2)) { try? await Task.sleep(for: .milliseconds(50)) }
                     guard !Task.isCancelled else { return }
                     welcomeSafety?.cancel()
                     AudioHub.shared.holdEffects(false)

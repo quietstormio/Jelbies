@@ -14,6 +14,13 @@ final class LaunchCurtainTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     private func gate(_ c: Clock) -> LaunchGate { let g = LaunchGate(clock: { c.t }); Self.keep.append(g); return g }
 
+    /// trophy-loading-r1: coming back with the Profile (or its trophies sheet) open must not raise the "Loading your Jelly Pet" cover: the stage is paused, so it never sees a frame.
+    func testWelcomeCoverSkippedWhileAFullScreenScreenIsOpen() {
+        XCTAssertTrue(GameScreen.welcomeCoverSkipped(away: 60, stagePaused: true), "a long absence with the Profile open: no cover")
+        XCTAssertTrue(GameScreen.welcomeCoverSkipped(away: 3, stagePaused: false), "a short absence: no cover")
+        XCTAssertFalse(GameScreen.welcomeCoverSkipped(away: 60, stagePaused: false), "a long absence on the room: the cover stays")
+    }
+
     func testHidesOnlyAfterMinShowStageTickAndSettle() {
         let c = Clock()
         let g = gate(c)
