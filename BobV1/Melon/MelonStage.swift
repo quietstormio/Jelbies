@@ -1100,7 +1100,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Feeds the idle-rest governor: Bob counts as still with no touch, script, walk, request, focus blend, tray or selection, and low kinetic energy.
     private func updateIdleRest(_ stage: MelonStageView, dt: Double) {
         guard Self.idleRestFlag, Self.adaptiveEnabled || UserDefaults.standard.bool(forKey: "IdleRest") else { return }
-        var active = stage.activeTouches > 0 || RoomSwipe.yaw != 0 || mode != .none || sim.grabbing || throwHold > 0 || model.touch.holdsBrain
+        var active = stage.activeTouches > 0 || RoomSwipe.yaw != 0 || RoomSwipe.pitch != 0 || mode != .none || sim.grabbing || throwHold > 0 || model.touch.holdsBrain
         for a in actors {            // every Jelly has to be still
             if let brain = a.brain, brain.enabled {
                 active = active || brain.activity != .idle || brain.commanded || brain.pending != nil
@@ -2252,11 +2252,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         let p = t.location(in: view), now = CACurrentMediaTime()
         if !swipeLive {
             let dx = p.x - swipeStart.x, dy = p.y - swipeStart.y
-            if abs(dx) >= RoomSwipe.startDistance, abs(dx) > abs(dy) { swipeLive = true; RoomSwipe.begin(now: now); if DevArgs.enabled { NSLog("[roomswipe] begin yaw %.1f deg", Double(RoomSwipe.yaw * 180 / .pi)) }; swipeLast = swipeStart; swipeLastT = now - 0.016 }
-            else if abs(dy) >= RoomSwipe.startDistance { swipeID = nil; return }          // a vertical drag is not ours
+            if max(abs(dx), abs(dy)) >= RoomSwipe.startDistance { swipeLive = true; RoomSwipe.begin(now: now); if DevArgs.enabled { NSLog("[roomswipe] begin yaw %.1f pitch %.1f deg", Double(RoomSwipe.yaw * 180 / .pi), Double(RoomSwipe.pitch * 180 / .pi)) }; swipeLast = swipeStart; swipeLastT = now - 0.016 }
             else { return }
         }
-        RoomSwipe.drag(dx: p.x - swipeLast.x, dt: now - swipeLastT, now: now)
+        RoomSwipe.drag(dx: p.x - swipeLast.x, dy: p.y - swipeLast.y, dt: now - swipeLastT, now: now)
         swipeLast = p; swipeLastT = now
     }
 
@@ -2266,7 +2265,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     private func endSwipe() {
-        if swipeLive { RoomSwipe.end(now: CACurrentMediaTime()); if DevArgs.enabled { NSLog("[roomswipe] end yaw %.1f deg", Double(RoomSwipe.yaw * 180 / .pi)) } }
+        if swipeLive { RoomSwipe.end(now: CACurrentMediaTime()); if DevArgs.enabled { NSLog("[roomswipe] end yaw %.1f pitch %.1f deg", Double(RoomSwipe.yaw * 180 / .pi), Double(RoomSwipe.pitch * 180 / .pi)) } }
         swipeID = nil; swipeLive = false
     }
 
