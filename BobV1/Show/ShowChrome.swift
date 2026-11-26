@@ -580,6 +580,7 @@ struct TrickRound: View {
                         Spacer(minLength: 0)
                         VStack(spacing: 8) {
                             turns
+                            if show.trickTutorialUp { tutorialCard }          // (the empty space under the turn chips: never over the stage)
                             Spacer(minLength: 0)
                             bottomStack(full: full, rowCap: 3, burstHeight: 40)
                         }
@@ -594,6 +595,7 @@ struct TrickRound: View {
                             Color.clear.frame(width: size.width * 0.55 - 16)
                             VStack(spacing: 10) {
                                 turns
+                                if show.trickTutorialUp { tutorialCard }
                                 Spacer(minLength: 0)
                                 bottomStack(full: full, rowCap: 6, burstHeight: 48 * sc)
                             }
@@ -605,6 +607,7 @@ struct TrickRound: View {
                     VStack(spacing: 10) {
                         RoundHeader(care: care, round: 3, title: "Trick", kicker: turnPips.kicker, turns: turnPips)
                         turns.padReadable(760)
+                        if show.trickTutorialUp { tutorialCard.padReadable(760) }          // (the empty space under the turn chips, above the stage)
                         Spacer(minLength: 0)
                         bottomStack(full: full, rowCap: nil, burstHeight: 40 * sc).padReadable(760)
                     }
@@ -627,7 +630,6 @@ struct TrickRound: View {
                     else { toast }
                 }
                 .frame(maxWidth: .infinity, minHeight: toastHeight)
-                .overlay(alignment: .top) { if show.trickTutorialUp { tutorialCard.offset(y: -(70 * sc)) } }          // (over the stage's lower floor, above the menu it points at: nothing moves)
                 if rivalsOn { skipButton }          // (show-perfect-r1: Skip is a small chip beside the entrant's banner; the trick cards stay up below)
             }
             ScoreStrip(care: care, scale: sc, compact: compact)
