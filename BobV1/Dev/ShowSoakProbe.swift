@@ -56,7 +56,7 @@ final class ShowSoakProbe {
         hintEvery = d.bool(forKey: "ShowSoakHintEveryShow")
         if d.bool(forKey: "ShowSoakClassic") { show.randomTurnOrder = false }
         if d.bool(forKey: "ShowSoakAutoDance") { show.soakAutoDance = true }
-        if d.object(forKey: "ShowSoakFast") != nil { show.soakFastDance = d.double(forKey: "ShowSoakFast") }
+        if d.double(forKey: "ShowSoakFast") > 0 { show.soakFastDance = d.double(forKey: "ShowSoakFast") }
         emit(["k": "config", "hint": d.string(forKey: "ShowSoakHint") ?? "keep", "hintStored": d.bool(forKey: ShowFlow.trickTutorialKey), "classic": !show.randomTurnOrder,
               "autoDance": show.soakAutoDance, "fast": show.soakFastDance ?? -1, "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"])
     }
