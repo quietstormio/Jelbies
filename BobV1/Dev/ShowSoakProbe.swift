@@ -149,6 +149,7 @@ final class ShowSoakProbe {
             o["pGates"] = care.soakWalkGates(nil)
             o["lineFormed"] = care.showLineFormed()
             o["floors"] = care.soakFloors()
+            o["allGates"] = care.soakRivalGates()
             if let i = show.rivalTurn { o["rGates"] = care.soakWalkGates(i) }
         }
         return o

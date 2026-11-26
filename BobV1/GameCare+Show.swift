@@ -919,6 +919,16 @@ extension GameCare {
         return out
     }
     var soakWardrobeHeld: Bool { showBook.wardrobeHeld }
+    /// Every rival body's walk bookkeeping (index: gates, the second leg it is on, the seat it is sent to).
+    func soakRivalGates() -> String {
+        guard let s = show.sim else { return "" }
+        return s.rivals.indices.map { i -> String in
+            let id = showBook.rivalBody[i]
+            let via = id.flatMap { showBook.via[$0] } != nil ? 1 : 0
+            let retry = id.flatMap { showBook.retryAt[$0] }.map { String(format: "%.1f", showBook.gameClock - $0) } ?? "-"
+            return "r\(i)[\(soakWalkGates(i)) via=\(via) retryAgo=\(retry)]"
+        }.joined(separator: " ")
+    }
     /// Every stage body: actor id (p = the player's), its distance from the middle, and the walk bookkeeping; whether the middle is clear for the player; the pending walks (id, seconds waited).
     func soakFloors() -> String {
         let book = showBook
