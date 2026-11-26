@@ -575,12 +575,12 @@ struct TrickRound: View {
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 8) {
                             SideHeader(round: 3, title: "Trick", kicker: turnPips.kicker, turns: turnPips)
+                            if show.trickTutorialUp { tutorialCard.frame(maxWidth: size.width * 0.38) }          // (the empty corner under the title, above the performer: not over a Jelmiko)
                             Spacer(minLength: 0)
                         }
                         Spacer(minLength: 0)
                         VStack(spacing: 8) {
                             turns
-                            if show.trickTutorialUp { tutorialCard }          // (the empty space under the turn chips: never over the stage)
                             Spacer(minLength: 0)
                             bottomStack(full: full, rowCap: 3, burstHeight: 40)
                         }
@@ -659,13 +659,13 @@ struct TrickRound: View {
             HStack(spacing: 12 * sc) {
                 Image(systemName: "hand.tap.fill").font(.system(size: 26 * sc, weight: .heavy)).foregroundStyle(SK.ink)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Pick a move").font(SK.font(20 * sc, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                    Text("More stars, more points.").font(SK.font(14 * sc, .heavy)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.7)
+                    Text("Pick a move").font(SK.font((compact ? 17 : 20) * sc, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    Text("More stars, more points.").font(SK.font((compact ? 12 : 14) * sc, .heavy)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.7)
                 }
                 Spacer(minLength: 2)
                 Image(systemName: "arrow.down").font(.system(size: 24 * sc, weight: .black)).foregroundStyle(ShowUI.brownGold)
             }
-            .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity).frame(height: 64 * sc)
+            .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity).frame(height: (compact ? 48 : 64) * sc)
             .background(RoundedRectangle(cornerRadius: 22 * sc, style: .continuous).fill(SK.cream.opacity(0.97)))
             .overlay(RoundedRectangle(cornerRadius: 22 * sc, style: .continuous).strokeBorder(ShowUI.gold, lineWidth: 3))
             .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
