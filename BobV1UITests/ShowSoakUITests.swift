@@ -196,10 +196,10 @@ final class ShowSoakUITests: XCTestCase {
             let next = el(app, "dance-next")
             if Int(Date().timeIntervalSince(t0)) % 10 == 0, fired.insert("hb\(Int(Date().timeIntervalSince(t0)))").inserted { log("[\(tag)] poll phase=\(phase) round=\(round) turns=\(turns) next.exists=\(next.exists) hittable=\(next.exists && next.isHittable)") }
             if round == "dance", next.exists, next.isEnabled, !next.frame.isEmpty { press(next); log("[\(tag)] Next: Trick"); continue }
-            if round == "trick", f["tutorialUp"] as? Bool == true, rand(6) == 0, fired.insert("tut\(turns)").inserted { let t = el(app, "trick-tutorial"); if t.exists { t.tap() } }
+            if round == "trick", f["tutorialUp"] as? Bool == true, env["SOAK_SHOTS"] != "1", rand(6) == 0, fired.insert("tut\(turns)").inserted { let t = el(app, "trick-tutorial"); if t.exists { t.tap() } }
             // evidence frames (SOAK_SHOTS=1): the hint card over a first-ever Show, and the always-up cards while the entrants go
             if env["SOAK_SHOTS"] == "1" {
-                if round == "trick", f["tutorialUp"] as? Bool == true, fired.insert("shot-hint").inserted { usleep(600_000); shot("\(tag)_hintcard") }
+                if round == "trick", f["tutorialUp"] as? Bool == true, fired.insert("shot-hint").inserted { usleep(1_200_000); shot("\(tag)_hintcard"); usleep(2_500_000); shot("\(tag)_hintcard_later") }
                 if round == "trick", phase == "rival-go", turns >= 1, fired.insert("shot-cards").inserted { usleep(900_000); shot("\(tag)_cards_while_rivals_go") }
             }
             // show-perfect-r1: the cards are up and enabled from the first second of the Trick round (every 3 s the screen is asked); not his go yet = a tap QUEUES the move ("Up next"), once per turn at random
