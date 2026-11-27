@@ -626,10 +626,10 @@ struct LobbyHowRow: View {
         VStack(spacing: 0) {
             if !first { Rectangle().fill(SK.ink.opacity(0.08)).frame(height: 1) }
             HStack(alignment: .top, spacing: 14) {
-                LobbyIcon(kind: icon).frame(width: 42, height: 42).background(Circle().fill(SK.honey))
+                LobbyIcon(kind: icon).frame(width: 40, height: 40).background(Circle().fill(SK.honey))          // (the tutorial card's disc, title and body type: Tutorial/CoachTokens.swift)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(SK.font(16.5, .black)).foregroundStyle(SK.ink)
-                    Text(text).font(SK.font(13.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2.5)
+                    Text(title).font(Coach.line()).foregroundStyle(Coach.ink)
+                    Text(text).font(Coach.body()).foregroundStyle(Coach.muted).lineSpacing(2.5)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)

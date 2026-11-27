@@ -174,7 +174,6 @@ struct GameScreen: View {
                                     }
                                     .accessibilityValue(settingsOpen ? "expanded" : "collapsed")
                                     .accessibilityIdentifier("settings-button")
-                                    .firstDayTarget(.settings)
                                     HUDGlassIcon(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
                                         AudioHub.shared.uiTap()
                                         withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false; settingsOpen = false } }
@@ -191,7 +190,7 @@ struct GameScreen: View {
                         if !focus.isActive, !cleaning, !racing {
                             GlassEffectContainer(spacing: 8) {
                                 HStack(spacing: 8) {
-                                    DropsPill(wallet: model.care.bath.wallet, glass: true).firstDayTarget(.coins)
+                                    DropsPill(wallet: model.care.bath.wallet, glass: true)
                                     RosterButton(care: model.care, open: $rosterOpen)
                                 }
                             }
@@ -218,13 +217,12 @@ struct GameScreen: View {
                             GlassEffectContainer(spacing: 8) {
                                 VStack(spacing: 0) {
                                     VoiceBookButton { bookOpen = true }
-                                    if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true }.firstDayTarget(.bag) }
+                                    if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
                                     if !focus.isActive {
-                                        GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }.firstDayTarget(.goOut)
+                                        GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }.tutorialTarget("goout")
                                     }
                                     Capsule().fill(CareMenu.brown.opacity(0.22)).frame(width: 28, height: 1.5).padding(.vertical, 4)
                                     VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true })
-                                        .firstDayTarget(.mic)
                                         .overlay(alignment: .topLeading) {
                                             VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
                                         }
@@ -328,7 +326,8 @@ struct GameScreen: View {
             setUpSelect(); model.care.touchPlay = model.touch
             DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep), and before the bedtime check
             model.care.launched()
-            FirstDayTour.shared.roomReady()          // a new game's first day (or Watch the opening): the tour shows over this room (Start/FirstDayTour.swift)
+            Self.installTutorial(model.care)          // the tutorial (Tutorial/): where the Jelmiko and the world are, then begin / resume it
+            FirstDayTour.shared.roomReady(name: model.care.jellies.first?.name)          // a new game's first day (or Watch the opening): the tutorial starts over this room (Start/FirstDayTour.swift)
             Self.devAdoptNow(model.care)
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
@@ -450,7 +449,9 @@ struct GameScreen: View {
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
         .onChange(of: model.care.volley.winMusic) { _, _ in AudioHub.shared.setTownScene(currentMusicScene) }
+        .onChange(of: menuOpen) { _, o in TutorialSignals.shared.menuOpen = o }
         .onChange(of: town) { _, t in
+            TutorialSignals.shared.townOpen = t != nil
             #if targetEnvironment(simulator)
             RaceDepartProbe.mark("town \(String(describing: t))")
             #endif
@@ -506,7 +507,6 @@ struct GameScreen: View {
         }
         .overlay { GuestArrivalOverlay(care: model.care) }
         .overlay { NightSkipVeil(care: model.care) }
-        .overlayPreferenceValue(FirstDayAnchorKey.self) { FirstDayTourOverlay(care: model.care, anchors: $0) }          // the first-day tour: coach marks over the real HUD
         .overlay { if BubbleWand.shared.active { BubbleLayerRepresentable().ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true) } }          // the bubble wand's bubbles (Toys/)
         .overlay(alignment: .trailing) {          // iPad: the Bag is a side card (the room stays visible beside it), not a bottom sheet
             if HUDLayout.isPad, bagOpen {
@@ -1245,6 +1245,33 @@ struct GameScreen: View {
     /// Development argument `-AdoptNow <name or id>` (gated like `-SetRoster`: `DevArgs.enabled`): about 4 s after the room appears, opens the Adoption Center, then 1 s later brings that Jelbie home through the very call the
     /// Adoption Center makes (`StartFlow.bringHome`), so the room is rebuilt and the bought-Jelbie arrival runs. `-AdoptAwayMin <minutes>` first backdates the needs stamp, as if the player had
     /// spent that long on the adoption screen (the stamp is what the new room measures its time away from: 5 minutes at night is the "already asleep" path). `-SetRoster` stops re-applying once he is bought.
+    /// The tutorial's two eyes on the game (Tutorial/): the Jelmiko's circle on screen, and a plain snapshot of what is open. Nothing here changes the game.
+    static func installTutorial(_ care: GameCare) {
+        TutorialTargets.shared.jelmiko = { [weak care] size in
+            guard let care, let p = ThoughtBubbleView.project(care.headWorld - SIMD3(0, BlobShape.H * 0.5, 0), size: size, focus: care.focus.blend) else { return nil }
+            let d = min(size.width, size.height) * 0.42
+            let x = min(max(p.x - d / 2, 8), max(size.width - d - 8, 8)), y = min(max(p.y - d / 2, 8), max(size.height - d - 8, 8))          // (kept on screen: he may stand at an edge)
+            return CGRect(x: x, y: y, width: d, height: d)
+        }
+        Tutorial.shared.worldProvider = { [weak care] in
+            guard let care else { return TutorialWorld() }
+            var w = TutorialWorld()
+            w.menuOpen = TutorialSignals.shared.menuOpen
+            w.townOpen = TutorialSignals.shared.townOpen
+            w.focusActive = care.focus.isActive
+            w.hearts = !(care.touchPlay?.hearts.isEmpty ?? true)
+            w.hungry = care.needs.wantedNeed == .hunger
+            w.trayOut = care.trayOut
+            w.busy = TipContext.live(care).blocked || care.tripActive
+            w.targets = TutorialTargets.shared.ids
+            return w
+        }
+        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "TutorialAuto") == 1, !Tutorial.shared.inProgress, !Tutorial.shared.isDone, !Tutorial.shared.wasSkipped, !Tutorial.shared.active {          // capture / UI-test aid: begin the real tutorial in this room, optionally on a step
+            Tutorial.shared.begin(name: care.jellies.first?.name ?? "Bob", replay: false, run: false)
+            if let id = UserDefaults.standard.string(forKey: "TutorialStep") { Tutorial.shared.jump(toID: id) }
+        }
+    }
+
     static func devAdoptNow(_ care: GameCare) {
         guard DevArgs.enabled, !adoptNowDone, let text = UserDefaults.standard.string(forKey: "AdoptNow"), let c = JellyRoster.characterID(named: text) else { return }
         adoptNowDone = true
@@ -1620,6 +1647,7 @@ struct CareMenu: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .tutorialTarget(kind == .food && i == 0 ? "food" : nil, shape: .rounded(16))
                     .accessibilityIdentifier(e.ident)
                     .accessibilityLabel(e.count.map { $0 == 0 ? "\(e.name), none left" : "\(e.name), \($0) left" } ?? e.name)
                     .transition(chipTransition(i))
@@ -1657,6 +1685,7 @@ struct CareMenu: View {
                     .padding(.horizontal, 12).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 16).fill(Self.cream))
                     .frame(maxWidth: cap)
                     .accessibilityIdentifier("care-feed-empty-hint")
+                    .tutorialTarget("feed-empty", shape: .rounded(16))
             }
         }
     }
@@ -1822,6 +1851,7 @@ struct CareMenu: View {
         .buttonStyle(.plain)
         .disabled(!on)
         .accessibilityIdentifier(item.rawValue)
+        .tutorialTarget(item == .feed ? "feed" : (item == .come || item == .callAll) ? "come" : nil)
         .accessibilityLabel(HUDMenu.spokenLabel(item, mode, care: care))
         .accessibilityHint(reason ?? "")
         .accessibilityFocused($focusedRow, equals: item)
@@ -1895,7 +1925,7 @@ struct CareMenu: View {
             .buttonStyle(.plain)
             .hudGlassEffect(HUDGlass.pink, opaque: Color(red: 0.95, green: 0.38, blue: 0.56), in: .circle)
             .accessibilityIdentifier("care-menu")
-            .firstDayTarget(.care)
+            .tutorialTarget("care")
             .accessibilityLabel(who.map { open ? "Close \($0)'s menu" : "\($0)'s menu" } ?? (open ? "Close care menu" : "Care menu"))
             .accessibilityValue(open ? "expanded" : "collapsed")
             .accessibilityHint(who.map { "Shows care actions for \($0)" } ?? "Shows care actions for everyone")
@@ -1939,6 +1969,7 @@ struct ReleaseButton: View {
         .buttonStyle(.plain)
         .hudFrost(in: .capsule)
         .accessibilityIdentifier("focus-release")
+        .tutorialTarget("release")
         .accessibilityLabel(title)
         .accessibilityHint("Goes back to the room")
         .keyboardShortcut(.escape, modifiers: [])

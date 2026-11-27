@@ -89,7 +89,7 @@ final class StartFlow {
         if d.object(forKey: "FirstDayChar") != nil {          // capture aid: the first-day-home beat (the card with that species, or the room's tour over the saved / default room)
             let c = min(max(d.integer(forKey: "FirstDayChar"), 0), 3)
             if FirstDayStyle.current == .card { phase = .firstDay(c, JellyRoster.baseNames[c], true) }
-            else { phase = .game; FirstDayTour.shared.arm(name: JellyRoster.nameOf(JellyRoster.savedIDs().first ?? c), replay: true, reduceMotion: false); if d.object(forKey: "FirstDayStep") != nil { FirstDayTour.shared.jump(to: d.integer(forKey: "FirstDayStep")) } }
+            else { phase = .game; FirstDayTour.shared.arm(name: JellyRoster.nameOf(JellyRoster.savedIDs().first ?? c), replay: true, reduceMotion: false); if let id = d.string(forKey: "FirstDayStep") { FirstDayTour.shared.jump(to: id) } }
         }
         if d.object(forKey: "OpeningBeat") != nil { phase = .opening }                  // capture aid: the opening story at a given beat
         #endif

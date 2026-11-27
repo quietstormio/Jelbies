@@ -2,7 +2,7 @@
 //  TipCards.swift
 //  The first-time tip card (model: TipBook.swift). The card is drawn in its own pass-through window above everything (the room, a Town screen, a sheet, the Jelly Spring), so one
 //  view serves every screen and never needs a host inside them; only the card takes touches. A tap anywhere else dismisses it AND still reaches what it hit (a window-level recognizer
-//  that never cancels touches). Look: the first-day tour's card family (cream, radius 24, the tour's shadow, the tour's pink "Got it").
+//  that never cancels touches). Look: a CoachCard (Tutorial/CoachCard.swift), the same card the tutorial steps use.
 //
 
 import SwiftUI
@@ -71,75 +71,18 @@ enum TipPlacement {
     }
 }
 
-/// The card itself.
+/// The card itself: a CoachCard (Tutorial/CoachCard.swift), the same view the tutorial steps are drawn with.
 struct TipCardView: View {
     let card: TipCard
     let width: CGFloat
     var pointerX: CGFloat? = nil
+    var maxHeight: CGFloat? = nil
     var onGotIt: () -> Void
-    @AccessibilityFocusState private var titleFocus: Bool
 
-    private var disc: some View {
-        Image(systemName: card.symbol).font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink)
-            .frame(width: 40, height: 40).background(Circle().fill(SK.honey)).accessibilityHidden(true)
-    }
-    private var title: some View {
-        Text(card.title).font(SK.font(17, .black)).foregroundStyle(SK.ink)
-            .accessibilityAddTraits(.isHeader).accessibilityFocused($titleFocus)
-    }
-    private var gotIt: some View {
-        TourCapsuleButton(title: "Got it", hint: "Hides this tip", id: "tip-got-it") { AudioHub.shared.uiTap(); onGotIt() }
-            .background(GeometryReader { g in Color.clear.preference(key: TipGotItKey.self, value: g.frame(in: .global)) })
-    }
-
-    var body: some View { realBody }
-
-    // A simple two-layout card: the button beside the title when the title fits, else under the body.
-    private var realBody: some View {
-        let inner = width - 32
-        return TipCardLayout(inner: inner, disc: AnyView(disc), title: AnyView(title), body: card.body, gotIt: AnyView(gotIt))
-            .padding(16)
-            .frame(width: width, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color(hex: 0xFFFDF8))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color(hex: 0x4D331F).opacity(0.10), lineWidth: 1))
-                    .shadow(color: Color(hex: 0x5A3A2A).opacity(0.3), radius: 10, y: 4)
-            )
-            .overlay(alignment: .bottomLeading) {
-                if let px = pointerX { Triangle(up: false).fill(Color(hex: 0xFFFDF8)).frame(width: 22, height: 12).offset(x: min(max(px - 11, 22), width - 44), y: 11) }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("tip-\(card.id)")
-            .onAppear { if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { titleFocus = true } } }
-    }
-}
-
-private struct TipCardLayout: View {
-    let inner: CGFloat
-    let disc: AnyView, title: AnyView
-    let body_: String
-    let gotIt: AnyView
-    init(inner: CGFloat, disc: AnyView, title: AnyView, body: String, gotIt: AnyView) {
-        self.inner = inner; self.disc = disc; self.title = title; self.body_ = body; self.gotIt = gotIt
-    }
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            column(beside: true)
-            column(beside: false)
-        }
-    }
-    private func column(beside: Bool) -> some View {
-        VStack(alignment: .leading, spacing: beside ? 4 : 12) {
-            if beside {
-                HStack(spacing: 12) { disc; title.lineLimit(1).fixedSize(horizontal: true, vertical: false); Spacer(minLength: 8); gotIt }.frame(minHeight: 44)
-            } else {
-                HStack(spacing: 12) { disc; title.lineLimit(2) }.frame(minHeight: 44)
-            }
-            Text(body_).font(JFont.scaled(14.5, .semibold, design: .default)).foregroundStyle(SK.muted).lineSpacing(3.5)
-                .fixedSize(horizontal: false, vertical: true).padding(.leading, 52)
-            if !beside { HStack { Spacer(minLength: 0); gotIt } }
-        }
-        .frame(width: inner, alignment: .leading)
+        CoachCard(symbol: card.symbol, title: card.title, text: card.body, button: "Got it", buttonID: "tip-got-it", buttonHint: "Hides this tip",
+                  onButton: { AudioHub.shared.uiTap(); onGotIt() },
+                  pointer: pointerX.map { (up: false, x: $0) }, width: width, maxHeight: maxHeight, identifier: "tip-\(card.id)")
     }
 }
 
@@ -181,15 +124,16 @@ struct TipOverlay: View {
         let place = TipPlace.of(card.id)
         let w = TipPlacement.width(size)
         let landscape = size.width > size.height * 1.2
-        let h: CGFloat = 143
+        let h: CGFloat = 200
         return TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             let heads = TipWindowHost.heads(size: size, wanted: place.faces)
             let origin = TipPlacement.origin(place, size: size, safe: safe, heads: heads, h: h, avoidMap: TipWindowHost.mapButtons(card.id, size: size))
                 ?? TipPlacement.origin(TipPlace(kind: place.kind, offset: place.offset), size: size, safe: safe, heads: [], h: h) ?? .zero
-            let view = TipCardView(card: card, width: w, pointerX: landscape ? nil : place.pointerX) { TipBook.shared.dismiss() }
+            let room = place.kind == .bottom ? origin.y + h - safe.top - 8 : size.height - origin.y - max(safe.bottom, 8) - 12
+            let view = TipCardView(card: card, width: w, pointerX: landscape ? nil : place.pointerX, maxHeight: max(room, 160)) { TipBook.shared.dismiss() }
                 .background(GeometryReader { g in Color.clear.preference(key: TipFrameKey.self, value: g.frame(in: .global)) })
                 .onPreferenceChange(TipFrameKey.self) { TipBook.shared.cardFrame = $0 }
-                .onPreferenceChange(TipGotItKey.self) { TipBook.shared.gotItFrame = $0 }
+                .onPreferenceChange(CoachButtonFrameKey.self) { TipBook.shared.gotItFrame = $0 }
                 .onAppear { TipBook.shared.passThrough = landscape && card.id == "town" }
             Group {
                 if place.kind == .bottom {          // stands on its bar: the bottom edge is fixed, the card grows upward
@@ -203,11 +147,6 @@ struct TipOverlay: View {
             .animation(.easeOut(duration: 0.2), value: origin.x)
         }
     }
-}
-
-private struct TipGotItKey: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 private struct TipFrameKey: PreferenceKey {

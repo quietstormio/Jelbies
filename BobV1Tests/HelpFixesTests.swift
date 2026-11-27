@@ -30,16 +30,14 @@ final class HelpFixesTests: XCTestCase {
         XCTAssertNotEqual(CourseTier.puddle.blurb, CourseTier.splash.blurb)
     }
 
-    // coach skip
-    func testCoachStepWithNoControlIsSkippedAndNeverDrawsACaption() {
-        for t in FirstDayTour.coachTargets {
-            XCTAssertTrue(FirstDayTour.skipsStep(.coach(t), holeMissing: true))
-            XCTAssertFalse(FirstDayTour.skipsStep(.coach(t), holeMissing: false))
-            XCTAssertFalse(FirstDayTour.showsCaption(.coach(t)), "a coach step never falls back to a caption")
+    // coach skip (the tutorial: a step whose control is not on screen has nothing to ring, blocks nothing, never turns into a caption, and is moved past: TutorialTests.testAControlThatNeverShowsMovesOnOrGoesBack)
+    func testSpotStepWithNoControlIsSkippedAndNeverDrawsACaption() {
+        let targets = TutorialTargets()
+        for s in Tutorial.homeSteps where s.kind == .spot && s.target != "jelmiko" {
+            XCTAssertNil(targets.spot(for: s, size: CGSize(width: 393, height: 852)), "\(s.id): no control, no ring")
+            XCTAssertFalse(TutorialPolicy.swallows(s, spot: nil, cardFrame: .zero, at: CGPoint(x: 5, y: 5)), "\(s.id): nothing is blocked when nothing is pointed at")
+            XCTAssertEqual(s.kind, .spot); XCTAssertNil(s.button, "\(s.id) is never a caption card")
         }
-        XCTAssertFalse(FirstDayTour.skipsStep(.welcome, holeMissing: true))
-        XCTAssertFalse(FirstDayTour.skipsStep(.jellyCoins, holeMissing: true))
-        XCTAssertTrue(FirstDayTour.showsCaption(.welcome)); XCTAssertTrue(FirstDayTour.showsCaption(.jellyCoins)); XCTAssertFalse(FirstDayTour.showsCaption(.arrive))
     }
 
     // mic wording

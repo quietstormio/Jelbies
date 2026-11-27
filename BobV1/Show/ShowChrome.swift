@@ -653,22 +653,21 @@ struct TrickRound: View {
         .accessibilityLabel("Skip").accessibilityIdentifier("rivals-skip")
     }
 
-    /// "Pick a move": a cream card, a title and one short line, an arrow down to the trick cards. A tap puts it away.
+    /// "Pick a move": the tutorial card's tokens (Tutorial/CoachTokens.swift: solid fill, ink, type, radius, shadow) in its own slot under the turn chips, so it stays off the performer. A tap puts it away.
     private var tutorialCard: some View {
         Button { AudioHub.shared.uiTap(); show.dismissTrickTutorial() } label: {
             HStack(spacing: 12 * sc) {
-                Image(systemName: "hand.tap.fill").font(.system(size: 26 * sc, weight: .heavy)).foregroundStyle(SK.ink)
+                Image(systemName: "hand.tap.fill").font(.system(size: 20 * sc, weight: .heavy)).foregroundStyle(Coach.ink)
+                    .frame(width: 40 * sc, height: 40 * sc).background(Circle().fill(SK.honey))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Pick a move").font(SK.font((compact ? 17 : 20) * sc, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                    Text("More stars, more points.").font(SK.font((compact ? 12 : 14) * sc, .heavy)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.7)
+                    Text("Pick a move").font(Coach.line()).foregroundStyle(Coach.ink).fixedSize(horizontal: false, vertical: true)
+                    Text("More stars, more points.").font(Coach.caption()).foregroundStyle(Coach.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 2)
-                Image(systemName: "arrow.down").font(.system(size: 24 * sc, weight: .black)).foregroundStyle(ShowUI.brownGold)
+                Image(systemName: "arrow.down").font(.system(size: 22 * sc, weight: .black)).foregroundStyle(Coach.accent)
             }
-            .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity).frame(height: (compact ? 48 : 64) * sc)
-            .background(RoundedRectangle(cornerRadius: 22 * sc, style: .continuous).fill(SK.cream.opacity(0.97)))
-            .overlay(RoundedRectangle(cornerRadius: 22 * sc, style: .continuous).strokeBorder(ShowUI.gold, lineWidth: 3))
-            .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+            .padding(.horizontal, Coach.inset).padding(.vertical, 6).frame(maxWidth: .infinity).frame(minHeight: max(Coach.minTap, (compact ? 52 : 64) * sc))
+            .background(RoundedRectangle(cornerRadius: Coach.cardRadius, style: .continuous).fill(Coach.fill).shadow(color: Coach.shadow, radius: 10, y: 4))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore).accessibilityLabel("Pick a move. More stars, more points.").accessibilityHint("Tap to hide").accessibilityAddTraits(.isButton)
