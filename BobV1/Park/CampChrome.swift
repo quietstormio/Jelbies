@@ -13,7 +13,7 @@ import SwiftUI
 final class CampUI {
     static let shared = CampUI()
     enum Sheet: Equatable { case none, swap(incoming: Int), dropOff, goodbye(Int) }
-    struct Leaving { enum Stage { case waving, walking, done }; var bodyID: Int; var instance: Int; var stage: Stage; var t: Float }
+    struct Leaving { enum Stage { case waving, walking, done }; var bodyID: Int; var instance: Int; var stage: Stage; var t: Float; var d0: Float = 0 }
     /// The selected creature (instance id).
     var selected: Int?
     var sheet: Sheet = .none
