@@ -182,7 +182,7 @@ extension BlobBrain {
     func contactTick(_ dt: Float) {
         socialBook.contactCool -= dt
         for (k, v) in socialBook.contactCoolPer where v > 0 { socialBook.contactCoolPer[k] = v - dt }
-        guard attached, !held else { return }
+        guard attached, !heldBase else { return }
         for o in socialOthers() where o !== self {
             if var gap = ContactField.gap(steerID, o.steerID, features: social == nil) {          // (inside a session the drawn body decides, as the harness does; wings only count for a roaming / lying brush)
                 if let sg = ContactField.skinGap(steerID, o.steerID) { gap = min(gap, sg) }          // (the support gap of the catalogue: the harness's ground truth for "touching")          // (a wing / tail touched is a touch: the folded wing between two lying backs still squishes)
@@ -195,7 +195,7 @@ extension BlobBrain {
                     socialBook.contactCoolPer[o.steerID] = ContactTuning.eventGap
                     let press = min(1, max(0, -gap) / 0.03 + 0.4)
                     jellyKick = max(jellyKick, 0.9 + 0.9 * press)
-                    if steerID < o.steerID || !(o.attached && !o.held) {          // (one sound + one haptic a touch, not one a body: the lower id, or whoever is left when he cannot)
+                    if steerID < o.steerID || !(o.attached && !o.heldBase) {          // (one sound + one haptic a touch, not one a body: the lower id, or whoever is left when he cannot)
                         // the emote's own contact sound (ContactStance.table: boop, squish, highfive_boop ...) or the default squish; AudioHub.play sends the sound's haptic cue too
                         // (only while the stance is HOLDING the touch - the press phase; an approach brush or a part is the default squish)
                         let st = contactStance(with: o).flatMap { st in social.flatMap { st.step(at: $0.phase)?.target == ContactStance.hold ? st : nil } }

@@ -148,8 +148,11 @@ final class BlobBrain {
     }
     enum After { case none, faceCamera, wave, face(SIMD2<Float>), eat(SIMD2<Float>, Bool), doEat(SIMD2<Float>, Bool), dineTurn(DiningPlace), dineGo }
 
+    nonisolated(unsafe) static let walkTrace = UserDefaults.standard.bool(forKey: "WalkTrace")          // TEMP: root-cause hunt (ears-sway-r1)
     var script: Script = .none {
-        didSet { if board != nil, case .walk = script { publishToBoard(pos: position) } }          // (the walk-board: a walk that begins is on the board at once; nothing reads it, WalkBoard.swift)
+        didSet {
+            if Self.walkTrace, ears.dancing, case .walk(let t, _) = script { NSLog("[walktrace] id=%d target=(%.2f,%.2f) job=%@ stack=%@", steerID, t.x, t.y, String(describing: job).prefix(40) as CVarArg, Thread.callStackSymbols.dropFirst(1).prefix(6).map { l -> String in let f = l.split(separator: " ", omittingEmptySubsequences: true); return f.count > 3 ? String(f[3]) : "?" }.joined(separator: " < ")) }
+            if board != nil, case .walk = script { publishToBoard(pos: position) } }          // (the walk-board: a walk that begins is on the board at once; nothing reads it, WalkBoard.swift)
     }
     /// The stage's walk board (one per stage, injected beside `peers`; nil = none) and the brain's reusable intent for it.
     var board: WalkBoard?
@@ -263,7 +266,11 @@ final class BlobBrain {
     /// While he stands under a bubble he is about to hop at, the leash's small idle moves wait (the wand sets and clears it).
     var bubbleHold = false
     var waitBounceT: Float = 0
-    var held: Bool { idleBlocked || reserved }
+    /// What the close-up (`idleBlocked`) or a coming meal (`reserved`) holds: the old meaning of `held`.
+    var heldBase: Bool { idleBlocked || reserved }
+    /// Held still: the autonomous brain (idle picks and emotes, reactions, social sessions, flourishes, decor nudges, bubble play) leaves him alone. A Music Ears
+    /// dancer is held like a diner (ears-sway-r1): nothing else starts a walk for him, and a social session he is in yields, while the dance stands him in a row.
+    var held: Bool { idleBlocked || reserved || ears.dancing }
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
     var social: SocialSession?
     var socialBook = SocialBook()

@@ -172,6 +172,8 @@ final class EarsReactor {
     /// The sway clock all dancers share, and where each one stands in the row.
     private(set) var sway = EarsSway()
     private(set) var rows: [Int: RowStep] = [:]
+    /// How many times the safety net sent a dancer back to his spot (should stay 0).
+    private(set) var walkBacks = 0
     private var anims: [Int: (anim: Anim, t: Float)] = [:]
     private var hurrying: Set<Int> = []
     private var whistleComeAt: Double?
@@ -330,8 +332,9 @@ final class EarsReactor {
             var st = rows[j.id] ?? { var r = RowStep(); r.phase = .swaying; return r }()
             st.t += dt
             let free: Bool = { if case .none = brain.script, brain.pending == nil, !brain.gait.isBusy { return true } else { return false } }()
-            // pushed or walked off his place (something else asked him to walk): back to the row, a few times
-            if st.phase != .walking, let spot = st.spot, free, st.asks < 12, st.t > 0.5, simd_distance(GameCare.floorPos(brain, j.sim), spot) > 0.7 {
+            // safety net only (a dancer is `held`, so the idle / social / reaction walks do not start): pushed off his place by something else, back to the row. Counted.
+            if st.phase != .walking, let spot = st.spot, free, st.asks < 4, st.t > 0.5, simd_distance(GameCare.floorPos(brain, j.sim), spot) > 1.0 {
+                walkBacks += 1; note("row: \(j.id) walked back (\(walkBacks))"); if Self.stepLog { NSLog("[ears] WALKBACK %d count=%d", j.id, walkBacks) }
                 st.phase = .walking; st.t = 0; st.lastAsk = -10; st.turned = false; st.gain = 0
             }
             switch st.phase {
