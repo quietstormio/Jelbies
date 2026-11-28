@@ -338,7 +338,7 @@ extension GameCare {
     }
 
     /// Per step while a creature is saying goodbye: wave, then walk to the gate, then the white wipe (a timeout at every stage; a refused walk falls back to the wipe).
-    static let goodbyeFadeAfterWalk: Float = 1.0
+    static let goodbyeFadeAfterWalk: Float = 1.6
     func tickCampLeaving(dt: Float) {
         let ui = CampUI.shared
         guard var l = ui.leaving, park.phase == .playing, let a = parkBook.actors.first(where: { $0.id == l.bodyID }), let b = a.brain else { return }
