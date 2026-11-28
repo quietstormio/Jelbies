@@ -7,6 +7,7 @@
 import SwiftUI
 import QuartzCore
 import AppIntents
+import AVFoundation
 import simd
 
 struct GameScreen: View {
@@ -898,6 +899,39 @@ struct GameScreen: View {
                             if stopAfter > 0, Double(k) * 0.5 >= stopAfter { Ears.shared.inject(.musicStopped); break }
                             if jitter { Ears.shared.inject(.musicBeat(EarBeat(bpm: 110, anchor: base + (k % 7 == 0 ? 60.0 / 110 / 2 : 0), strength: 3))) }
                             if k > 2000 { break }
+                        }
+                    }
+                }
+            case "file":
+                // -EarsEvent file -EarsFile <raw float32 mono 44.1 kHz> -EarsLoopSeconds <loop length>: REAL music through the real analysis (EarsPipeline: DSP and the beat
+                // tracker, no injected beats), fed in real time; its events go to Music Ears as the mic's would. Dev arguments only (a capture aid).
+                if DevArgs.enabled, let path = d.string(forKey: "EarsFile"), let data = FileManager.default.contents(atPath: path) {
+                    let loopSeconds = d.double(forKey: "EarsLoopSeconds"), stopAfter = d.double(forKey: "EarsStopAfter")
+                    let sr = 44100.0
+                    let all = data.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+                    let loopN = loopSeconds > 0 ? min(all.count, Int(loopSeconds * sr)) : all.count
+                    if let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sr, channels: 1, interleaved: false), loopN > 0 {
+                        let pipe = EarsPipeline(format: fmt, classify: false)
+                        let t0 = CACurrentMediaTime()
+                        NSLog("[ears] FEED t0=%.4f loop=%.5f s file=%@", t0, Double(loopN) / sr, (path as NSString).lastPathComponent)
+                        Task { @MainActor in
+                            var fed = 0
+                            while true {
+                                try? await Task.sleep(nanoseconds: 40_000_000)
+                                let t = CACurrentMediaTime() - t0
+                                if stopAfter > 0, t >= stopAfter { Ears.shared.inject(.musicStopped); NSLog("[ears] FEED stop t=%.4f", CACurrentMediaTime()); break }
+                                let want = Int(t * sr)
+                                if want > fed {
+                                    var chunk = [Float](); chunk.reserveCapacity(want - fed)
+                                    for i in fed..<want { chunk.append(all[i % loopN]) }
+                                    let hostStart = t0 + Double(fed) / sr
+                                    pipe.queue.async { pipe.feed(chunk, hostStart: hostStart) }
+                                    fed = want
+                                }
+                                pipe.queue.sync {}
+                                for e in pipe.drain().events { Ears.shared.inject(e); if EarsReactor.stepLog { NSLog("[ears] FEED event %@", String(describing: e)) } }
+                                Ears.shared.showHearing(.music, seconds: 5)
+                            }
                         }
                     }
                 }

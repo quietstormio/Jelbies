@@ -135,7 +135,9 @@ final class EarsReactorTests: XCTestCase {
         room.rigs[1].brain.idleBlocked = true
         room.reactor.locks = { var l = EarsReactor.Locks(); l.focus = true; return l }()
         room.handle(.heard(.clap))
-        XCTAssertEqual(room.reactor.anim(of: 1), .giggle, "idleBlocked in the close-up still giggles")
+        XCTAssertNil(room.reactor.anim(of: 1), "a dancer keeps dancing: no giggle (ears-dance-r2)")
+        room.handle(.musicStopped); room.run(EarsDance.tail + 0.5); room.handle(.heard(.clap))
+        XCTAssertEqual(room.reactor.anim(of: 1), .giggle, "idleBlocked in the close-up still giggles once the dance is over")
         XCTAssertNil(room.reactor.anim(of: 0), "reserved never reacts")
     }
 
@@ -228,6 +230,7 @@ final class EarsReactorTests: XCTestCase {
     /// The Music Ears dance (ears-sway-r1): they walk to a row facing the camera, spaced well apart, and sway on the beat with one smooth move.
     func testDanceWalksToTheRowFacesFrontSwaysOnTheBeatAndEndsAfterTheMusic() {
         let room = Room(count: 2); Self.keep.append(room)
+        room.reactor.rowWaitRange = 1...1; room.reactor.routinesOn = false          // (ears-dance-r2: the walk to the row follows the sway in place; the routines have their own tests)
         let bpm: Float = 120, anchor = room.now + 0.3
         room.handle(.musicStarted(EarBeat(bpm: bpm, anchor: anchor, strength: 3)))
         XCTAssertTrue(room.reactor.isDancing)

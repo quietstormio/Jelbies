@@ -33,6 +33,10 @@ nonisolated struct EarsSway {
     }
 
     private(set) var u: Double = 0
+    /// Side changes per beat of the heard tempo (1, or 1/2 for a tempo that is folded: the sway changes side on every second beat but every beat is a landing) and the
+    /// clock's speed (side changes per second). The dance steps (ears-dance-r2) are timed on `u` in these units, so they land where the sway lands.
+    private(set) var unit: Double = 1
+    var ratePerSecond: Double { rate }
     private var u0: Double = 0, theta: Double = 0, thetaTarget: Double = 0
     private var rate: Double = EarsSway.idleRate, rateTarget: Double = EarsSway.idleRate
     private(set) var locked = false
@@ -65,6 +69,7 @@ nonisolated struct EarsSway {
         // phase: the offset between the heard grid and the free clock, unwrapped next to the one in use
         // (every beat is a landing, and with a folded tempo the sway side changes on every second one: the phase counts modulo ONE BEAT = `unit` side changes)
         let unit = 1 / Double(max(1, (Double(b.bpm) / sb).rounded()))
+        self.unit = unit
         var th = (now - b.anchor) / period - u0
         th -= ((th - theta) / unit).rounded() * unit
         if !locked { offsets.removeAll(); thetaTarget = th }
