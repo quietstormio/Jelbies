@@ -25,7 +25,7 @@ extension BlobBrain {
 
     /// A free, autonomous or requested ordinary walk that is already moving (the first step of a walk from a stand is the old turn, then walk).
     var curveBody: Bool {
-        guard Self.curvedWalk, enabled, !held, social == nil || social?.kind == .follow, bubbleLeash == nil, !race.active, !volley.active, toy.waitUID < 0, toy.chaseSpot == nil,
+        guard Self.curvedWalk, enabled, !heldBase, social == nil || social?.kind == .follow, bubbleLeash == nil, !race.active, !volley.active, toy.waitUID < 0, toy.chaseSpot == nil,
               mealFinalYaw == nil, job == nil || crowdCurveRequested, playChase == 0, !tossBusy, !stanceStepFree, !ContactTouchMemory.exact.contains(steerID), peerClock - lastTranslateClock < 0.5 else { return false }
         switch job { case .some(.dine), .some(.sip): return false; default: break }
         switch idleState.kind {

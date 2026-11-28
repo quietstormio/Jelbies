@@ -885,7 +885,22 @@ struct GameScreen: View {
             switch event {
             case "clap": Ears.shared.inject(.heard(.clap)); Ears.shared.showHearing(.clap, seconds: 30)
             case "double": Ears.shared.inject(.doubleClap); Ears.shared.showHearing(.clap, seconds: 30)
-            case "dance": Ears.shared.inject(.musicStarted(EarBeat(bpm: 110, anchor: CACurrentMediaTime(), strength: 3))); Ears.shared.showHearing(.music, seconds: 120)
+            case "dance":
+                let base = CACurrentMediaTime()
+                Ears.shared.inject(.musicStarted(EarBeat(bpm: 110, anchor: base, strength: 3))); Ears.shared.showHearing(.music, seconds: 120)
+                // -EarsJitter 1: a fresh estimate every 0.5 s like the tracker sends, with a wrong half-beat one now and then (the sway must not pop); -EarsStopAfter s: the music ends
+                let jitter = d.bool(forKey: "EarsJitter"), stopAfter = d.double(forKey: "EarsStopAfter")
+                if jitter || stopAfter > 0 {
+                    Task { @MainActor in
+                        var k = 0
+                        while true {
+                            try? await Task.sleep(nanoseconds: 500_000_000); k += 1
+                            if stopAfter > 0, Double(k) * 0.5 >= stopAfter { Ears.shared.inject(.musicStopped); break }
+                            if jitter { Ears.shared.inject(.musicBeat(EarBeat(bpm: 110, anchor: base + (k % 7 == 0 ? 60.0 / 110 / 2 : 0), strength: 3))) }
+                            if k > 2000 { break }
+                        }
+                    }
+                }
             case "whistle": Ears.shared.inject(.heard(.whistle)); Ears.shared.showHearing(.whistle, seconds: 30)
             case "bark": Ears.shared.inject(.heard(.dogBark)); Ears.shared.showHearing(.dogBark, seconds: 30)
             case "laugh": Ears.shared.inject(.heard(.laugh)); Ears.shared.showHearing(.laugh, seconds: 30)

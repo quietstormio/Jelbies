@@ -263,7 +263,11 @@ final class BlobBrain {
     /// While he stands under a bubble he is about to hop at, the leash's small idle moves wait (the wand sets and clears it).
     var bubbleHold = false
     var waitBounceT: Float = 0
-    var held: Bool { idleBlocked || reserved }
+    /// What the close-up (`idleBlocked`) or a coming meal (`reserved`) holds: the old meaning of `held`.
+    var heldBase: Bool { idleBlocked || reserved }
+    /// Held still: the autonomous brain (idle picks and emotes, reactions, social sessions, flourishes, decor nudges, bubble play) leaves him alone. A Music Ears
+    /// dancer is held like a diner (ears-sway-r1): nothing else starts a walk for him, and a social session he is in yields, while the dance stands him in a row.
+    var held: Bool { idleBlocked || reserved || ears.dancing }
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
     var social: SocialSession?
     var socialBook = SocialBook()

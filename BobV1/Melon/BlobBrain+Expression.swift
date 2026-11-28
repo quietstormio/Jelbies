@@ -144,7 +144,7 @@ extension BlobBrain {
     var faceOwned: Bool {
         if activity == .touched || activity == .recovering { return true }
         if !autonomy && !idleForced && !commanded && demo == nil { return true }          // focus mode, bath, the care menu: they set the face themselves
-        if held && !commanded { return true }
+        if heldBase && !commanded { return true }
         if socialBook.squinting { return true }
         if isNapping { return true }
         switch script {
