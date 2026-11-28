@@ -55,6 +55,7 @@ final class FirstDayTourTests: XCTestCase {
         t.arm(name: "Lemon", replay: false, reduceMotion: false, defaults: d)
         t.skip()
         XCTAssertFalse(t.holdsGame); XCTAssertFalse(GameCare.introHold)
+        Tutorial.shared.defaults = d
         t.roomReady()
         XCTAssertNil(Tutorial.shared.step, "a skipped tutorial does not come up when the room appears")
     }

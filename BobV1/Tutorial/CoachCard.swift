@@ -36,12 +36,14 @@ struct CoachCard: View {
     var identifier = "coach-card"
     var textIdentifier: String? = nil
     var centered = false
+    /// The unseen copy the placement measures: no identifiers, hidden from VoiceOver and the UI tests.
+    var measuring = false
     @AccessibilityFocusState private var textFocus: Bool
 
     init(symbol: String? = nil, title: String? = nil, subtitle: String? = nil, text: String? = nil, rows: [CoachRow] = [], columns: Int = 1, button: String? = nil, buttonID: String = "coach-button", buttonHint: String? = nil,
-         onButton: @escaping () -> Void = {}, dots: (current: Int, count: Int)? = nil, onSkip: (() -> Void)? = nil, pointer: (up: Bool, x: CGFloat)? = nil, width: CGFloat, maxHeight: CGFloat? = nil, identifier: String = "coach-card", centered: Bool = false) {
+         onButton: @escaping () -> Void = {}, dots: (current: Int, count: Int)? = nil, onSkip: (() -> Void)? = nil, pointer: (up: Bool, x: CGFloat)? = nil, width: CGFloat, maxHeight: CGFloat? = nil, identifier: String = "coach-card", centered: Bool = false, measuring: Bool = false) {
         self.symbol = symbol; self.title = title; self.subtitle = subtitle; self.text = text; self.rows = rows; self.columns = columns; self.button = button; self.buttonID = buttonID; self.buttonHint = buttonHint
-        self.onButton = onButton; self.dots = dots; self.onSkip = onSkip; self.pointer = pointer; self.width = width; self.maxHeight = maxHeight; self.identifier = identifier; self.centered = centered
+        self.onButton = onButton; self.dots = dots; self.onSkip = onSkip; self.pointer = pointer; self.width = width; self.maxHeight = maxHeight; self.identifier = identifier; self.centered = centered; self.measuring = measuring
     }
 
     private var hasFooter: Bool { dots != nil || onSkip != nil }
@@ -72,7 +74,8 @@ struct CoachCard: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(identifier)
+        .accessibilityIdentifier(measuring ? "" : identifier)
+        .accessibilityHidden(measuring)
     }
 
     /// A safe guess for the pinned part's height, used only to size the scroll area.
@@ -88,7 +91,7 @@ struct CoachCard: View {
                     }
                     if let title {
                         Text(title).font(Coach.title()).foregroundStyle(Coach.ink).fixedSize(horizontal: false, vertical: true)
-                            .accessibilityAddTraits(.isHeader).accessibilityFocused($textFocus).accessibilityIdentifier("coach-title")
+                            .accessibilityAddTraits(.isHeader).accessibilityFocused($textFocus).accessibilityIdentifier(measuring ? "" : "coach-title")
                     }
                 }
                 .frame(minHeight: Coach.minTap, alignment: .leading)
@@ -101,7 +104,7 @@ struct CoachCard: View {
                     .foregroundStyle(title == nil && symbol == nil ? Coach.ink : Coach.muted)
                     .multilineTextAlignment(centered ? .center : .leading)
                     .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("coach-text")
+                    .accessibilityIdentifier(measuring ? "" : "coach-text")
             }
             if !rows.isEmpty { rowsView(inner) }
         }
@@ -143,7 +146,7 @@ struct CoachCard: View {
             HStack(spacing: 10) {
                 if let dots { CoachDots(current: dots.current, count: dots.count) }
                 Spacer(minLength: 8)
-                if let onSkip { CoachSkipChip(action: onSkip) }
+                if let onSkip { CoachSkipChip(id: measuring ? "" : "tutorial-skip", action: onSkip) }
             }
             .frame(minHeight: Coach.minTap)
         }

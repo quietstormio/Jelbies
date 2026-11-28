@@ -108,6 +108,7 @@ typealias TourCapsuleButton = CoachButton
 
 /// Skip: a small capsule on every tutorial card. Visible height 32, hit area 44 x 44.
 struct CoachSkipChip: View {
+    var id = "tutorial-skip"
     let action: () -> Void
     var body: some View {
         Button(action: action) {
@@ -122,7 +123,7 @@ struct CoachSkipChip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Skip").accessibilityHint("Skips the tutorial").accessibilityIdentifier("tutorial-skip")
+        .accessibilityLabel("Skip").accessibilityHint("Skips the tutorial").accessibilityIdentifier(id)
     }
 }
 

@@ -29,12 +29,15 @@ final class TutorialUITests: XCTestCase {
         let f = e.frame
         return app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: f.midX, dy: f.midY))
     }
+    private var roomT0: Date?
     private func note(_ s: String) {
         log.append(s)
-        let line = s + "\n", p = out + "/tutorial_log.txt"
+        let t = roomT0.map { String(format: "[game %3.0fs] ", Date().timeIntervalSince($0)) } ?? ""
+        let line = t + s + "\n", p = out + "/tutorial_log.txt"
         if let h = FileHandle(forWritingAtPath: p) { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close() } else { try? line.write(toFile: p, atomically: true, encoding: .utf8) }
     }
     private func shot(_ name: String) {
+        sleep(1)          // the card fades and the ring settles
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: out + "/\(name).png"))
         note("shot \(name)")
     }
@@ -95,7 +98,7 @@ final class TutorialUITests: XCTestCase {
         let this = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'This one!'")).firstMatch
         XCTAssertTrue(this.waitForExistence(timeout: 20)); centre(this).tap()
         let bring = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Bring'")).firstMatch
-        XCTAssertTrue(bring.waitForExistence(timeout: 20)); sleep(2); centre(bring).tap(); note("brought home")
+        XCTAssertTrue(bring.waitForExistence(timeout: 20)); sleep(2); centre(bring).tap(); note("brought home"); roomT0 = Date()
 
         // the run-in: only Skip is up
         XCTAssertTrue(el("tutorial-skip").waitForExistence(timeout: 60), "no Skip during the run-in")
@@ -113,33 +116,39 @@ final class TutorialUITests: XCTestCase {
         XCTAssertTrue(el("tutorial-button").exists, "a tap on the ring does nothing on the intro card")
         tapEl("tutorial-button")
         // 1 Cuddle
-        waitText("Tap \(name).")
+        waitText("Double tap \(name) to pick them.")
         shot("03_tap_jelmiko")
-        negativeTap("Tap \(name)")
-        centre(el("jelbie-0")).tap()
-        waitText("Tap Come here.")
+        negativeTap("pick")
+        centre(el("jelbie-0")).doubleTap()
+        waitText("Tap Come here for a cuddle.")
         shot("04_come_here")
         negativeTap("Tap Come here")
         tapEl(el("hud-come").exists ? "hud-come" : "hud-call-all")
-        waitText("Rub \(name)'s head.", timeout: 40)
+        waitText("Rub \(name)'s head. Cuddles make them happy.", timeout: 40)
         shot("05_rub")
         let a = app.coordinate(withNormalizedOffset: CGVector(dx: 0.42, dy: 0.45)), b = app.coordinate(withNormalizedOffset: CGVector(dx: 0.58, dy: 0.45))
-        for _ in 0..<4 { a.press(forDuration: 0.5, thenDragTo: b, withVelocity: .slow, thenHoldForDuration: 0.2); if cardText == "Tap Let \(name) go." { break } }
-        waitText("Tap Let \(name) go.")
+        for _ in 0..<4 { a.press(forDuration: 0.5, thenDragTo: b, withVelocity: .slow, thenHoldForDuration: 0.2); if cardText == "Tap Let \(name) go when you're done." { break } }
+        waitText("Tap Let \(name) go when you're done.")
         shot("06_release")
         tapEl("focus-release")
-        // 2 Care
-        waitText("Tap the heart.", timeout: 40)
-        shot("07_heart")
-        negativeTap("Tap the heart")
-        let goOut = el("go-out")
-        if goOut.exists { centre(goOut).tap(); sleep(1); XCTAssertFalse(el("town-screen").exists, "Go out opened through the dim") ; note("go-out blocked ok") }
-        tapEl("care-menu")
-        waitText("Feed, water and play are here. Tap the heart to close.")
+        // 2 Care: selecting a Jelmiko opens the menu, so after the cuddle it is usually open already ("Tap the heart to close"); when it is closed the first card asks for the heart
+        let closeLine = "Care, dress-up and more are in here. Tap the heart to close."
+        let openLine = "Tap the heart to care for \(name)."
+        let end = Date().addingTimeInterval(40)
+        while Date() < end, cardText != closeLine, cardText != openLine { usleep(300_000) }
+        if cardText == openLine {
+            shot("07_heart")
+            negativeTap("Tap the heart")
+            let goOut = el("go-out")
+            if goOut.exists { let before = cardText; centre(goOut).tap(); sleep(4); XCTAssertFalse(el("town-screen").exists, "Go out opened through the dim"); XCTAssertEqual(cardText, before, "the step moved after a tap on a control outside the ring"); note("go-out blocked ok") }
+            tapEl("care-menu")
+        }
+        waitText(closeLine, timeout: 20)
         shot("08_menu")
+        negativeTap("Tap the heart to close")
         tapEl("care-menu")
         // 3 Go out
-        waitText("Tap Go out.")
+        waitText("Tap Go out to visit the town.")
         shot("09_goout")
         tapEl("go-out")
         waitText("Shop, races, the park and more.", timeout: 20)
@@ -177,7 +186,7 @@ final class TutorialUITests: XCTestCase {
 
     // MARK: 3. kill and relaunch mid-tour
     func testKillAndRelaunchResumes() {
-        for (kill, resume) in [("care.heart", "Tap the heart."), ("cuddle.release", nil as String?), ("out.go", "Tap Go out.")] {
+        for (kill, resume) in [("care.heart", "Tap the heart to care for Bob."), ("cuddle.release", nil as String?), ("out.go", "Tap Go out to visit the town.")] {
             launch(fresh + ["-TutorialAuto", "1", "-TutorialStep", kill])
             XCTAssertTrue(el("tutorial-card").waitForExistence(timeout: 90), "no card at \(kill)")
             sleep(2)
@@ -185,9 +194,9 @@ final class TutorialUITests: XCTestCase {
             launch(["-MainMenu", "0", "-ClockHour", "12", "-BlobNoWander", "1"])          // NO reset or new-game arguments
             XCTAssertTrue(el("tutorial-card").waitForExistence(timeout: 90), "the tutorial did not resume after a kill at \(kill)")
             shot("resume_\(kill)")
-            let expected = resume ?? "Tap \(app.staticTexts["coach-text"].label.dropFirst(4).dropLast())."          // chapter 1 restarts at "Tap <name>."
+            let expected = resume ?? cardText          // chapter 1 restarts at "Double tap <name>."
             XCTAssertEqual(cardText, expected, "killed at \(kill)")
-            if resume == nil { XCTAssertTrue(cardText.hasPrefix("Tap ") && !cardText.contains("Come") && !cardText.contains("Let"), cardText) }
+            if resume == nil { XCTAssertTrue(cardText.hasPrefix("Double tap "), cardText) }
             centre(el("tutorial-skip")).tap(); sleep(1)
             app.terminate()
         }
@@ -203,5 +212,46 @@ final class TutorialUITests: XCTestCase {
         default: break
         }
         walk(trueFirst: false, cfg: cfg, orient: orient, extra: extra)
+    }
+
+    // MARK: debug: what the care steps do after one tap on the heart
+    func testHeartSteps() {
+        launch(fresh + ["-TutorialAuto", "1", "-TutorialStep", "care.heart"])
+        XCTAssertTrue(el("tutorial-card").waitForExistence(timeout: 90)); sleep(3)
+        note("start text=\(cardText) feed=\(el("care-feed").exists)")
+        centre(el("care-menu")).tap()
+        for i in 0..<14 { sleep(1); note("t+\(i + 1)s text=\(cardText) feed=\(el("care-feed").exists)") }
+        shot("heart_after")
+    }
+
+    // MARK: debug: the heart after a cuddle in the plain game (no tutorial)
+    func testHeartAfterCuddlePlain() {
+        launch(fresh)
+        XCTAssertTrue(el("care-menu").waitForExistence(timeout: 90)); sleep(6)
+        centre(el("jelbie-0")).doubleTap(); sleep(3)
+        note("selected: come=\(el("hud-come").exists) clear=\(el("hud-clear").exists) feed=\(el("care-feed").exists)")
+        tapEl(el("hud-come").exists ? "hud-come" : "hud-call-all")
+        XCTAssertTrue(el("focus-release").waitForExistence(timeout: 40)); sleep(3)
+        tapEl("focus-release"); sleep(6)
+        note("after release: clear=\(el("hud-clear").exists) feed=\(el("care-feed").exists) come=\(el("hud-come").exists)")
+        centre(el("care-menu")).tap()
+        for i in 0..<4 { sleep(1); note("heart +\(i + 1)s feed=\(el("care-feed").exists) clear=\(el("hud-clear").exists)") }
+        centre(el("care-menu")).tap()
+        for i in 0..<3 { sleep(1); note("heart2 +\(i + 1)s feed=\(el("care-feed").exists) clear=\(el("hud-clear").exists)") }
+    }
+
+    func testHeartWhileSelected() {
+        launch(fresh + ["-TutorialAuto", "1", "-TutorialStep", "cuddle.tap"])
+        XCTAssertTrue(el("tutorial-card").waitForExistence(timeout: 90)); sleep(3)
+        centre(el("jelbie-0")).doubleTap()
+        XCTAssertTrue(el("hud-come").waitForExistence(timeout: 15)); sleep(1)
+        tapEl("tutorial-skip"); sleep(3)
+        note("selected, skipped: dress=\(el("hud-dress").exists) clear=\(el("hud-clear").exists) menu=\(el("care-menu").value ?? "")")
+        shot("sel_before")
+        centre(el("care-menu")).tap()
+        for i in 0..<5 { sleep(2); note("heart +\(2 * i + 2)s dress=\(el("hud-dress").exists) value=\(el("care-menu").value ?? "")") }
+        shot("sel_after")
+        centre(el("care-menu")).tap()
+        for i in 0..<3 { sleep(2); note("heart again +\(2 * i + 2)s dress=\(el("hud-dress").exists) value=\(el("care-menu").value ?? "")") }
     }
 }

@@ -44,6 +44,10 @@ struct TutorialStep: Equatable {
     var target: String? = nil
     var shape: CoachShape = .capsule
     var place: Place = .top
+    /// The card stands at `place` (top / low) instead of beside its ring: used where the ring's neighbours are what the card would cover (the menu's rows).
+    var pinned = false
+    /// The card prefers the side of its ring: the control sits in the left rail with empty floor beside it.
+    var beside = false
     var wait: TutorialWait
     var missing: Missing = .advance
     /// "Tap {name}." and friends: {name} is the Jelmiko's name.
@@ -71,15 +75,15 @@ final class Tutorial {
         TutorialStep(id: "arrive", chapter: 0, kind: .arrival, wait: .arrival),
         TutorialStep(id: "intro", chapter: 0, kind: .intro, title: "This is your Jelmiko, {name}.", text: "To take care of them, you can:", button: "Show me how", target: "jelmiko", wait: .button),
         // 1 Cuddle
-        TutorialStep(id: "cuddle.tap", chapter: 1, kind: .spot, text: "Tap {name}.", target: "jelmiko", wait: .target("come")),
-        TutorialStep(id: "cuddle.come", chapter: 1, kind: .spot, text: "Tap Come here.", target: "come", wait: .focusOpen, missing: .back("cuddle.tap")),
-        TutorialStep(id: "cuddle.rub", chapter: 1, kind: .card, text: "Rub {name}'s head.", place: .low, wait: .hearts),
-        TutorialStep(id: "cuddle.release", chapter: 1, kind: .spot, text: "Tap Let {name} go.", target: "release", wait: .focusClosed),
+        TutorialStep(id: "cuddle.tap", chapter: 1, kind: .spot, text: "Double tap {name} to pick them.", target: "jelmiko", wait: .target("come")),
+        TutorialStep(id: "cuddle.come", chapter: 1, kind: .spot, text: "Tap Come here for a cuddle.", target: "come", pinned: true, wait: .focusOpen, missing: .back("cuddle.tap")),
+        TutorialStep(id: "cuddle.rub", chapter: 1, kind: .card, text: "Rub {name}'s head. Cuddles make them happy.", place: .low, wait: .hearts),
+        TutorialStep(id: "cuddle.release", chapter: 1, kind: .spot, text: "Tap Let {name} go when you're done.", target: "release", wait: .focusClosed),
         // 2 Care menu
-        TutorialStep(id: "care.heart", chapter: 2, kind: .spot, text: "Tap the heart.", target: "care", wait: .menuOpen),
-        TutorialStep(id: "care.menu", chapter: 2, kind: .spot, text: "Feed, water and play are here. Tap the heart to close.", target: "care", wait: .menuClosed),
+        TutorialStep(id: "care.heart", chapter: 2, kind: .spot, text: "Tap the heart to care for {name}.", target: "care", wait: .menuOpen),
+        TutorialStep(id: "care.menu", chapter: 2, kind: .spot, text: "Care, dress-up and more are in here. Tap the heart to close.", target: "care", pinned: true, wait: .menuClosed),
         // 3 Go out
-        TutorialStep(id: "out.go", chapter: 3, kind: .spot, text: "Tap Go out.", target: "goout", wait: .townOpen),
+        TutorialStep(id: "out.go", chapter: 3, kind: .spot, text: "Tap Go out to visit the town.", target: "goout", beside: true, wait: .townOpen),
         TutorialStep(id: "out.town", chapter: 3, kind: .card, title: "Shop, races, the park and more.", text: "Each one shows you how the first time.", button: "Got it", place: .top, wait: .button),
     ]
 
@@ -123,6 +127,11 @@ final class Tutorial {
     @ObservationIgnored var now: () -> Date = { Date() }
     @ObservationIgnored private var stepStart = Date.distantPast
     @ObservationIgnored private var missingSince: Date?
+    /// The care menu was seen open during this step ("close it" only counts after it was open).
+    @ObservationIgnored private var sawMenuOpen = false
+    /// ... and closed ("open it" only counts after the player was seen with it closed: a new cuddle leaves the menu open).
+    @ObservationIgnored private var sawMenuClosed = false
+    @ObservationIgnored private var lastBeat = 0
     /// Seconds a step stays before the next one may take over (a card never flashes past), and how long a missing control is waited for.
     static let minDwell: TimeInterval = 0.7
     static let missingWait: TimeInterval = 6
@@ -182,7 +191,9 @@ final class Tutorial {
     // MARK: moving
 
     private func go(to i: Int) {
-        index = i; serial += 1; stepStart = now(); missingSince = nil
+        index = i; serial += 1; stepStart = now(); missingSince = nil; sawMenuOpen = false; sawMenuClosed = false
+        if DevArgs.enabled { NSLog("[tut] -> %@", steps.indices.contains(i) ? steps[i].id : "-") }
+        if step?.id == "out.town", !replay { TipBook.shared.markSeen("town") }          // this card already says what the "Where to?" tip says
         if let s = step, !replay, !isHint, s.chapter > furthestChapter { defaults.set(s.chapter, forKey: Self.chapterKey) }
     }
 
@@ -201,8 +212,10 @@ final class Tutorial {
     /// Ends it. A finished or skipped home walkthrough is done for good (a replay writes nothing).
     func finish(completed: Bool) {
         guard active else { return }
+        if DevArgs.enabled { NSLog("[tut] finish completed=%d hint=%d at %@", completed ? 1 : 0, isHint ? 1 : 0, step?.id ?? "-") }
         let hint = isHint
         active = false; isHint = false; loop?.cancel(); loop = nil; cardFrame = .zero
+        TipBook.shared.quiet(for: hint ? 20 : TipBook.quietAfterTutorial)          // tip cards do not pop right after a walkthrough
         if hint { defaults.set(true, forKey: Self.hungryKey) }
         else if !replay {
             defaults.set(completed ? "done" : "skipped", forKey: Self.stateKey)
@@ -239,10 +252,14 @@ final class Tutorial {
 
     /// Reads the world and moves on when the step's wait is true. One step per call, never before `minDwell`.
     func tick(world w: TutorialWorld) {
+        if DevArgs.enabled, w != world { NSLog("[tut] step=%@ menu=%d town=%d focus=%d hearts=%d targets=%@", step?.id ?? "-", w.menuOpen ? 1 : 0, w.townOpen ? 1 : 0, w.focusActive ? 1 : 0, w.hearts ? 1 : 0, w.targets.sorted().joined(separator: ",")) }
         world = w
         guard let s = step else { maybeStartHungry(world: w); return }
         let t = now()
+        if DevArgs.enabled, Int(t.timeIntervalSince1970) % 4 == 0, lastBeat != Int(t.timeIntervalSince1970) { lastBeat = Int(t.timeIntervalSince1970); NSLog("[tut] beat step=%@ targets=%d", s.id, w.targets.count) }
+        if w.menuOpen { sawMenuOpen = true } else { sawMenuClosed = true }
         guard t.timeIntervalSince(stepStart) >= Self.minDwell else { return }
+        if s.wait == .menuClosed, !sawMenuOpen { return }
         // a control the step points at that is not on screen: wait a little, then move on (or go back to the step that shows it)
         if let target = s.target, s.kind == .spot, target != "jelmiko", !w.targets.contains(target) {
             if missingSince == nil { missingSince = t }

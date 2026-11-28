@@ -449,7 +449,6 @@ struct GameScreen: View {
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
         .onChange(of: model.care.volley.winMusic) { _, _ in AudioHub.shared.setTownScene(currentMusicScene) }
-        .onChange(of: menuOpen) { _, o in TutorialSignals.shared.menuOpen = o }
         .onChange(of: town) { _, t in
             TutorialSignals.shared.townOpen = t != nil
             #if targetEnvironment(simulator)
@@ -1256,7 +1255,6 @@ struct GameScreen: View {
         Tutorial.shared.worldProvider = { [weak care] in
             guard let care else { return TutorialWorld() }
             var w = TutorialWorld()
-            w.menuOpen = TutorialSignals.shared.menuOpen
             w.townOpen = TutorialSignals.shared.townOpen
             w.focusActive = care.focus.isActive
             w.hearts = !(care.touchPlay?.hearts.isEmpty ?? true)
@@ -1264,9 +1262,11 @@ struct GameScreen: View {
             w.trayOut = care.trayOut
             w.busy = TipContext.live(care).blocked || care.tripActive
             w.targets = TutorialTargets.shared.ids
+            w.menuOpen = w.targets.contains { $0.hasPrefix("row-") || $0 == "feed" || $0 == "come" }          // the menu is open exactly when its rows are on screen
             return w
         }
-        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "TutorialAuto") == 1, !Tutorial.shared.inProgress, !Tutorial.shared.isDone, !Tutorial.shared.wasSkipped, !Tutorial.shared.active {          // capture / UI-test aid: begin the real tutorial in this room, optionally on a step
+        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "TutorialAuto") == 1, !Tutorial.shared.active {          // capture / UI-test aid: begin the real tutorial in this room from clean flags, optionally on a step
+            Tutorial.shared.resetFlags()
             Tutorial.shared.begin(name: care.jellies.first?.name ?? "Bob", replay: false, run: false)
             if let id = UserDefaults.standard.string(forKey: "TutorialStep") { Tutorial.shared.jump(toID: id) }
         }
@@ -1851,7 +1851,7 @@ struct CareMenu: View {
         .buttonStyle(.plain)
         .disabled(!on)
         .accessibilityIdentifier(item.rawValue)
-        .tutorialTarget(item == .feed ? "feed" : (item == .come || item == .callAll) ? "come" : nil)
+        .tutorialTarget(item == .feed ? "feed" : (item == .come || item == .callAll) ? "come" : "row-\(item.rawValue)")
         .accessibilityLabel(HUDMenu.spokenLabel(item, mode, care: care))
         .accessibilityHint(reason ?? "")
         .accessibilityFocused($focusedRow, equals: item)
@@ -2022,7 +2022,7 @@ struct FocusHint: View {
     var body: some View {
         Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
             .onAppear {
-                guard shown, !Self.suppressed else { return }
+                guard shown, !Self.suppressed, !Tutorial.shared.holdsGame else { return }          // (the tutorial card says it already)
                 GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky,
                                               onShown: { UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key) })          // (a visit counts once the line was on the bar)
             }

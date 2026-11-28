@@ -36,6 +36,9 @@ enum TutorialDriver {
         switch s.wait {
         case .button: t.buttonTapped()
         case .arrival: t.arrivalDone()
+        case .menuClosed:          // "close it" counts only after the player was seen with it open
+            clock = clock.addingTimeInterval(1); var open = world(for: s); open.menuOpen = true; t.tick(world: open)
+            clock = clock.addingTimeInterval(1); t.tick(world: world(for: s))
         default: clock = clock.addingTimeInterval(1); t.tick(world: world(for: s))
         }
     }
@@ -93,12 +96,13 @@ final class TutorialTests: XCTestCase {
             XCTAssertEqual(t.step?.id, s.id)
             // the world as it is when the player has done nothing yet: the control is there, the action is not
             var idle = TutorialWorld(); if let tg = s.target { idle.targets.insert(tg) }
-            if s.wait == .menuClosed { idle.menuOpen = true }
+            if s.wait == .menuClosed { idle.menuOpen = false }          // nothing seen open yet: closed means nothing
             if s.wait == .focusClosed { idle.focusActive = true }
             TutorialDriver.clock = TutorialDriver.clock.addingTimeInterval(2)
             t.now = { TutorialDriver.clock }
             t.tick(world: idle)
             XCTAssertEqual(t.step?.id, s.id, "\(s.id) must not move before the player acts")
+            if s.wait == .menuClosed { var o = idle; o.menuOpen = true; t.tick(world: o); XCTAssertEqual(t.step?.id, s.id) }
             t.tick(world: TutorialDriver.world(for: s))
             XCTAssertNotEqual(t.step?.id, s.id, "\(s.id) moves once the player acted")
             t.reset()
@@ -107,14 +111,30 @@ final class TutorialTests: XCTestCase {
 
     func testAStepNeverFlashesPastBeforeItsDwell() {
         let (t, _) = TutorialDriver.make("dwell")
-        t.jump(toID: "care.heart")
-        var w = TutorialWorld(); w.targets = ["care"]; w.menuOpen = true
+        t.jump(toID: "out.go")
+        var w = TutorialWorld(); w.targets = ["goout"]; w.townOpen = true
         t.tick(world: w)
-        XCTAssertEqual(t.step?.id, "care.heart", "already satisfied, but the card shows first")
+        XCTAssertEqual(t.step?.id, "out.go", "already satisfied, but the card shows first")
         TutorialDriver.clock = TutorialDriver.clock.addingTimeInterval(Tutorial.minDwell + 0.1); t.now = { TutorialDriver.clock }
         t.tick(world: w)
-        XCTAssertEqual(t.step?.id, "care.menu")
+        XCTAssertEqual(t.step?.id, "out.town")
         t.reset()
+    }
+
+    func testTheCareStepsFollowTheMenuWhateverItsStateWas() {
+        let (t, _) = TutorialDriver.make("heart")
+        t.jump(toID: "care.heart")          // selecting a Jelmiko opens the menu: it can already be open when the chapter starts
+        func tick(_ open: Bool) { TutorialDriver.clock = TutorialDriver.clock.addingTimeInterval(1); t.now = { TutorialDriver.clock }; var w = TutorialWorld(); w.targets = ["care"]; w.menuOpen = open; t.tick(world: w) }
+        tick(true); XCTAssertEqual(t.step?.id, "care.menu", "already open: on to 'close it'")
+        tick(true); XCTAssertEqual(t.step?.id, "care.menu", "still open: not closed yet")
+        tick(false); XCTAssertEqual(t.step?.id, "out.go")
+        t.reset()
+        let (u, _) = TutorialDriver.make("heart2")
+        u.jump(toID: "care.heart")
+        func tick2(_ open: Bool) { TutorialDriver.clock = TutorialDriver.clock.addingTimeInterval(1); u.now = { TutorialDriver.clock }; var w = TutorialWorld(); w.targets = ["care"]; w.menuOpen = open; u.tick(world: w) }
+        tick2(false); XCTAssertEqual(u.step?.id, "care.heart", "closed: waits for the heart")
+        tick2(true); XCTAssertEqual(u.step?.id, "care.menu")
+        u.reset()
     }
 
     func testAControlThatNeverShowsMovesOnOrGoesBack() {
@@ -213,7 +233,8 @@ final class TutorialTests: XCTestCase {
         d.set("done", forKey: Tutorial.stateKey)
         t.maybeStartHungry(world: hungryWorld())
         func act(_ w: TutorialWorld) { TutorialDriver.clock = TutorialDriver.clock.addingTimeInterval(1); t.now = { TutorialDriver.clock }; t.tick(world: w) }
-        var w = hungryWorld(); w.targets = ["care"]; w.menuOpen = true
+        var w = hungryWorld(); w.targets = ["care"]
+        w.menuOpen = true
         act(w); XCTAssertEqual(t.step?.id, "hungry.feed")
         w.targets = ["feed", "food"]
         act(w); XCTAssertEqual(t.step?.id, "hungry.food")
@@ -227,7 +248,8 @@ final class TutorialTests: XCTestCase {
         d.set("done", forKey: Tutorial.stateKey)
         t.maybeStartHungry(world: hungryWorld())
         func act(_ w: TutorialWorld) { TutorialDriver.clock = TutorialDriver.clock.addingTimeInterval(1); t.now = { TutorialDriver.clock }; t.tick(world: w) }
-        var w = hungryWorld(); w.targets = ["care"]; w.menuOpen = true
+        var w = hungryWorld(); w.targets = ["care"]
+        w.menuOpen = true
         act(w); XCTAssertEqual(t.step?.id, "hungry.feed")
         w.targets = ["feed", "feed-empty"]
         act(w); XCTAssertEqual(t.step?.id, "hungry.nofood")
@@ -350,6 +372,19 @@ final class TutorialTests: XCTestCase {
         XCTAssertLessThan(top.frame.minY, size.height * 0.25)
         let l = TutorialPlacement.place(size: CGSize(width: 852, height: 393), safe: UIEdgeInsets(top: 0, left: 59, bottom: 21, right: 59), spot: nil, place: .low, natural: 150, wide: false, avoid: nil)
         XCTAssertGreaterThan(l.frame.midX, 852 / 2, "landscape: on the right edge, clear of the Jelmiko in the middle")
+    }
+
+    func testPinnedAndBesideCards() {
+        let size = CGSize(width: 393, height: 852), safe = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        let row = CoachSpot(rect: CGRect(x: 230, y: 700, width: 150, height: 44), shape: .capsule)
+        let p = TutorialPlacement.place(size: size, safe: safe, spot: row, place: .top, natural: 130, wide: false, avoid: nil, pinned: true)
+        XCTAssertLessThan(p.frame.maxY, 400, "a pinned card stands at the top, clear of the menu's rows")
+        XCTAssertNil(p.pointer)
+        let rail = CoachSpot(rect: CGRect(x: 24, y: 690, width: 56, height: 56), shape: .capsule)
+        let b = TutorialPlacement.place(size: size, safe: safe, spot: rail, place: .top, natural: 130, wide: false, avoid: nil, beside: true)
+        XCTAssertGreaterThan(b.frame.minX, rail.hole.maxX, "beside the rail button, not over it")
+        XCTAssertFalse(b.frame.intersects(rail.hole))
+        XCTAssertLessThanOrEqual(b.frame.maxY, size.height - safe.bottom - 100 + 0.5, "not down over the heart and the name chip")
     }
 }
 
