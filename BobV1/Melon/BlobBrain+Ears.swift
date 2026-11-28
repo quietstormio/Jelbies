@@ -279,6 +279,7 @@ final class EarsReactor {
             rows[j.id] = st
         }
         note("row: \(spots.count) spots for \(dancers.count)")
+        if UserDefaults.standard.bool(forKey: "EarsLog") { NSLog("[ears] row spots=%@ from=%@", spots.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) }.joined(separator: " "), order.map { String(format: "%d(%.2f,%.2f)", $0.id, GameCare.floorPos($0.brain, $0.sim).x, GameCare.floorPos($0.brain, $0.sim).y) }.joined(separator: " ")) }
     }
 
     private func driveDance(_ jellies: [Jelly], dt: Float, now: Double) {
@@ -320,6 +321,7 @@ final class EarsReactor {
                 let sq = 1 - (1 - sway.squash(depth: EarsDance.bob)) * g
                 brain.ears.write(pitch: 0, roll: sway.roll(maxRoll: EarsDance.sway) * g * amp, squash: 1 - (1 - sq) * amp)
             }
+            if UserDefaults.standard.bool(forKey: "EarsLog"), rows[j.id]?.phase != st.phase { NSLog("[ears] %d -> %@ at (%.2f,%.2f) t=%.1f", j.id, String(describing: st.phase), GameCare.floorPos(brain, j.sim).x, GameCare.floorPos(brain, j.sim).y, st.t) }
             rows[j.id] = st
         }
     }
