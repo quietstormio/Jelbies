@@ -35,9 +35,9 @@ import simd
 
 extension GameCare {
     /// Set by StartFlow.bringHome; the next room's first steps consume it.
-    nonisolated(unsafe) static var newcomerPending = false
+    nonisolated(unsafe) static var newcomerPending = ArrivalLane.lab != nil          // (-ArrivalLab: the launch itself is an arrival)
     /// Set with it when others are at home: the launch curtain stays up until he has been put off-screen (`LaunchGate.evaluate`), so he is never seen at his spawn spot.
-    nonisolated(unsafe) static var newcomerWithOthers = false
+    nonisolated(unsafe) static var newcomerWithOthers = ArrivalLane.lab != nil
     /// The first-day tour (Start/FirstDayTour.swift) is armed or up: the needs and the need bubbles wait (GameCare.tickNeeds, tickBubbles). Set only by FirstDayTour.
     nonisolated(unsafe) static var introHold = false
     static let newcomerEdge = SIMD2<Float>(1.1, -2.2)
@@ -48,6 +48,7 @@ extension GameCare {
 
     func tickNewcomer(_ actors: [JellyActor], dt: Float) {
         guard !isPreview else { return }          // (a showcase stage never takes the pending arrival, and never greets anybody)
+        if newcomerWelcome == nil, ArrivalLane.active != nil { endArrivalLane() }          // (never a lane left reserved)
         if let w = newcomerWelcome { tickNewcomerWelcome(w, actors, dt: dt); return }
         if var n = newcomer {
             n.age += dt
@@ -65,6 +66,7 @@ extension GameCare {
         guard Self.newcomerPending else { newcomerPendingT = 0; return }
         // a stale flag never fires later: whatever kept the room from taking him within a few seconds drops it (he is then just a housemate, nothing pops in)
         newcomerPendingT += dt
+        if ArrivalLane.lab != nil, GameCamera.aspect < 1, let o = UserDefaults.standard.string(forKey: "ForceOrientation"), o != "portrait", newcomerPendingT < 7 { return }          // (lab: let the window turn first)
         if newcomerPendingT > 10 { Self.newcomerPending = false; Self.newcomerWithOthers = false; newcomerPendingT = 0; return }
         let rosterCount = max(jellies.count, 1)
         // (a sleepover / play friend's body is the actor after the roster: he is not the newcomer)
@@ -147,7 +149,14 @@ extension GameCare {
 
     private func beginNewcomerWelcome(_ actors: [JellyActor], _ na: JellyActor, _ nb: BlobBrain) {
         let others = actors.filter { $0.id != na.id }          // (a friend over counts for where he stands, not for the greetings)
-        let target = guestSpotNear(others)
+        arrivalLabPlace(others)
+        var target = guestSpotNear(others)
+        arrivalLabWorst(others, target: target)
+        if ArrivalLane.on, let ref = nb.isSleeping ? others.first?.brain : nb, !others.isEmpty {          // (arrival-lane-r1: his lane is cleared behind the curtain, ArrivalLane.swift)
+            let plan = planArrival(others, using: ref, legacy: target)
+            target = plan.target
+            applyArrivalPlan(plan)
+        }
         let w = NewcomerWelcome(id: na.id, name: jelly(na.id)?.name ?? "Your Jelmiko", target: target)
         // (a plain "welcome back" greeting from a long time away would fight the welcome: it is dropped, the welcome is the greeting)
         greeting = false; greetPending = []; greetOthers = [:]; queued.removeAll { if case .come = $0 { return true }; return false }
@@ -177,12 +186,13 @@ extension GameCare {
         if w.stage == .healing {
             // Heal until nothing that snapshots / restores autonomy is going on (a close-up that began while he was held saved "off" and gives it back when it ends, an
             // outing likewise) AND his autonomy has stayed on for a full second: it is put right every step until then.
+            if !w.walkIn { endArrivalLane() }
             let restoring = focus.phase != .roaming || focusGroup.saved[w.id] != nil || bath.active
             if w.walkIn {          // interrupted before he was in the room: he runs in on his own (the wall stays lifted until he is in)
                 w.walkT += dt
                 if simd_distance(na.floor, w.target) < 1.0 || w.walkT > 15 || tripActive || raceBusy {
                     if simd_distance(na.floor, w.target) > 1.5 { rehome(na, at: w.target) }
-                    w.walkIn = false; nb.hurry = false; restoreArena(w, na)
+                    w.walkIn = false; nb.hurry = false; restoreArena(w, na); endArrivalLane()
                 } else if !restoring, nb.pending == nil, nb.scriptIsNone { nb.hurry = true; nb.requestNow(.goTo(w.target)) }
             }
             if newcomerInterrupted || restoring { w.healT = 0; return }
@@ -242,17 +252,35 @@ extension GameCare {
             }
         case .entrance:
             if nb.isSleeping, w.stageT < NewcomerCheer.wakeCap { return }          // (he must be on his feet to run)
-            if w.stageT >= NewcomerCheer.entranceDelay { startRunIn(w, na, nb, all) }
+            if w.stageT >= NewcomerCheer.entranceDelay {
+                // (arrival-lane-r1: nobody in his lane when he starts; a late one is sent out of it first, a beat or two at most)
+                if ArrivalLane.on, w.stageT < NewcomerCheer.entranceDelay + 3, arrivalClearCheck(household, target: w.target) { return }
+                startRunIn(w, na, nb, all)
+            }
         case .runIn:
             // as he crosses into view: the first confetti burst, from the left edge at his height
             if !w.sideFired {
                 let hw = GameCamera.visibleHalfWidthAtBody(z: na.floor.y, aspect: GameCamera.aspect)
                 if na.floor.x > -hw + 0.3 || w.stageT > 4 { w.sideFired = true; fireConfetti(side: true, actor: na, w) }
             }
+            // (arrival-lane-r1: a walk any housemate starts toward / across the lane while he runs is turned away at once, whatever picked it)
+            if ArrivalLane.on, ArrivalLane.active != nil, Int(w.stageT * 4) != Int((w.stageT - dt) * 4), simd_distance(na.floor, w.target) > 0.6 { _ = arrivalClearCheck(household, target: w.target) }
+            if (ArrivalLane.logOn || ArrivalLane.active != nil) && simd_distance(na.floor, w.target) > 0.6 { let l = ArrivalLaneShape(z: w.target.y, spotX: w.target.x); ArrivalLane.violations += household.filter { l.contains($0.floor) && $0.brain?.isSleeping != true }.count }
+            if ArrivalLane.logOn {
+                w.trail.append((w.stageT, na.floor))
+                while let f = w.trail.first, w.stageT - f.0 > 0.1 { w.trail.removeFirst() }
+                let v = w.trail.count > 1 ? simd_distance(na.floor, w.trail[0].1) / max(w.stageT - w.trail[0].0, 1e-4) : 0
+                NSLog("[arrlane] t=%.3f wall=%.3f x=%.2f z=%.2f v=%.3f act=%@ held=%d yield=%.2f wait=%.2f H=%@", w.stageT, CACurrentMediaTime(), na.floor.x, na.floor.y, v, "\(nb.activity)", nb.heldByPeer ? 1 : 0, nb.yieldT, nb.steerWait,
+                      household.map { h -> String in
+                          var g = "-"; if let b = h.brain, case .walk(let t, _) = b.script { g = String(format: "(%.1f,%.1f)", t.x, t.y) }
+                          return String(format: "%d:%.2f,%.2f>%@/%@", h.id, h.floor.x, h.floor.y, g, h.brain.map { "\($0.activity)" } ?? "?") }.joined(separator: " "))
+            }
             let calm = nb.activity == .idle || nb.activity == .lookingAround || nb.activity == .steppingInPlace
             w.calm = (calm && w.stageT > 0.8) ? w.calm + dt : 0
             guard w.calm > 0.3 || w.stageT > 12 else { return }
             nb.hurry = false          // (he stays held, autonomy off, until the cheer is over)
+            endArrivalLane()
+            if ArrivalLane.logOn { NSLog("[arrlane] cheer violations=%d", ArrivalLane.violations) }
             restoreArena(w, na)
             if !w.sideFired { w.sideFired = true }
             NSLog("[newcomer] cheer begins t=%.1f at (%.1f,%.1f)", w.t, na.floor.x, na.floor.y)
@@ -275,6 +303,8 @@ extension GameCare {
         if na.floor.x > -(hw + 0.9) { rehome(na, at: guestArrivalEntry(toward: w.target, offScreen: true)) }
         AudioHub.shared.play(.perfectStreak)          // the "ta-da": the short rising chime (the game's streak chime)
         UIAccessibility.post(notification: .announcement, argument: "\(w.name) is home")
+        ArrivalLane.violations = 0
+        if ArrivalLane.on { let n = everyone.filter { $0.id != na.id && ArrivalLane.active?.contains($0.floor) == true }.count; NSLog("[arrlane] start lane violators=%d", n) }
         arrivalRunIn(na, to: w.target, household: everyone, voice: true)
         NSLog("[newcomer] run t=%.1f from (%.1f,%.1f) to (%.1f,%.1f)", w.t, na.floor.x, na.floor.y, w.target.x, w.target.y)
         w.go(.runIn)
@@ -586,6 +616,7 @@ final class NewcomerWelcome {
     var sideFired = false, cheerStarted = false, hopIndex = 0
     /// Interrupted before he was in the room: he is running in on his own (healing stage).
     var walkIn = false, walkT: Float = 0
+    var trail: [(Float, SIMD2<Float>)] = []
 
     init(id: Int, name: String, target: SIMD2<Float>) { self.id = id; self.name = name; self.target = target }
 
