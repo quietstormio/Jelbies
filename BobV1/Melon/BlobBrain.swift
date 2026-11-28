@@ -148,11 +148,8 @@ final class BlobBrain {
     }
     enum After { case none, faceCamera, wave, face(SIMD2<Float>), eat(SIMD2<Float>, Bool), doEat(SIMD2<Float>, Bool), dineTurn(DiningPlace), dineGo }
 
-    nonisolated(unsafe) static let walkTrace = UserDefaults.standard.bool(forKey: "WalkTrace")          // TEMP: root-cause hunt (ears-sway-r1)
     var script: Script = .none {
-        didSet {
-            if Self.walkTrace, ears.dancing, case .walk(let t, _) = script { NSLog("[walktrace] id=%d target=(%.2f,%.2f) job=%@ stack=%@", steerID, t.x, t.y, String(describing: job).prefix(40) as CVarArg, Thread.callStackSymbols.dropFirst(1).prefix(6).map { l -> String in let f = l.split(separator: " ", omittingEmptySubsequences: true); return f.count > 3 ? String(f[3]) : "?" }.joined(separator: " < ")) }
-            if board != nil, case .walk = script { publishToBoard(pos: position) } }          // (the walk-board: a walk that begins is on the board at once; nothing reads it, WalkBoard.swift)
+        didSet { if board != nil, case .walk = script { publishToBoard(pos: position) } }          // (the walk-board: a walk that begins is on the board at once; nothing reads it, WalkBoard.swift)
     }
     /// The stage's walk board (one per stage, injected beside `peers`; nil = none) and the brain's reusable intent for it.
     var board: WalkBoard?

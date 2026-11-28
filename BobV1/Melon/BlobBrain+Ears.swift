@@ -310,6 +310,7 @@ final class EarsReactor {
 
     /// `-EarsLog 1`: the roll the render is given each sim step; the largest step between two steps is printed once a second.
     static let stepLog = UserDefaults.standard.bool(forKey: "EarsLog")
+    private var gapMin = Float.infinity, gapWalkMin = Float.infinity, gapDanceMin = Float.infinity, gapAt: Double = 0
     private var stepPrev: [Int: Float] = [:]
     private var stepMax: Float = 0, stepAt: Double = 0, rollMaxSeen: Float = 0
     private func logStep(_ id: Int, _ roll: Float, now: Double) {
@@ -320,6 +321,14 @@ final class EarsReactor {
 
     private func driveDance(_ jellies: [Jelly], dt: Float, now: Double) {
         guard let d = dance else { return }
+        if Self.stepLog {          // capture aid: the closest two dancers each second (walking in / swaying)
+            let dn = jellies.filter { $0.brain.ears.dancing }
+            var m = Float.infinity
+            for a in 0..<dn.count { for b in (a + 1)..<max(dn.count, a + 1) { m = min(m, simd_distance(GameCare.floorPos(dn[a].brain, dn[a].sim), GameCare.floorPos(dn[b].brain, dn[b].sim))) } }
+            gapMin = min(gapMin, m)
+            if rows.values.contains(where: { $0.phase != .swaying }) { gapWalkMin = min(gapWalkMin, m) } else { gapDanceMin = min(gapDanceMin, m) }
+            if now - gapAt >= 1 { gapAt = now; NSLog("[ears] gap now-min=%.2f walkin-min=%.2f dance-min=%.2f", gapMin, gapWalkMin, gapDanceMin); gapMin = .infinity }
+        }
         sway.tick(dt: Double(dt))
         // the last `fade` seconds of the tail ease the sway out
         let tailK = Float(d.endAt.map { min(1, max(0, ($0 - now) / EarsDance.fade)) } ?? 1)
