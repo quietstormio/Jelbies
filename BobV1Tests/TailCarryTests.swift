@@ -62,7 +62,7 @@ final class TailCarryTests: XCTestCase {
             ("standing", .stand, 4), ("walking 5 s", .walk, 5),
             ("tail wag (signature)", .kind(.signatureFlourish), 6), ("tailThump", .kind(.tailThump), 8), ("tailHug", .kind(.tailHug), 8), ("tail spin", .kind(.tail), 8),
             ("sit", .kind(.sit), 5), ("flop", .kind(.flop), 6), ("lieDown", .kind(.lieDown), 8), ("floorNapFlop", .kind(.floorNapFlop), 8), ("hula", .kind(.hula), 6), ("shake", .kind(.shake), 4),
-            ("sneeze", .kind(.sneeze), 4), ("bellyDrum", .kind(.bellyDrum), 5), ("politeBow", .kind(.politeBow), 4), ("dizzyWobble", .kind(.dizzyWobble), 5), ("stumble", .kind(.stumble), 4),
+            ("bellyDrum", .kind(.bellyDrum), 5), ("politeBow", .kind(.politeBow), 4), ("dizzyWobble", .kind(.dizzyWobble), 5), ("stumble", .kind(.stumble), 4),
             ("run", .kind(.run), 5), ("zoomies", .kind(.zoomies), 6), ("jacks", .kind(.jacks), 5), ("slide", .kind(.slide), 5), ("scoot", .kind(.scoot), 5),
             ("bounce (hops)", .kind(.bounce), 6), ("joy (jump)", .kind(.joy), 5), ("skipHop", .kind(.skipHop), 5), ("hiccup", .kind(.hiccup), 4), ("superSpring", .kind(.superSpring), 6),
             ("corkscrew", .kind(.corkscrew), 6), ("tossHeader", .kind(.tossHeader), 4), ("proudStrut", .kind(.proudStrut), 6),

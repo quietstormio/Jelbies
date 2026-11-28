@@ -100,7 +100,7 @@ final class AudioHub {
         return Self.clock() - max(lastVoice[i], lastContextVoice[i], lastEmoteVoice[i])
     }
     @ObservationIgnored private var lastVoice: [Double] = [0, 0, 0]
-    /// When each Jelbie's own emote voice (hic, achoo, woozy) last played: his ambient chirp / babble waits `emoteVoiceHush` s after it (a nice balance: they do not speak too much).
+    /// When each Jelbie's own emote voice (hic, woozy) last played: his ambient chirp / babble waits `emoteVoiceHush` s after it (a nice balance: they do not speak too much).
     @ObservationIgnored private var lastEmoteVoice: [Double] = [-100, -100, -100]
     static let emoteVoiceHush: Double = 6
     @ObservationIgnored private var lastMood: [Int: BlobMood] = [:]
@@ -882,7 +882,7 @@ final class AudioHub {
         let level = settings.sfxLevel * duck.gain
         let now = Self.clock()
         let key = jelly.map { "\(sfx.rawValue)#\($0)" } ?? sfx.rawValue
-        if let j = jelly, [.emoteHic, .emoteAchoo, .emoteWoozy, .emoteSpinHug, .emoteStarSigh, .emoteTilt, .emoteWelcome, .emoteCheckIn].contains(sfx) { lastEmoteVoice[min(max(j, 0), 2)] = now }
+        if let j = jelly, [.emoteHic, .emoteWoozy, .emoteSpinHug, .emoteStarSigh, .emoteTilt, .emoteWelcome, .emoteCheckIn].contains(sfx) { lastEmoteVoice[min(max(j, 0), 2)] = now }
         if let l = lastPlay[key], now - l < sfx.minGap { diag("play:\(sfx.rawValue)", jelly, "minGap"); return }
         lastPlay[key] = now
         let n = variants(sfx)
@@ -1106,18 +1106,17 @@ final class AudioHub {
         return name
     }
 
-    /// The bath's creature voice (Bath/BathVoices.swift): one of the existing voice clips (`v`, its variant) or, with `v` nil, the shared sneeze, in the voice set of the Jelly in
+    /// The bath's creature voice (Bath/BathVoices.swift): one of the existing voice clips (`v`, its variant), in the voice set of the Jelly in
     /// `jelly`'s slot. Past the shared gates (muted / background / level) and its own 0.9 s gap per Jelly; stamps `lastVoice` / `lastContextVoice` so no ambient voice lands on it.
     /// Returns whether it was fired (the bath's plan only remembers a vocal that played). `soft` = the quiet idle one. Logged `bath:<voice>`.
-    static let bathVoiceGain: Float = 0.7, bathVoiceSoftGain: Float = 0.5, bathSneezeGain: Float = 1.0, bathVoiceGap: Double = 0.9
+    static let bathVoiceGain: Float = 0.7, bathVoiceSoftGain: Float = 0.5, bathVoiceGap: Double = 0.9
     @ObservationIgnored private var lastBathVoice: [Double] = [-100, -100, -100]
     @discardableResult
-    func bathVoice(jelly: Int, _ v: JellyVoice?, variant: Int = 1, soft: Bool = false, x: Float = 0) -> Bool {
-        let what = "bath:\(v?.rawValue ?? "sneeze")"
+    func bathVoice(jelly: Int, _ v: JellyVoice, variant: Int = 1, soft: Bool = false, x: Float = 0) -> Bool {
+        let what = "bath:\(v.rawValue)"
         Self.requestTap?(what)
         let name = JellyRoster.name(slot: jelly)
-        if let v { CaptionCenter.shared.post(SoundCaptions.voice(v, name: name)) }
-        else if let t = SoundCaptions.text(.emoteAchoo, jelly: name) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
+        CaptionCenter.shared.post(SoundCaptions.voice(v, name: name))          // a11y: captions even when muted
         if let w = gateWhy() { diag(what, jelly, w); return false }
         let level = settings.sfxLevel * duck.gain
         let i = min(max(jelly, 0), 2)
@@ -1125,10 +1124,9 @@ final class AudioHub {
         if now - lastBathVoice[i] < Self.bathVoiceGap { diag(what, jelly, "hush bath"); return false }
         lastBathVoice[i] = now; lastVoice[i] = now; lastContextVoice[i] = now
         let c = JellyRoster.speciesOf(slot: jelly)
-        let gain = (v == nil ? Self.bathSneezeGain : (soft ? Self.bathVoiceSoftGain : Self.bathVoiceGain)) * level
+        let gain = (soft ? Self.bathVoiceSoftGain : Self.bathVoiceGain) * level
         diag(what, jelly, nil, v: gain)
-        if let v { fire(JellyVoiceSet.file(character: c, v, variant: variant), volume: gain, pan: 0, rate: JellyVoiceSet.rate(character: c, v)) }
-        else { fire("emote_achoo_1", volume: gain, pan: 0) }
+        fire(JellyVoiceSet.file(character: c, v, variant: variant), volume: gain, pan: 0, rate: JellyVoiceSet.rate(character: c, v))
         return true
     }
 

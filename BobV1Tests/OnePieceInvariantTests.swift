@@ -85,7 +85,7 @@ final class OnePieceInvariantTests: XCTestCase {
         .tailThump: Entry(seconds: 5, chars: [1]), .tailHug: Entry(seconds: 6, chars: [1]),
         .shake: Entry(seconds: 3), .lieDown: Entry(seconds: 9), .chirp: Entry(seconds: 3),
         .soccerKick: Entry(via: "soccer: dribble the ball to the goal and shoot"),
-        .hiccup: Entry(seconds: 4), .sneeze: Entry(seconds: 4), .dizzyWobble: Entry(seconds: 4.5), .politeBow: Entry(seconds: 7), .bellyDrum: Entry(seconds: 7), .signatureFlourish: Entry(seconds: 8),
+        .hiccup: Entry(seconds: 4), .dizzyWobble: Entry(seconds: 4.5), .politeBow: Entry(seconds: 7), .bellyDrum: Entry(seconds: 7), .signatureFlourish: Entry(seconds: 8),
         .tossHeader: Entry(seconds: 5), .tossBump: Entry(seconds: 7),
         .stargazing: Entry(seconds: 16), .proudStrut: Entry(seconds: 9), .floorNapFlop: Entry(seconds: 11), .tapTilt: Entry(seconds: 5), .welcomeWiggle: Entry(seconds: 4), .checkIn: Entry(seconds: 5),
         .sing: Entry(seconds: 4),          // (trick-only: BlobBrain+Tricks.swift)

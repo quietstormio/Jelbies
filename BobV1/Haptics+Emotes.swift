@@ -27,7 +27,7 @@ struct CueSpec: Equatable {
 
 /// Key frames the emotes ask for, and the group emotes' tags.
 enum EmoteCue: String, CaseIterable, Sendable {
-    case hic, sneezeBuild, sneezeBump, dizzyWobble, bowTick, patA, patB, flourish
+    case hic, dizzyWobble, bowTick, patA, patB, flourish
 }
 enum GroupCue: String, CaseIterable, Sendable {
     case highFiveBump = "highFive.bump", congaForm = "congaLine.form", congaScatter = "congaLine.scatter", ringForm = "ringDance.form", ringScatter = "ringDance.scatter"
@@ -79,8 +79,6 @@ enum HapticCue: Hashable, Sendable {
     static func emoteSpec(_ c: EmoteCue) -> CueSpec {
         switch c {
         case .hic: return CueSpec(i: 0.36, s: 0.25, n: 2, gap: 0.07, decay: 0.4)
-        case .sneezeBuild: return CueSpec(i: 0.14, s: 0.20, n: 2, gap: 0.14, decay: 1.3)
-        case .sneezeBump: return CueSpec(i: 0.42, s: 0.15, n: 3, gap: 0.06, decay: 0.5)
         case .dizzyWobble: return CueSpec(i: 0.17, s: 0.09, n: 5, gap: 0.12, decay: 0.8)
         case .bowTick: return CueSpec(i: 0.21, s: 0.20, n: 2, gap: 0.2, decay: 0.5)
         case .patA: return CueSpec(i: 0.27, s: 0.21, n: 1)
@@ -163,7 +161,6 @@ enum HapticCue: Hashable, Sendable {
         case .welcomeWiggle: return CueSpec(i: 0.14, s: 0.17, n: 2, gap: 0.13, decay: 0.8)
         case .checkIn: return CueSpec(i: 0.085, s: 0.19)
         case .hiccup: return CueSpec(i: 0.18, s: 0.22, n: 1)
-        case .sneeze: return CueSpec(i: 0.12, s: 0.18, n: 1)
         case .dizzyWobble: return CueSpec(i: 0.11, s: 0.08, n: 2, gap: 0.2, decay: 0.8)
         case .politeBow: return CueSpec(i: 0.10, s: 0.15, n: 1)
         case .bellyDrum: return CueSpec(i: 0.14, s: 0.19, n: 2, gap: 0.12, decay: 0.8)

@@ -47,7 +47,6 @@ nonisolated enum SoundCaptions {
         case .beanbagSit: return "Plop"
         case .unwrap: return "Unwrap"
         case .emoteHic: return "Hic!"
-        case .emoteAchoo: return "Achoo!"
         case .emoteWoozy: return "Woozy wobble"
         case .emoteBow: return "Little chime"
         case .emotePat: return "Pat pat"

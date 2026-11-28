@@ -1,6 +1,6 @@
 //
 //  BlobBrain+Emotes2.swift
-//  Batch 2 of the emotes (user-approved 2026-11-02, g-emotes3): six solo moves. All STANDING pose moves in the family of bow / sneeze / giggle (feet planted or stepping on the spot with the locked
+//  Batch 2 of the emotes (user-approved 2026-11-02, g-emotes3): six solo moves. All STANDING pose moves in the family of bow / giggle (feet planted or stepping on the spot with the locked
 //  march step, the stubby arms at the rest nubs, the walk and the face untouched, nobody walking through anybody). They are `IdleKind`s so EmoteFeetTests / OnePieceInvariantTests cover them for
 //  all six characters, but they are NOT in the idle weight tables: `EmoteTreats.batch2` lists the random treats (with their gates), the player cues are `treatCue` (stage / care hooks), and
 //  `treat2MaybeStart` is the ONE call that schedules the random ones (a single line at the top of `idleMaybeStart`; set `EmoteTreats.selfSchedule = false` to hand them to another treat slot).

@@ -548,7 +548,7 @@ final class BathFlow {
         guard !look.bubbles.isEmpty else { return }
         for i in look.bubbles.indices { look.bubbles[i].y += 0.35 * dt; bubbleAge[i] -= dt }
         var k = 0
-        while k < look.bubbles.count { if bubbleAge[k] <= 0 { look.bubbles.remove(at: k); bubbleAge.remove(at: k); if popGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.bubblepop, volume: BathSFX.popVolume) }; if voicePlan.rand() < 0.1 { voiceAsk(.pop) } } else { k += 1 } }
+        while k < look.bubbles.count { if bubbleAge[k] <= 0 { look.bubbles.remove(at: k); bubbleAge.remove(at: k); if popGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.bubblepop, volume: BathSFX.popVolume) }} else { k += 1 } }
     }
 
     // MARK: the creature's voice (BathVoices.swift)
@@ -569,13 +569,11 @@ final class BathFlow {
     private func voiceAsk(_ m: BathMoment) {
         guard phase == .soap || phase == .rinse || phase == .shine || phase == .finish else { return }
         if let p = voicePending, p.moment == .allClean { return }
-        if m == .pop, voicePending != nil { return }
         voicePending = (m, Self.voiceEventWait)
     }
 
     private func voiceTick(dt: Float) {
         guard phase == .soap || phase == .rinse || phase == .shine || phase == .finish else { voicePending = nil; return }
-        voicePlan.advance(dt)
         voiceSince += dt
         if let p = voicePending { voicePending = p.left - dt > 0 ? (p.moment, p.left - dt) : nil }
         if let p = voicePending {

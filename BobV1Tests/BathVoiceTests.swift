@@ -13,21 +13,20 @@ final class BathVoiceTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     nonisolated(unsafe) static var clockBase = 50_000.0
 
-    struct Played { var t: Float; var file: String; var gain: Float; var moment: String }
+    struct Played { var t: Float; var file: String; var gain: Float; var moment: String; var phase: BathPhase = .off }
     struct Result { var played: [Played] = []; var seconds: Float = 0; var requests = 0; var drops: [String: Int] = [:] }
 
-    /// Strips the variant / jelly suffix: "hum_jelly1_v2" -> "hum", "chirp_jelly1_happy" -> "chirp_happy", "emote_achoo_1" -> "achoo".
+    /// Strips the variant / jelly suffix: "hum_jelly1_v2" -> "hum", "chirp_jelly1_happy" -> "chirp_happy".
     static func kind(_ f: String) -> String {
-        if f.hasPrefix("emote_achoo") { return "achoo" }
         if f.hasPrefix("chirp_") { return f.hasSuffix("sad") ? "chirp_sad" : "chirp_happy" }
         return f.components(separatedBy: "_jelly").first ?? f
     }
-    static func isVoice(_ f: String) -> Bool { f.contains("_jelly") || f.hasPrefix("emote_achoo") }
+    static func isVoice(_ f: String) -> Bool { f.contains("_jelly") }
 
     /// One full scripted bath (soap -> rinse -> shine -> finish) at the dirt given; `slot0` is Bob.
     /// `demo`: the capture script (its own scrubs, Next 1 s after a stage is complete, Done 2.5 s after the finish card shows); otherwise the fake finger of CleanRun with an instant Next.
     /// `idleSeconds` > 0: no finger at all for that long once the soap stage is on (the tub, untouched), then stop.
-    func runBath(dirt: Float = 0.5, demo: Bool = false, idleSeconds: Float = 0) -> Result {
+    func runBath(dirt: Float = 0.5, demo: Bool = false, idleSeconds: Float = 0, holdShine: Float = 0) -> Result {
         let hub = AudioHub.shared
         hub._openForTest(); AudioHub.dryRun = true
         let base = Self.clockBase
@@ -36,10 +35,10 @@ final class BathVoiceTests: XCTestCase {
         var res = Result()
         AudioHub.firedTap = nil; AudioHub.firedVolumeTap = { name, vol in
             guard Self.isVoice(name) else { return }
-            res.played.append(Played(t: r.t, file: name, gain: vol, moment: r.bath.voiceMoment))
+            res.played.append(Played(t: r.t, file: name, gain: vol, moment: r.bath.voiceMoment, phase: r.bath.phase))
         }
         AudioHub.dropTap = { what, why in
-            if what.hasPrefix("voice:") || what.hasPrefix("chirp") || what.hasPrefix("bath") || what == "play:emote_achoo" { res.drops["\(what)|\(why ?? "PLAYED")", default: 0] += 1 }
+            if what.hasPrefix("voice:") || what.hasPrefix("chirp") || what.hasPrefix("bath") { res.drops["\(what)|\(why ?? "PLAYED")", default: 0] += 1 }
         }
         defer { AudioHub.firedVolumeTap = nil; AudioHub.dropTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; Self.clockBase = base + Double(r.t) + 200 }
         r.care.clean()
@@ -51,7 +50,15 @@ final class BathVoiceTests: XCTestCase {
             return res
         }
         if demo { r.bath.demo = true; r.run(150, scrubbing: false, autoNext: false, until: { r.bath.phase == .off && r.phases.contains(.finish) }) }
-        else { r.run(120, until: { r.bath.phase == .off && r.phases.contains(.finish) }) }
+        else {
+            if holdShine > 0 {
+                // Stay in the shine stage, finger down and no Next, so the touch hum (every 2.5 to 4 s) must come inside the window.
+                r.run(120, until: { r.bath.phase == .shine })
+                XCTAssertEqual(r.bath.phase, .shine, "reached the shine stage")
+                r.run(holdShine, scrubbing: true, autoNext: false)
+                XCTAssertEqual(r.bath.phase, .shine, "still in the shine stage after the hold")
+            }
+            r.run(120, until: { r.bath.phase == .off && r.phases.contains(.finish) }) }
         res.seconds = r.t
         return res
     }
@@ -96,13 +103,16 @@ final class BathVoiceTests: XCTestCase {
         func row(_ f: String, _ g: Float) { if let d = Self.rmsDB(f) { print(String(format: "[bathvoice] TABLE   %@ | rms %.1f dB | gain %.2f | speaker %.1f dB", f, d, g, d + 20 * log10(Double(g)))) } }
         row("chirp_jelly1_happy", 0.7)          // a normal idle chirp (AudioHub.chirp: 0.7 x level)
         for f in res.played.map(\.file) where seen.insert(f).inserted { row(f, gains[f] ?? 0) }
+        XCTAssertFalse(moments.contains("pop"), "no bath vocal for a popping bubble any more (retired)")
+        XCTAssertTrue(res.played.allSatisfy { $0.file.contains("_jelly") }, "every bath vocal is one of the creature voice clips: \(Set(res.played.map(\.file)).sorted())")
         XCTAssertFalse(res.drops.keys.contains { $0.hasPrefix("bath:") && !$0.hasSuffix("|PLAYED") && !$0.hasSuffix("|hush bath") }, "no guard but the bath's own gap drops a bath vocal: \(res.drops)")
     }
 
     func testTheFastFingerBathSpeaksToo() {
-        let res = runBath()
+        // The shine stage is held (rubbed, no Next) for 10 s: the stage lasts about 4.6 s and its stage-done vocal restarts the 2.5 to 4 s touch-hum timer, so the hum must come inside the window.
+        let res = runBath(holdShine: 10)
         report("instant-next bath", res)
-        XCTAssertTrue(res.played.contains { $0.moment == "shinePurr" }, "the shine stage hums while rubbed")
+        XCTAssertTrue(res.played.contains { $0.moment == "shinePurr" && $0.phase == .shine }, "the shine stage hums while rubbed")
     }
 
     func testAnUntouchedTubGivesAnOccasionalSoftSound() {

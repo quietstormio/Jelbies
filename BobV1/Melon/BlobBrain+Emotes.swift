@@ -4,7 +4,6 @@
 //  hop), the arms stay the locked stubby capsules (ArmCap's global caps; the belly pat only turns their direction), the walk and the face are untouched. Each is an `IdleKind`, so the
 //  scheduler (weights, cooldowns, Variety) and EmoteFeetTests / OnePieceInvariantTests pick them up like every other move.
 //    hiccup            a surprised "hic!" squash-bounce straight up (a few cm), then an embarrassed look round (a worried face, a blush, a head turn each way) and a tiny second hic
-//    sneeze            a wind-up (head back, eyes closing, "ah... ah..." with a small open mouth), one quick achoo squish forward (pitch <= 0.38 rad), a little shake and a blink
 //    dizzyWobble       a woozy circular sway (yaw + a small circle of pitch / roll, never past 0.12 rad of side tilt), the dazed face, then a shake-off wiggle; also follows the spin antic now and then
 //    politeBow         faces the player, bows forward 0.35 rad with a slight head dip, holds 0.6 s, rises (eyes lowered, a blush)
 //    bellyDrum         faces the player; both stubby arms swing in and pat the belly in turn (direction only: the length stays capped), the body jiggling with each pat
@@ -32,7 +31,7 @@ struct SignatureDrive: Equatable {
 enum SignatureKind: Int { case bob, tail, wings, daisy, ears }
 
 extension BlobBrain {
-    static let emoteKinds: Set<IdleKind> = [.hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish]
+    static let emoteKinds: Set<IdleKind> = [.hiccup, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish]
 
     /// Which flourish this Jelbie has: his feature if it is out, else the plain proud jiggle.
     var signatureKind: SignatureKind {
@@ -51,7 +50,7 @@ extension BlobBrain {
     func emoteBegin(_ kind: IdleKind, _ sim: SoftBody) -> Bool {
         idleBegin(kind)
         script = .idle
-        activity = (kind == .sneeze || kind == .politeBow) ? .lookingAround : .playing
+        activity = (kind == .politeBow) ? .lookingAround : .playing
         idleState.k = 0
         idleState.steps = 0; idleState.hop = 0; idleState.jackA = 0
         sig = SignatureDrive()
@@ -111,7 +110,6 @@ extension BlobBrain {
         let t = idleState.phaseT
         switch kind {
         case .hiccup: runHiccup(skinner, t)
-        case .sneeze: runSneeze(skinner, t)
         case .dizzyWobble: runDizzy(skinner, t)
         case .politeBow: runBow(skinner, t)
         case .bellyDrum: runBellyDrum(skinner, t, dt)
@@ -166,46 +164,6 @@ extension BlobBrain {
         }
         if emoteOnce(2, t, at: hic2) { jellyKick = max(jellyKick, 0.7); face(.surprised, hold: 0.5) }
         if t > 3.0 && !feet.active { emoteDone(skinner) }
-    }
-
-    // MARK: sneeze
-
-    private func runSneeze(_ skinner: Skinner, _ t: Float) {
-        let a = amplitude
-        let ach: Float = 1.25
-        func bump(_ lo: Float, _ hi: Float) -> Float { t > lo && t < hi ? sinf(.pi * (t - lo) / (hi - lo)) : 0 }
-        let in1 = bump(0.10, 0.65), in2 = bump(0.72, 1.20)
-        // "ah..." "ah...": the head goes back, he stretches a touch, the mouth opens a little, the eyes close more and more
-        pitch -= (0.05 * in1 + 0.09 * in2) * a
-        squash *= 1 + 0.025 * in1 + 0.045 * in2
-        var mouth = 0.30 * max(0.6 * in1, in2)
-        // ACHOO: a fast squish forward (<= 0.38 rad), then it springs back with a small overshoot
-        let u = t - ach
-        if u >= 0 {
-            let pk = smooth01(u / 0.06) * (1 - smooth01((u - 0.10) / 0.42))
-            pitch += 0.38 * pk * a
-            squash *= 1 - 0.11 * pk
-            let open = u < 0.34 ? smooth01(u / 0.04) * (1 - smooth01((u - 0.22) / 0.10)) : 0
-            mouth = max(mouth, 0.65 * open)
-            if u > 0.45, u < 0.95 { pitch -= 0.04 * sinf(.pi * (u - 0.45) / 0.5) }
-            // a small shake after it
-            if u > 0.9, u < 1.4 { let e = 1 - (u - 0.9) / 0.5; twist = 0.12 * e * sinf(2 * .pi * 7 * (u - 0.9)) }
-        }
-        mouthOpen = mouth
-        if emoteOnce(5, t, at: 0.12) { emoteHaptic(.sneezeBuild) }          // (tick-tick with the first "ah")
-        if emoteOnce(0, t, at: ach - 0.02) {
-            emoteHaptic(.sneezeBump)
-            AudioHub.shared.play(.emoteAchoo, jelly: steerID, x: px, volume: 1)
-            jellyKick = max(jellyKick, 2.4)
-        }
-        // the eyes: closing in the wind-up, shut for the sneeze, open again, one blink
-        var eyes: Float = 1
-        if t < ach - 0.05 { eyes = 1 - 0.65 * smooth01(t / 1.15) }
-        else if u < 0.8 { eyes = 0.04 }
-        else if u < 1.0 { eyes = 0.04 + 0.96 * smooth01((u - 0.8) / 0.2) }
-        if u > 1.3, u < 1.5 { eyes = min(eyes, 1 - sinf(.pi * (u - 1.3) / 0.2)) }
-        skinner.setEyeOpenness(max(0, eyes))
-        if t > ach + 1.65 && !feet.active { emoteDone(skinner) }
     }
 
     // MARK: dizzy wobble

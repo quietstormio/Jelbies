@@ -58,7 +58,7 @@ final class RestMoreTests: XCTestCase {
         s.socials = lab.events.reduce(0) { $0 + $1.filter { if case .began = $0 { return true }; return false }.count } / 2
         return s
     }
-    static let soloEmotes: Set<IdleKind> = [.jacks, .bounce, .tail, .stretch, .shake, .chirp, .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish, .tailThump, .tailHug, .window, .peek, .skipHop, .hopscotch, .legSpin, .trot, .joy]
+    static let soloEmotes: Set<IdleKind> = [.jacks, .bounce, .tail, .stretch, .shake, .chirp, .hiccup, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish, .tailThump, .tailHug, .window, .peek, .skipHop, .hopscotch, .legSpin, .trot, .joy]
 
     /// The switch off (or a room that is not home) is exactly today: no slot rest, and the same picks (no random draw, no hook).
     func testSwitchOffAndAwayFromHomeAreToday() {
