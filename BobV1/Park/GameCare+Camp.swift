@@ -338,6 +338,7 @@ extension GameCare {
     }
 
     /// Per step while a creature is saying goodbye: wave, then walk to the gate, then the white wipe (a timeout at every stage; a refused walk falls back to the wipe).
+    static let goodbyeFadeAfterWalk: Float = 1.6
     func tickCampLeaving(dt: Float) {
         let ui = CampUI.shared
         guard var l = ui.leaving, park.phase == .playing, let a = parkBook.actors.first(where: { $0.id == l.bodyID }), let b = a.brain else { return }
@@ -350,8 +351,11 @@ extension GameCare {
                 l.stage = .walking; l.t = 0
             }
         case .walking:
-            let arrived = simd_distance(a.floor, SIMD2(CampScenery.gateX, 4.2)) < 0.9
-            if arrived || l.t > 7 { l.stage = .done; ui.leaving = l; ui.finishMove(); park.beginRefresh(); return }
+            let dist = simd_distance(a.floor, SIMD2(CampScenery.gateX, 4.2))
+            if l.d0 == 0 { l.d0 = dist }
+            let arrived = dist < 0.9
+            // the white starts while the body is still running: a third of the way to the gate, or 1 s into the walk, whichever comes first (it used to wait for the gate)
+            if arrived || dist < l.d0 * (2.0 / 3.0) || l.t > Self.goodbyeFadeAfterWalk { l.stage = .done; ui.leaving = l; ui.finishMove(); park.beginRefresh(); return }
         case .done: return
         }
         ui.leaving = l
