@@ -146,7 +146,7 @@ struct CoachCard: View {
                 buttonView
                 skipView
             }
-            .frame(minHeight: Coach.minTap)
+            .frame(minHeight: button == nil ? 32 : Coach.minTap)          // (a Skip-only row is as tall as the chip you see: the gap above it is the same 12 pt as above a button; the chip's 44 pt hit area overflows into the padding)
             VStack(alignment: .leading, spacing: 4) {
                 dotsView
                 buttonView
@@ -162,7 +162,7 @@ struct CoachCard: View {
                 .background(GeometryReader { g in Color.clear.preference(key: CoachButtonFrameKey.self, value: g.frame(in: .global)) })
         }
     }
-    @ViewBuilder private var skipView: some View { if let onSkip { CoachSkipChip(id: measuring ? "" : "tutorial-skip", action: onSkip) } }
+    @ViewBuilder private var skipView: some View { if let onSkip { CoachSkipChip(id: measuring ? "" : "tutorial-skip", action: onSkip).padding(.vertical, button == nil ? -6 : 0) } }
 }
 
 /// Where the card's primary button is (window points): the tip window lets a tap through everywhere else on a landscape map.

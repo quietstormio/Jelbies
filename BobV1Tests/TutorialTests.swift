@@ -393,6 +393,16 @@ final class TutorialTests: XCTestCase {
         XCTAssertGreaterThan(l.frame.midX, 852 / 2, "landscape: on the right edge, clear of the Jelmiko in the middle")
     }
 
+    func testLowCardsKeepClearOfTheRail() {
+        let size = CGSize(width: 393, height: 852), safe = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        let heart = CoachSpot(rect: CGRect(x: 310, y: 760, width: 72, height: 72), shape: .capsule)
+        let a = TutorialPlacement.place(size: size, safe: safe, spot: heart, place: .top, natural: 130, wide: false, avoid: nil, railClear: true)
+        XCTAssertGreaterThanOrEqual(a.frame.minX, Coach.railClear)
+        XCTAssertLessThanOrEqual(a.frame.maxX, size.width - Coach.inset + 0.5)
+        let b = TutorialPlacement.place(size: size, safe: safe, spot: nil, place: .low, natural: 130, wide: false, avoid: nil, railClear: true)
+        XCTAssertGreaterThanOrEqual(b.frame.minX, Coach.railClear)
+    }
+
     func testPinnedAndBesideCards() {
         let size = CGSize(width: 393, height: 852), safe = UIEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
         let row = CoachSpot(rect: CGRect(x: 230, y: 700, width: 150, height: 44), shape: .capsule)

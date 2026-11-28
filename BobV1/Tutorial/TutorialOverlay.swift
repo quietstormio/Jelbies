@@ -38,9 +38,9 @@ enum TutorialPlacement {
     }
 
     /// Where the card stands. `natural` is the card's MEASURED height at `width`; it is never taller than the room (the card scrolls inside then).
-    static func place(size: CGSize, safe: UIEdgeInsets, spot: CoachSpot?, place: TutorialStep.Place, natural: CGFloat, wide: Bool, avoid: CGPoint?, pinned: Bool = false, beside: Bool = false, tight: Bool = false) -> Result {
+    static func place(size: CGSize, safe: UIEdgeInsets, spot: CoachSpot?, place: TutorialStep.Place, natural: CGFloat, wide: Bool, avoid: CGPoint?, pinned: Bool = false, beside: Bool = false, tight: Bool = false, railClear: Bool = false) -> Result {
         let landscape = size.width > size.height * 1.2
-        let left = safe.left + Coach.inset, right = size.width - safe.right - Coach.inset
+        let left = safe.left + (railClear ? Coach.railClear : Coach.inset), right = size.width - safe.right - Coach.inset
         let topLim = safe.top + (tight ? 8 : 58), botLim = size.height - max(safe.bottom, 8) - 12
         let fullRoom = max(botLim - topLim, 120)
         var w = wide ? min(Coach.wideWidth, right - left) : min(Coach.width(size), right - left)
@@ -178,9 +178,11 @@ struct TutorialOverlay: View {
         let spot = targets.spot(for: step, size: size)
         let wide = step.kind == .intro && landscape
         let cols = step.kind != .intro ? 1 : (dynamicTypeSize.isAccessibilitySize ? 1 : (wide ? 3 : 2))
-        let baseW = wide ? min(Coach.wideWidth, size.width - safe.left - safe.right - 2 * Coach.inset) : Coach.width(size)
+        // a card that stands low on a portrait phone keeps clear of the left rail (a rail pill peeking out from under a card reads as a second card)
+        let lowCard = !landscape && !wide && !step.pinned && !step.beside && step.kind != .intro && (spot.map { $0.hole.midY > size.height * 0.68 } ?? (step.place == .low))
+        let baseW = lowCard ? min(Coach.width(size), size.width - safe.left - safe.right - Coach.railClear - Coach.inset) : wide ? min(Coach.wideWidth, size.width - safe.left - safe.right - 2 * Coach.inset) : Coach.width(size)
         let avoid = targets.jelmiko?(size).map { CGPoint(x: $0.midX, y: $0.midY) }
-        let r = TutorialPlacement.place(size: size, safe: safe, spot: wide ? nil : spot, place: step.place, natural: natural, wide: wide, avoid: step.target == "jelmiko" ? nil : avoid, pinned: step.pinned, beside: step.beside, tight: step.kind == .intro)
+        let r = TutorialPlacement.place(size: size, safe: safe, spot: wide ? nil : spot, place: step.place, natural: natural, wide: wide, avoid: step.target == "jelmiko" ? nil : avoid, pinned: step.pinned, beside: step.beside, tight: step.kind == .intro, railClear: lowCard)
         ZStack(alignment: .topLeading) {
             if step.kind == .arrival {
                 Color.clear.overlay(alignment: .bottom) { CoachSkipChip { tutorial.skip() }.padding(.bottom, max(safe.bottom, 10) + 14) }

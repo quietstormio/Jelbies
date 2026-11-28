@@ -17,6 +17,8 @@ enum Coach {
     /// Space between the parts inside a card.
     static let spacing: CGFloat = 12
     static let minTap: CGFloat = 44
+    /// Where a low card starts on a portrait phone: right of the left rail (16 margin + 62 rail + 14).
+    static let railClear: CGFloat = 92
     /// The icon disc in a header and in a row.
     static let disc: CGFloat = 40
 

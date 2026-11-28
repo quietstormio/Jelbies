@@ -110,6 +110,7 @@ final class TutorialUITests: XCTestCase {
         XCTAssertTrue(title.hasPrefix("This is your Jelmiko, "), title)
         let name = String(title.dropFirst("This is your Jelmiko, ".count).dropLast())
         shot("02_intro")
+        XCTAssertGreaterThanOrEqual(el("tutorial-skip").frame.height, 43.5, "the Skip chip keeps a 44 pt tap target")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap(); sleep(1)          // the floor, under the card and the ring: the intro takes every touch
         XCTAssertTrue(el("tutorial-button").exists, "a tap outside the card does nothing on the intro card")
         tapEl("tutorial-button")
