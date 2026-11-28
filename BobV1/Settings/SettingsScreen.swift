@@ -207,6 +207,11 @@ struct SettingsScreen: View {
             actionRow("Photo mode", "camera", id: "photo-button", action: openPhoto)
             actionRow("Main menu", "house", id: "settings-main-menu", action: mainMenu)
             actionRow("Watch the opening", "sparkles", id: "settings-watch-opening", action: watchOpening)
+            actionRow("Replay tutorial", "graduationcap", id: "settings-replay-tutorial") {          // the home walkthrough again, over the room (nothing is written to the save)
+                let n = care?.jellies.first?.name ?? ""
+                close()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Tutorial.shared.replayFromSettings(name: n) }          // after the Settings cover is gone
+            }
             actionRow("Show tips again", "lightbulb", id: "settings-tips-again") { TipBook.shared.resetFlags(); tipsAgainLine = true; DispatchQueue.main.asyncAfter(deadline: .now() + 3) { tipsAgainLine = false } }
             if tipsAgainLine {
                 Text("Tips will show again.").font(CloudTheme.font(13, .medium)).foregroundStyle(ink.opacity(0.75)).accessibilityIdentifier("settings-tips-again-line")

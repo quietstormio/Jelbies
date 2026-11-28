@@ -123,6 +123,14 @@ final class TipBook {
 
     // MARK: asking
 
+    /// Seconds no tip card shows after the home walkthrough ends.
+    nonisolated static let quietAfterTutorial: TimeInterval = 45
+    @ObservationIgnored private var quietUntil = Date.distantPast
+    /// No card for `seconds` from now (the tutorial just ended: cards are spaced out, never stacked on it).
+    func quiet(for seconds: TimeInterval) { quietUntil = max(quietUntil, now().addingTimeInterval(seconds)) }
+    /// The tutorial taught this already: the card never shows (its flag is written).
+    func markSeen(_ id: String) { defaults.set(true, forKey: Self.key(id)); queue.removeAll { $0 == id } }
+
     func isSeen(_ id: String) -> Bool { defaults.bool(forKey: Self.key(id)) }
 
     /// A screen's trigger. Ignored when the flag is set, the id is already queued / up, or `ready` is false (the Camp card waits for somebody to be there).
@@ -166,7 +174,7 @@ final class TipBook {
             return
         }
         if DevArgs.enabled, !queue.isEmpty { let line = "queue=\(queue) open=\(open.sorted()) ctx=\(ctx) holds=\(holds.sorted())"; if line != lastLog { lastLog = line; NSLog("[tips] %@", line) } }
-        guard !queue.isEmpty, !ctx.blocked, holds.isEmpty, !landscapePhone() else { return }          // landscape iPhone: the queue holds, no flag is written
+        guard !queue.isEmpty, !ctx.blocked, holds.isEmpty, !landscapePhone(), now() >= quietUntil else { return }          // landscape iPhone: the queue holds, no flag is written
         if let last = lastEnd, now().timeIntervalSince(last) < Self.gap, !(queue.first == forced && forced != nil) { return }
         if GameMessageCenter.shared.current != nil { return }          // one place: a tip card waits for the message on the bar (the bar waits for a tip too)
         guard let i = queue.firstIndex(where: { open.contains($0) }) else { return }

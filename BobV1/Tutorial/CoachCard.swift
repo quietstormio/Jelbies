@@ -1,0 +1,172 @@
+//
+//  CoachCard.swift
+//  The one card. Every tutorial step, tip, the first-hungry reminder and the Show's "Pick a move" is this view; a card only differs in which parts it has:
+//      header   [icon disc] + title                      (the title is always the same type; the disc is left out when there is none)
+//      body     one short line (optional)
+//      rows     the intro's list (optional)
+//      footer   [dots] ........ [primary button] [Skip]  (ONE row, one height; each part optional; the row is left out when it has no part)
+//  Same fill, radius, padding, fonts and spacing everywhere (CoachTokens.swift). The card's height hugs its content. When the card is taller than the room it was given, the top part
+//  (header, body, rows) scrolls and the footer stays put: nothing is ever cropped, at any Dynamic Type size. At accessibility sizes the footer stacks (dots, button, Skip).
+//
+
+import SwiftUI
+
+struct CoachRow: Equatable, Identifiable {
+    var id: String { text }
+    let symbol: String          // an SF Symbol, or "coin" for the JellyCoin icon
+    let color: UInt32
+    let text: String
+}
+
+struct CoachCard: View {
+    var symbol: String? = nil
+    var title: String? = nil
+    var text: String? = nil
+    var rows: [CoachRow] = []
+    var columns = 1
+    var button: String? = nil
+    var buttonID = "coach-button"
+    var buttonHint: String? = nil
+    var onButton: () -> Void = {}
+    var dots: (current: Int, count: Int)? = nil
+    var onSkip: (() -> Void)? = nil
+    /// An SF Symbol at the header's trailing end (Pick a move's arrow toward the trick cards).
+    var trailing: String? = nil
+    /// Pointer toward the ring: `up` = the tip points up (the card is below its ring); x = the pointer's centre inside the card.
+    var pointer: (up: Bool, x: CGFloat)? = nil
+    /// nil = as wide as it is offered (a card inside a layout, e.g. Pick a move).
+    var width: CGFloat? = nil
+    /// The room the card was given; the top part scrolls when the card would be taller.
+    var maxHeight: CGFloat? = nil
+    var identifier = "coach-card"
+    /// The unseen copy the placement measures: no identifiers, hidden from VoiceOver and the UI tests.
+    var measuring = false
+    @AccessibilityFocusState private var textFocus: Bool
+
+    init(symbol: String? = nil, title: String? = nil, text: String? = nil, rows: [CoachRow] = [], columns: Int = 1, button: String? = nil, buttonID: String = "coach-button", buttonHint: String? = nil,
+         onButton: @escaping () -> Void = {}, dots: (current: Int, count: Int)? = nil, onSkip: (() -> Void)? = nil, trailing: String? = nil, pointer: (up: Bool, x: CGFloat)? = nil,
+         width: CGFloat? = nil, maxHeight: CGFloat? = nil, identifier: String = "coach-card", measuring: Bool = false) {
+        self.symbol = symbol; self.title = title; self.text = text; self.rows = rows; self.columns = columns; self.button = button; self.buttonID = buttonID; self.buttonHint = buttonHint
+        self.onButton = onButton; self.dots = dots; self.onSkip = onSkip; self.trailing = trailing; self.pointer = pointer; self.width = width; self.maxHeight = maxHeight; self.identifier = identifier; self.measuring = measuring
+    }
+
+    private var hasFooter: Bool { dots != nil || button != nil || onSkip != nil }
+
+    var body: some View {
+        let verticalRoom = maxHeight.map { $0 - 2 * Coach.inset }
+        VStack(alignment: .leading, spacing: Coach.spacing) {
+            if let verticalRoom {
+                ViewThatFits(in: .vertical) {
+                    top
+                    ScrollView(.vertical, showsIndicators: true) { top }
+                        .frame(maxHeight: max(verticalRoom - footerEstimate, 80))
+                }
+            } else {
+                top
+            }
+            if hasFooter { footer }
+        }
+        .padding(Coach.inset)
+        .frame(width: width, alignment: .leading)
+        .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Coach.cardRadius, style: .continuous).fill(Coach.fill).shadow(color: Coach.shadow, radius: 10, y: 4))
+        .overlay(alignment: pointer.map { $0.up ? .topLeading : .bottomLeading } ?? .top) {
+            if let pointer, let width {
+                CoachPointer(up: pointer.up).fill(Coach.fill).frame(width: 22, height: 12)
+                    .offset(x: min(max(pointer.x - 11, 22), width - 44), y: pointer.up ? -11 : 11)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(measuring ? "" : identifier)
+        .accessibilityHidden(measuring)
+    }
+
+    /// A safe guess for the pinned footer's height, used only to size the scroll area.
+    private var footerEstimate: CGFloat { hasFooter ? Coach.minTap + Coach.spacing : 0 }
+
+    private var top: some View {
+        VStack(alignment: .leading, spacing: Coach.spacing) {
+            if title != nil || symbol != nil { header }
+            if let text {
+                Text(text).font(Coach.body()).foregroundStyle(Coach.muted)
+                    .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier(measuring ? "" : "coach-text")
+            }
+            if !rows.isEmpty { rowsView }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The header: [disc] + title (+ trailing symbol). One component for every card.
+    private var header: some View {
+        HStack(spacing: 12) {
+            if let symbol {
+                Image(systemName: symbol).font(.system(size: 20, weight: .heavy)).foregroundStyle(Coach.ink)
+                    .frame(width: Coach.disc, height: Coach.disc).background(Circle().fill(SK.honey)).accessibilityHidden(true)
+            }
+            if let title {
+                Text(title).font(Coach.title()).foregroundStyle(Coach.ink).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader).accessibilityFocused($textFocus).accessibilityIdentifier(measuring ? "" : "coach-title")
+            }
+            if let trailing {
+                Spacer(minLength: 4)
+                Image(systemName: trailing).font(.system(size: 22, weight: .black)).foregroundStyle(Coach.accent).accessibilityHidden(true)
+            }
+        }
+    }
+
+    private var rowsView: some View {
+        let cols = max(1, min(columns, rows.count))
+        let per = Int((Double(rows.count) / Double(cols)).rounded(.up))
+        return HStack(alignment: .top, spacing: 18) {
+            ForEach(0..<cols, id: \.self) { c in
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(rows.enumerated()).filter { $0.offset / per == c }.map(\.element)) { r in
+                        HStack(spacing: 12) {
+                            if r.symbol == "coin" { JellyCoinIcon(size: Coach.disc).accessibilityHidden(true) }
+                            else {
+                                Image(systemName: r.symbol).font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+                                    .frame(width: Coach.disc, height: Coach.disc).background(Circle().fill(Color(hex: r.color))).accessibilityHidden(true)
+                            }
+                            Text(r.text).font(Coach.body()).foregroundStyle(Coach.ink).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    /// The footer: dots at the leading end, the primary button and Skip at the trailing end, all in one row of one height; stacked when the row does not fit.
+    private var footer: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                dotsView
+                Spacer(minLength: 4)
+                buttonView
+                skipView
+            }
+            .frame(minHeight: button == nil ? 32 : Coach.minTap)          // (a Skip-only row is as tall as the chip you see: the gap above it is the same 12 pt as above a button; the chip's 44 pt hit area overflows into the padding)
+            VStack(alignment: .leading, spacing: 4) {
+                dotsView
+                buttonView
+                skipView
+            }
+        }
+    }
+
+    @ViewBuilder private var dotsView: some View { if let dots { CoachDots(current: dots.current, count: dots.count) } }
+    @ViewBuilder private var buttonView: some View {
+        if let button {
+            CoachButton(title: button, hint: buttonHint, id: measuring ? "" : buttonID, action: onButton)
+                .background(GeometryReader { g in Color.clear.preference(key: CoachButtonFrameKey.self, value: g.frame(in: .global)) })
+        }
+    }
+    @ViewBuilder private var skipView: some View { if let onSkip { CoachSkipChip(id: measuring ? "" : "tutorial-skip", action: onSkip).padding(.vertical, button == nil ? -6 : 0) } }
+}
+
+/// Where the card's primary button is (window points): the tip window lets a tap through everywhere else on a landscape map.
+struct CoachButtonFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
