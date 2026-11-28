@@ -103,7 +103,7 @@ enum EmoteSpot {
         return -heatAt(p) - rugWeight * rug - bandWeight * over
     }
     /// Standing emotes that are worth walking to a better place for (the in-place ones; the walkers, the reactions and the ones tied to a prop or a window stay as they are).
-    static let soloKinds: Set<IdleKind> = [.jacks, .slump, .yawn, .tail, .flop, .stretch, .bounce, .sway, .sigh, .shake, .lieDown, .chirp, .hiccup, .sneeze, .dizzyWobble,
+    static let soloKinds: Set<IdleKind> = [.jacks, .slump, .yawn, .tail, .flop, .stretch, .bounce, .sway, .sigh, .shake, .lieDown, .chirp, .hiccup, .dizzyWobble,
                                            .politeBow, .bellyDrum, .signatureFlourish, .proudStrut, .tailThump, .tailHug]
     /// Pair kinds that start where they are (a glance across the room, a dash) are never moved.
     static let pairStay: Set<SocialKind> = [.look, .zoomies, .greet, .bagSit]

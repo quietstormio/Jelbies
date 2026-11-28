@@ -31,7 +31,7 @@ enum IdleTuning {
     /// Seconds between forced zoomies / runs while awake in the daytime and not grumpy (a visible burst every few minutes). Vars so the suites can shorten it.
     nonisolated(unsafe) static var zoomUrge: ClosedRange<Float> = 30...55
     /// Seconds between the solo emotes (the treat slot, 2026-11-02): about one per 3 minutes per Jelbie.
-    /// 2026-11-06 "play more often": 200...380 s divided by `treatSpeedUp` (the solo emotes carry vocals: hic, achoo, spin-hug, star-sigh...). A test sets the old range for its "before".
+    /// 2026-11-06 "play more often": 200...380 s divided by `treatSpeedUp` (the solo emotes carry vocals: hic, spin-hug, star-sigh...). A test sets the old range for its "before".
     static let treatSpeedUp: Float = 1.3
     nonisolated(unsafe) static var treatGap: ClosedRange<Float> = (200 / treatSpeedUp)...(380 / treatSpeedUp)
     /// The first urge, seconds after he starts roaming (a Jelly that is not first waits longer: `zoomUrge` = this + 35 s per Jelly id once he is wired).
@@ -80,7 +80,6 @@ enum IdleKind: String, CaseIterable, Sendable {
     case soccerKick    // (soccer) walks up behind the soccer ball and stomp-kicks it; dribbles it; shoots at the mini goal and celebrates: BlobBrain+Soccer.swift
     // solo emotes (2026-11-02, g-emotes1): standing pose emotes, feet planted, stubby arms: BlobBrain+Emotes.swift
     case hiccup        // a surprised "hic!" squash-bounce straight up, then an embarrassed look around (a second tiny hic)
-    case sneeze        // a wind-up (eyes closing, "ah... ah..."), one quick achoo squish forward, a blink
     case dizzyWobble   // a woozy circular sway with dazed eyes, then a shake-off wiggle (also follows the spin antic now and then)
     case politeBow     // a sweet bow: forward ~0.35 rad, a slight head dip, a hold, then up
     case bellyDrum     // pats the belly with both stubby arms alternately, the body jiggling with each pat
@@ -156,9 +155,9 @@ enum IdleTable {
     /// old moves keep every pick they had (r1053 -> r1055 had folded them into the weighted table and every old kind lost ~10-15 % of its picks).
     static func treatWeights(_ m: IdleMood) -> [(kind: IdleKind, weight: Float)] {
         switch m {
-        case .happy: return [(.hiccup, 0.6), (.sneeze, 0.5), (.dizzyWobble, 0.35), (.politeBow, 0.7), (.bellyDrum, 0.8), (.signatureFlourish, 1.1)]
-        case .okay: return [(.hiccup, 0.6), (.sneeze, 0.6), (.dizzyWobble, 0.3), (.politeBow, 0.5), (.bellyDrum, 0.4), (.signatureFlourish, 0.6)]
-        case .grumpy: return [(.sneeze, 0.4)]
+        case .happy: return [(.hiccup, 0.6), (.dizzyWobble, 0.35), (.politeBow, 0.7), (.bellyDrum, 0.8), (.signatureFlourish, 1.1)]
+        case .okay: return [(.hiccup, 0.6), (.dizzyWobble, 0.3), (.politeBow, 0.5), (.bellyDrum, 0.4), (.signatureFlourish, 0.6)]
+        case .grumpy: return []
         }
     }
     /// The special (non-wander) behaviours of a mood.
@@ -726,7 +725,7 @@ extension BlobBrain {
         case .sigh, .hmph:
             idleBegin(kind)
             script = .idle; activity = .lookingAround
-        case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish:
+        case .hiccup, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish:
             return emoteBegin(kind, sim)
         case .tossHeader: return tossHeaderStart(sim)
         case .tossBump: return tossBumpStart(sim, stand: here, dir: SIMD2(0, 1))
@@ -809,7 +808,7 @@ extension BlobBrain {
         case .hmph: runHmph(sim, skinner, dt)
         case .tailThump: runTailThump(sim, skinner, dt)
         case .tailHug: runTailHug(sim, skinner, dt)
-        case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish: runEmote(sim, skinner, dt)
+        case .hiccup, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish: runEmote(sim, skinner, dt)
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn: runEmote2(sim, skinner, dt)
         case .sing: runSing(sim, skinner, dt)
         case .hula: runHula(sim, skinner, dt)

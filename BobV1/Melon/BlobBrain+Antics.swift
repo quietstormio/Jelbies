@@ -33,7 +33,6 @@ extension BlobBrain {
         case .tailThump: return 28
         case .tailHug: return 40
         case .hiccup: return 30
-        case .sneeze: return 40
         case .dizzyWobble: return 35
         case .politeBow: return 40
         case .bellyDrum: return 35

@@ -19,7 +19,7 @@ extension FeatureCaptureTests {
         // (name, kind, character, six moments in seconds from the emote's own start, camera azimuth off the player's view in rad)
         let sig: [Float] = [0.3, 0.6, 1.0, 1.4, 1.8, 2.2]
         let cases: [(String, IdleKind, Int, [Float], Float)] = [
-            ("hiccup", .hiccup, 0, [0.15, 0.32, 0.45, 1.3, 1.9, 2.55], 0), ("sneeze", .sneeze, 0, [0.4, 0.95, 1.3, 1.4, 1.8, 2.5], 0),
+            ("hiccup", .hiccup, 0, [0.15, 0.32, 0.45, 1.3, 1.9, 2.55], 0),
             ("dizzyWobble", .dizzyWobble, 0, [0.5, 1.0, 1.5, 2.0, 2.6, 3.0], 0), ("politeBow", .politeBow, 0, [0.2, 0.5, 0.9, 1.2, 1.5, 1.9], 0),
             ("bellyDrum", .bellyDrum, 0, [0.3, 0.5, 0.8, 1.1, 1.5, 2.0], 0), ("bellyDrum34", .bellyDrum, 0, [0.5, 0.65, 0.8, 0.95, 1.1, 1.25], 0.7),
             ("sig_bob", .signatureFlourish, 0, sig, 0), ("sig_pip", .signatureFlourish, 1, sig, 0), ("sig_moss", .signatureFlourish, 2, sig, 0),
