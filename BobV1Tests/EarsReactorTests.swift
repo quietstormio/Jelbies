@@ -253,10 +253,10 @@ final class EarsReactorTests: XCTestCase {
             XCTAssertLessThan(abs(wrapAngle(r.brain.yaw - r.brain.faceCameraYaw())), 0.5, "dancer \(i) faces the camera")
         }
         let apart = simd_distance(GameCare.floorPos(room.rigs[0].brain, room.rigs[0].sim), GameCare.floorPos(room.rigs[1].brain, room.rigs[1].sim))
-        XCTAssertGreaterThanOrEqual(apart, EarsRow.minGap, "spaced well apart")
+        XCTAssertGreaterThanOrEqual(apart, EarsRow.minGap - 0.05, "spaced well apart")
         // one smooth move: no pop (the old dance flipped the sway side in one frame: 0.2 rad)
-        XCTAssertLessThan(rollStep, 0.012, "roll step per frame")
-        XCTAssertLessThan(sqStep, 0.008, "squash step per frame")
+        XCTAssertLessThan(rollStep, 0.016, "roll step per frame")
+        XCTAssertLessThan(sqStep, 0.01, "squash step per frame")
         // the bob is lowest at the sway's extremes, which sit on the beat grid (every 2nd beat at 120 BPM: a side change per second)
         var minima: [Double] = []
         for i in 1..<(trace.count - 1) where trace[i].t > room.now - 6 && trace[i].sq < trace[i - 1].sq && trace[i].sq <= trace[i + 1].sq && trace[i].sq < 0.97 { minima.append(trace[i].t) }
@@ -297,15 +297,15 @@ final class EarsReactorTests: XCTestCase {
         room.handle(.musicBeatLost); room.run(4, each: watch)                                                           // lost: the sway goes on
         let before = rollMax; rollMax = 0
         room.run(3, each: watch)
-        XCTAssertGreaterThan(rollMax, 0.05, "still swaying with no beat (it coasts): was \(before)")
-        XCTAssertLessThan(rollStep, 0.012, "roll step per frame")
-        XCTAssertLessThan(sqStep, 0.008, "squash step per frame")
+        XCTAssertGreaterThan(rollMax, 0.08, "still swaying with no beat (it coasts): was \(before)")
+        XCTAssertLessThan(rollStep, 0.016, "roll step per frame")
+        XCTAssertLessThan(sqStep, 0.01, "squash step per frame")
         XCTAssertTrue(room.reactor.isDancing)
     }
 
     /// The row: spaced apart, on free floor, never overlapping the furniture.
     func testTheRowIsSpacedWellApartAndOnFreeFloor() {
-        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956); GameCamera.aspect = 440.0 / 956.0
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         for n in 1...3 {
             let ps = EarsRow.gameSpots(count: n, resolver: nil)

@@ -16,6 +16,7 @@
 
 import Foundation
 import simd
+import CoreGraphics
 
 /// Additive pose channel (rad, rad, factor). `set` eases toward the wants; `write` sets the pose now (the beat-locked dance).
 nonisolated struct EarsPose: Equatable {
@@ -50,8 +51,8 @@ extension BlobBrain {
 
 nonisolated enum EarsDance {
     /// The sway (rad of roll, one side to the other) and the small bob (squash at each extreme of the sway).
-    static let sway: Float = 0.09
-    static let bob: Float = 0.05
+    static let sway: Float = 0.14
+    static let bob: Float = 0.06
     /// They keep dancing this long after the music stopped, the last `fade` seconds of it easing the sway out.
     static let tail: Double = 2.5
     static let fade: Double = 0.8
@@ -66,38 +67,61 @@ nonisolated enum EarsDance {
 /// the furniture, the sofa and the other solids), inside the visible floor. Pure placement; the reactor walks them there.
 enum EarsRow {
     /// Centre-to-centre spacings tried (widest first) and the least any two may be apart.
-    static let spacings: [Float] = [1.6, 1.45, 1.3]
-    static let minGap: Float = 1.2
+    static let spacings: [Float] = [2.0, 1.9, 1.8, 1.7, 1.6]
+    static let minGap: Float = 1.6
     /// Row depths tried (z; the call spot is 2.4): the front of the room first.
-    static let depths: [Float] = [1.6, 1.2, 2.0, 0.8, 0.4]
+    static let depths: [Float] = [2.0, 1.8, 1.6, 2.2, 1.4, 1.2, 0.8, 0.4]
     /// How far the row may slide sideways to clear something.
-    static let slides: [Float] = [0, -0.4, 0.4, -0.8, 0.8, -1.2, 1.2]
+    /// The middle band of the floor, nearest the middle first.
+    static let middle: [Float] = [1.8, 2.0, 1.6, 2.2, 1.4]
+    static let slides: [Float] = [0, -0.4, 0.4, -0.8, 0.8]
     static let bodyRadius: Float = 0.8
 
     /// `n` spots, left to right; empty when nothing fits (they sway where they stand).
     static func spots(count n: Int, free: (SIMD2<Float>) -> Bool, halfWidth: (Float) -> Float) -> [SIMD2<Float>] {
         guard n > 0 else { return [] }
-        for z in depths {
+        func fit(_ sp: Float, _ z: Float) -> [SIMD2<Float>]? {
             let hw = halfWidth(z) - 0.7
-            for sp in (n == 1 ? [Float(0)] : spacings) {
-                for cx in slides {
-                    let xs = (0..<n).map { cx + (Float($0) - Float(n - 1) / 2) * sp }
-                    guard xs.allSatisfy({ abs($0) <= hw }) else { continue }
-                    let ps = xs.map { SIMD2<Float>($0, z) }
-                    if ps.allSatisfy(free) { return ps }
-                }
+            for cx in slides {
+                let xs = (0..<n).map { cx + (Float($0) - Float(n - 1) / 2) * sp }
+                guard xs.allSatisfy({ abs($0) <= hw }) else { continue }
+                let ps = xs.map { SIMD2<Float>($0, z) }
+                if ps.allSatisfy(free) { return ps }
             }
+            return nil
         }
+        let sps = n == 1 ? [Float(0)] : spacings
+        // the widest spacing (2.0 down to `minGap`) that fits in the middle band of the floor, nearest the middle first ...
+        for sp in sps { for z in middle { if let r = fit(sp, z) { return r } } }
+        // ... else the nearest depth at all that takes a row of at least `minGap`
+        for z in depths { for sp in sps { if let r = fit(sp, z) { return r } } }
         return []
+    }
+
+    /// The body (and a little either side) is inside the picture and clear of the HUD rails, as the room camera sees the floor.
+    static func onScreenClear(_ p: SIMD2<Float>) -> Bool {
+        let asp = GameCamera.aspect
+        let size = CGSize(width: CGFloat(1000 * asp), height: 1000)
+        let rails = HUDLayout.railRects(aspect: asp)
+        for dx: Float in [-0.6, 0, 0.6] {
+            guard let sp = GameCamera.screenPoint(floor: SIMD2(p.x + dx, p.y), size: size) else { return false }
+            let f = CGPoint(x: sp.x / size.width, y: sp.y / size.height)
+            if f.x < 0.03 || f.x > 0.97 || f.y < 0.2 || f.y > 0.92 { return false }
+            for r in rails where r.insetBy(dx: -0.01, dy: -0.03).contains(f) { return false }
+        }
+        return true
     }
 
     /// Floor test and floor width as the game has them.
     static func gameSpots(count n: Int, resolver: BlobBrain?) -> [SIMD2<Float>] {
-        spots(count: n, free: { p in
+        func base(_ p: SIMD2<Float>) -> Bool {
             guard FreeFloor.isFree(p, radius: bodyRadius) else { return false }
-            if let r = resolver { return simd_distance(r.fixed(p), p) < 0.12 }          // (the floor rules would not push it: HUD rails, walls)
-            return true
-        }, halfWidth: { z in GameCamera.roamFloor?.halfWidth(at: z) ?? 2.6 })
+            return p.y <= (GameCamera.roamFloor?.maxZ ?? 5) - 0.3 && p.y >= (GameCamera.roamFloor?.minZ ?? -2) + 0.3          // (inside the roam floor; other bodies standing there walk off on their own)
+        }
+        let hw: (Float) -> Float = { z in GameCamera.roamFloor?.halfWidth(at: z) ?? 2.6 }
+        // in the picture and clear of the HUD first; a narrow view (portrait phone) that has no such row for 3 gets the free-floor one
+        let strict = spots(count: n, free: { base($0) && onScreenClear($0) }, halfWidth: hw)
+        return strict.isEmpty ? spots(count: n, free: base, halfWidth: hw) : strict
     }
 }
 
@@ -282,6 +306,16 @@ final class EarsReactor {
         if UserDefaults.standard.bool(forKey: "EarsLog") { NSLog("[ears] row spots=%@ from=%@", spots.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) }.joined(separator: " "), order.map { String(format: "%d(%.2f,%.2f)", $0.id, GameCare.floorPos($0.brain, $0.sim).x, GameCare.floorPos($0.brain, $0.sim).y) }.joined(separator: " ")) }
     }
 
+    /// `-EarsLog 1`: the roll the render is given each sim step; the largest step between two steps is printed once a second.
+    static let stepLog = UserDefaults.standard.bool(forKey: "EarsLog")
+    private var stepPrev: [Int: Float] = [:]
+    private var stepMax: Float = 0, stepAt: Double = 0, rollMaxSeen: Float = 0
+    private func logStep(_ id: Int, _ roll: Float, now: Double) {
+        if let p = stepPrev[id] { stepMax = max(stepMax, abs(roll - p)) }
+        stepPrev[id] = roll; rollMaxSeen = max(rollMaxSeen, abs(roll))
+        if now - stepAt >= 1 { stepAt = now; NSLog("[ears] roll step max %.4f rad/step, |roll| max %.3f", stepMax, rollMaxSeen); stepMax = 0 }
+    }
+
     private func driveDance(_ jellies: [Jelly], dt: Float, now: Double) {
         guard let d = dance else { return }
         sway.tick(dt: Double(dt))
@@ -296,6 +330,10 @@ final class EarsReactor {
             var st = rows[j.id] ?? { var r = RowStep(); r.phase = .swaying; return r }()
             st.t += dt
             let free: Bool = { if case .none = brain.script, brain.pending == nil, !brain.gait.isBusy { return true } else { return false } }()
+            // pushed or walked off his place (something else asked him to walk): back to the row, a few times
+            if st.phase != .walking, let spot = st.spot, free, st.asks < 12, st.t > 0.5, simd_distance(GameCare.floorPos(brain, j.sim), spot) > 0.7 {
+                st.phase = .walking; st.t = 0; st.lastAsk = -10; st.turned = false; st.gain = 0
+            }
             switch st.phase {
             case .walking:
                 brain.ears.clear()
@@ -320,8 +358,10 @@ final class EarsReactor {
                 let g = st.gain * tailK, amp = brain.amplitude
                 let sq = 1 - (1 - sway.squash(depth: EarsDance.bob)) * g
                 brain.ears.write(pitch: 0, roll: sway.roll(maxRoll: EarsDance.sway) * g * amp, squash: 1 - (1 - sq) * amp)
+                if Self.stepLog { logStep(j.id, brain.ears.roll, now: now) }
             }
             if UserDefaults.standard.bool(forKey: "EarsLog"), rows[j.id]?.phase != st.phase { NSLog("[ears] %d -> %@ at (%.2f,%.2f) t=%.1f", j.id, String(describing: st.phase), GameCare.floorPos(brain, j.sim).x, GameCare.floorPos(brain, j.sim).y, st.t) }
+            if Self.stepLog, Int(now) != Int(now - Double(dt)) { NSLog("[ears] pos %d %@ (%.2f,%.2f) spot=%@ script=%@ pending=%@", j.id, String(describing: st.phase), GameCare.floorPos(brain, j.sim).x, GameCare.floorPos(brain, j.sim).y, st.spot.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-", String(describing: brain.script).prefix(40) as CVarArg, String(describing: brain.pending).prefix(40) as CVarArg) }
             rows[j.id] = st
         }
     }

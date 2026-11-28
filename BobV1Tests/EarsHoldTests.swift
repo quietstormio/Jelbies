@@ -145,15 +145,15 @@ final class EarsHoldTests: XCTestCase {
         room.handle(.musicStarted(nil))
         var rollMax: Float = 0, sqMin: Float = 1, step: Float = 0, prev: Float = 0
         room.run(10) { let e = room.rigs[0].brain.ears; rollMax = max(rollMax, abs(e.roll)); sqMin = min(sqMin, e.squash); step = max(step, abs(e.roll - prev)); prev = e.roll }
-        XCTAssertGreaterThan(rollMax, 0.03, "it sways with no beat")
-        XCTAssertLessThan(rollMax, 0.07, "gently")
-        XCTAssertGreaterThan(sqMin, 0.95)
+        XCTAssertGreaterThan(rollMax, 0.05, "it sways with no beat")
+        XCTAssertLessThan(rollMax, 0.1, "gently")
+        XCTAssertGreaterThan(sqMin, 0.93)
         XCTAssertFalse(room.reactor.log.contains { $0.hasPrefix("hop") || $0.hasPrefix("spin") }, "\(room.reactor.log)")
         // the beat comes: the same clock is steered (no jump), the sway grows into the beat
         room.handle(.musicBeat(EarBeat(bpm: 100, anchor: room.now + 0.2, strength: 3)))
         room.run(8) { let e = room.rigs[0].brain.ears; rollMax = max(rollMax, abs(e.roll)); step = max(step, abs(e.roll - prev)); prev = e.roll }
-        XCTAssertGreaterThan(rollMax, 0.075, "the full sway once the beat is known")
-        XCTAssertLessThan(step, 0.012, "no pop when the beat is found")
+        XCTAssertGreaterThan(rollMax, 0.11, "the full sway once the beat is known")
+        XCTAssertLessThan(step, 0.016, "no pop when the beat is found")
         room.handle(.musicBeatLost)
         room.run(0.2)
         XCTAssertNil(room.reactor.dance?.beat)
