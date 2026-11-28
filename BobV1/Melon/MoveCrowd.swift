@@ -74,6 +74,7 @@ extension BlobBrain {
     /// goal: nobody stands within `gap` of the spot, and nobody is walking to a spot within `gap` of it.
     func crowdGoalFree(_ p: SIMD2<Float>) -> Bool {
         let g = MoveCrowd.gap
+        if arrivalLaneBlocks(p) { return false }          // (arrival-lane-r1: a new Jelmiko is running in: nobody takes the lane, ArrivalLane.swift)
         for o in socialOthers() where o !== self {
             if simd_distance(o.position, p) < g { return false }
             if case .walk(let t, _) = o.script, simd_distance(t, p) < g { return false }
