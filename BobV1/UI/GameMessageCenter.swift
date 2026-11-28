@@ -240,7 +240,8 @@ struct GameMessageBar: View {
     }
 }
 
-/// The capsule itself: the tutorial card's fill, ink, type and shadow (Tutorial/CoachTokens.swift) in a capsule (one line of text = radius half the height). Also what the tests and the boards look at.
+/// The message line: the card's own radius rule (24 pt continuous: a capsule when it is one line), padding (16 sides), type (body 15 bold, caption 14 bold for the small sound caption), fill, ink and shadow
+/// (Tutorial/CoachTokens.swift). Never clipped: a long line wraps and the pill grows. Also what the tests and the boards look at.
 struct GameMessageCapsule: View {
     let text: String
     var icon: String? = nil
@@ -252,13 +253,13 @@ struct GameMessageCapsule: View {
         HStack(spacing: 8) {
             if let icon { Image(systemName: icon).font(.system(size: small ? 12 : 16, weight: .bold)).foregroundStyle(Coach.accent).accessibilityHidden(true) }
             Text(text)
-                .font(JFont.scaled(small ? 13 : 15, .bold, style: .body, cap: 1.3))          // (Coach.body's size and weight; the bar keeps its own 1.3 cap so a long line never grows over the HUD)
+                .font(small ? Coach.caption() : Coach.body())
                 .foregroundStyle(Coach.ink)
-                .lineLimit(2).minimumScaleFactor(0.85).multilineTextAlignment(.leading)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, small ? 11 : 14).padding(.vertical, small ? 5 : 7)
-        .background(Capsule().fill(Coach.fill).shadow(color: Coach.shadow, radius: 5, y: 2))
+        .padding(.horizontal, small ? 12 : Coach.inset).padding(.vertical, small ? 6 : 10)
+        .background(RoundedRectangle(cornerRadius: Coach.cardRadius, style: .continuous).fill(Coach.fill).shadow(color: Coach.shadow, radius: small ? 5 : 10, y: small ? 2 : 4))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)
         .accessibilityIdentifier(identifier)

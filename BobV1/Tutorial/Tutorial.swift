@@ -18,7 +18,8 @@ struct TutorialWorld: Equatable {
     var hearts = false            // hearts are floating (a rub works)
     var hungry = false            // the Jelmiko wants food (the food bubble is due)
     var trayOut = false           // a meal is on
-    var busy = false              // something else owns the game: a race, a show, a trip, a cut-scene, Settings...
+    var busy = false              // something else owns the game: a race, a show, a trip, a cut-scene...
+    var sheetOpen = false         // Settings, Photo mode or a "?" sheet is up
     var targets: Set<String> = []          // controls on screen that registered a frame
 }
 
@@ -75,25 +76,25 @@ final class Tutorial {
         TutorialStep(id: "arrive", chapter: 0, kind: .arrival, wait: .arrival),
         TutorialStep(id: "intro", chapter: 0, kind: .intro, title: "This is your Jelmiko, {name}.", text: "To take care of them, you can:", button: "Show me how", target: "jelmiko", wait: .button),
         // 1 Cuddle
-        TutorialStep(id: "cuddle.tap", chapter: 1, kind: .spot, text: "Double tap {name} to pick them.", target: "jelmiko", wait: .target("come")),
-        TutorialStep(id: "cuddle.come", chapter: 1, kind: .spot, text: "Tap Come here for a cuddle.", target: "come", pinned: true, wait: .focusOpen, missing: .back("cuddle.tap")),
-        TutorialStep(id: "cuddle.rub", chapter: 1, kind: .card, text: "Rub {name}'s head. Cuddles make them happy.", place: .low, wait: .hearts),
-        TutorialStep(id: "cuddle.release", chapter: 1, kind: .spot, text: "Tap Let {name} go when you're done.", target: "release", wait: .focusClosed),
+        TutorialStep(id: "cuddle.tap", chapter: 1, kind: .spot, title: "Double tap {name} to pick them.", target: "jelmiko", wait: .target("come")),
+        TutorialStep(id: "cuddle.come", chapter: 1, kind: .spot, title: "Tap Come here for a cuddle.", target: "come", pinned: true, wait: .focusOpen, missing: .back("cuddle.tap")),
+        TutorialStep(id: "cuddle.rub", chapter: 1, kind: .card, title: "Rub {name}'s head.", text: "Cuddles make them happy.", place: .low, wait: .hearts),
+        TutorialStep(id: "cuddle.release", chapter: 1, kind: .spot, title: "Tap Let {name} go.", text: "Do it when you're done.", target: "release", wait: .focusClosed),
         // 2 Care menu
-        TutorialStep(id: "care.heart", chapter: 2, kind: .spot, text: "Tap the heart to care for {name}.", target: "care", wait: .menuOpen),
-        TutorialStep(id: "care.menu", chapter: 2, kind: .spot, text: "Care, dress-up and more are in here. Tap the heart to close.", target: "care", pinned: true, wait: .menuClosed),
+        TutorialStep(id: "care.heart", chapter: 2, kind: .spot, title: "Tap the heart.", text: "It opens care for {name}.", target: "care", wait: .menuOpen),
+        TutorialStep(id: "care.menu", chapter: 2, kind: .spot, title: "Care, dress-up and more are in here.", text: "Tap the heart to close.", target: "care", pinned: true, wait: .menuClosed),
         // 3 Go out
-        TutorialStep(id: "out.go", chapter: 3, kind: .spot, text: "Tap Go out to visit the town.", target: "goout", beside: true, wait: .townOpen),
+        TutorialStep(id: "out.go", chapter: 3, kind: .spot, title: "Tap Go out.", text: "Visit the town.", target: "goout", beside: true, wait: .townOpen),
         TutorialStep(id: "out.town", chapter: 3, kind: .card, title: "Shop, races, the park and more.", text: "Each one shows you how the first time.", button: "Got it", place: .top, wait: .button),
     ]
 
     /// The first-hungry reminder: heart, Feed, then the food (or, with an empty bag, the way to the Shop).
     static let hungrySteps: [TutorialStep] = [
-        TutorialStep(id: "hungry.heart", chapter: 1, kind: .spot, text: "{name} is hungry! Tap the heart.", target: "care", wait: .menuOpen),
-        TutorialStep(id: "hungry.feed", chapter: 1, kind: .spot, text: "Tap Feed.", target: "feed", wait: .anyTarget(["food", "feed-empty"]), missing: .back("hungry.heart")),
+        TutorialStep(id: "hungry.heart", chapter: 1, kind: .spot, title: "{name} is hungry!", text: "Tap the heart to feed.", target: "care", wait: .menuOpen),
+        TutorialStep(id: "hungry.feed", chapter: 1, kind: .spot, title: "Tap Feed.", target: "feed", wait: .anyTarget(["food", "feed-empty"]), missing: .back("hungry.heart")),
     ]
-    static let hungryFood = TutorialStep(id: "hungry.food", chapter: 1, kind: .spot, text: "Tap a food.", target: "food", shape: .rounded(16), wait: .trayOut, missing: .advance)
-    static let hungryNoFood = TutorialStep(id: "hungry.nofood", chapter: 1, kind: .spot, text: "No food yet! Tap Go out to visit the Shop.", target: "goout", wait: .townOpen)
+    static let hungryFood = TutorialStep(id: "hungry.food", chapter: 1, kind: .spot, title: "Tap a food.", text: "It goes on the tray.", target: "food", shape: .rounded(16), wait: .trayOut, missing: .advance)
+    static let hungryNoFood = TutorialStep(id: "hungry.nofood", chapter: 1, kind: .spot, title: "No food yet!", text: "Tap Go out to visit the Shop.", target: "goout", wait: .townOpen)
 
     /// Every line a player reads (the text rules apply to all of them).
     static var allLines: [String] {
@@ -101,12 +102,12 @@ final class Tutorial {
     }
 
     static let introRows: [CoachRow] = [
-        CoachRow(symbol: "fork.knife", color: 0xF29B4B, text: "Feed them yummy food."),
-        CoachRow(symbol: "drop.fill", color: 0x4BA8E8, text: "Give them water."),
-        CoachRow(symbol: "heart.fill", color: 0xA8405F, text: "Cuddle them. Love makes them happy."),
-        CoachRow(symbol: "soccerball", color: 0x5DBB6A, text: "Play with balls and toys."),
-        CoachRow(symbol: "moon.zzz.fill", color: 0x8E7CE0, text: "Let them sleep at night."),
-        CoachRow(symbol: "coin", color: 0xE8B83A, text: "Earn JellyCoins around town."),
+        CoachRow(symbol: "fork.knife", color: 0xF29B4B, text: "Feed them."),
+        CoachRow(symbol: "drop.fill", color: 0x4BA8E8, text: "Give water."),
+        CoachRow(symbol: "heart.fill", color: 0xA8405F, text: "Cuddle them."),
+        CoachRow(symbol: "soccerball", color: 0x5DBB6A, text: "Play with toys."),
+        CoachRow(symbol: "moon.zzz.fill", color: 0x8E7CE0, text: "Let them sleep."),
+        CoachRow(symbol: "coin", color: 0xE8B83A, text: "Earn JellyCoins."),
     ]
 
     // MARK: state
@@ -140,6 +141,15 @@ final class Tutorial {
     @ObservationIgnored var onChange: (() -> Void)?
 
     var step: TutorialStep? { active && steps.indices.contains(index) ? steps[index] : nil }
+    /// The step is waiting out of sight: another screen has the game (a race, a show, the Park, Settings) or the Go out screens are up while the step is about the home room.
+    var paused: Bool {
+        guard let s = step, s.kind != .arrival else { return false }
+        if world.busy || world.sheetOpen { return true }
+        if world.townOpen, s.wait != .townOpen, s.id != "out.town" { return true }
+        return false
+    }
+    /// What the window draws and answers touches for.
+    var shownStep: TutorialStep? { paused ? nil : step }
     var holdsGame: Bool { active }
     /// The game's needs and bubbles wait while the home walkthrough runs (not for the hungry reminder).
     var freezesNeeds: Bool { active && !isHint }
@@ -255,6 +265,7 @@ final class Tutorial {
         if DevArgs.enabled, w != world { NSLog("[tut] step=%@ menu=%d town=%d focus=%d hearts=%d targets=%@", step?.id ?? "-", w.menuOpen ? 1 : 0, w.townOpen ? 1 : 0, w.focusActive ? 1 : 0, w.hearts ? 1 : 0, w.targets.sorted().joined(separator: ",")) }
         world = w
         guard let s = step else { maybeStartHungry(world: w); return }
+        if paused { return }          // another screen has the game: nothing moves, nothing shows
         let t = now()
         if DevArgs.enabled, Int(t.timeIntervalSince1970) % 4 == 0, lastBeat != Int(t.timeIntervalSince1970) { lastBeat = Int(t.timeIntervalSince1970); NSLog("[tut] beat step=%@ targets=%d", s.id, w.targets.count) }
         if w.menuOpen { sawMenuOpen = true } else { sawMenuClosed = true }

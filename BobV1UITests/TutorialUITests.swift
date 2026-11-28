@@ -43,14 +43,12 @@ final class TutorialUITests: XCTestCase {
     }
     /// The text of the card now up (the step's line, or the intro's title).
     private var cardText: String {
-        let t = app.staticTexts["coach-text"]
-        if t.exists { return t.label }
         let h = app.staticTexts["coach-title"]
         return h.exists ? h.label : ""
     }
     private func waitText(_ text: String, timeout: TimeInterval = 20, file: StaticString = #filePath, line: UInt = #line) {
         let end = Date().addingTimeInterval(timeout)
-        while Date() < end { if cardText == text || (app.staticTexts["coach-title"].exists && app.staticTexts["coach-title"].label == text) { note("step: \(text)"); return }; usleep(300_000) }
+        while Date() < end { if cardText == text { note("step: \(text)"); return }; usleep(300_000) }
         shot("FAIL_waiting_\(text.prefix(20).replacingOccurrences(of: " ", with: "_"))")
         XCTFail("the card never said '\(text)' (it says '\(cardText)')", file: file, line: line)
     }
@@ -112,8 +110,8 @@ final class TutorialUITests: XCTestCase {
         XCTAssertTrue(title.hasPrefix("This is your Jelmiko, "), title)
         let name = String(title.dropFirst("This is your Jelmiko, ".count).dropLast())
         shot("02_intro")
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap(); sleep(1)
-        XCTAssertTrue(el("tutorial-button").exists, "a tap on the ring does nothing on the intro card")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap(); sleep(1)          // the floor, under the card and the ring: the intro takes every touch
+        XCTAssertTrue(el("tutorial-button").exists, "a tap outside the card does nothing on the intro card")
         tapEl("tutorial-button")
         // 1 Cuddle
         waitText("Double tap \(name) to pick them.")
@@ -124,16 +122,16 @@ final class TutorialUITests: XCTestCase {
         shot("04_come_here")
         negativeTap("Tap Come here")
         tapEl(el("hud-come").exists ? "hud-come" : "hud-call-all")
-        waitText("Rub \(name)'s head. Cuddles make them happy.", timeout: 40)
+        waitText("Rub \(name)'s head.", timeout: 40)
         shot("05_rub")
         let a = app.coordinate(withNormalizedOffset: CGVector(dx: 0.42, dy: 0.45)), b = app.coordinate(withNormalizedOffset: CGVector(dx: 0.58, dy: 0.45))
-        for _ in 0..<4 { a.press(forDuration: 0.5, thenDragTo: b, withVelocity: .slow, thenHoldForDuration: 0.2); if cardText == "Tap Let \(name) go when you're done." { break } }
-        waitText("Tap Let \(name) go when you're done.")
+        for _ in 0..<4 { a.press(forDuration: 0.5, thenDragTo: b, withVelocity: .slow, thenHoldForDuration: 0.2); if cardText == "Tap Let \(name) go." { break } }
+        waitText("Tap Let \(name) go.")
         shot("06_release")
         tapEl("focus-release")
         // 2 Care: selecting a Jelmiko opens the menu, so after the cuddle it is usually open already ("Tap the heart to close"); when it is closed the first card asks for the heart
-        let closeLine = "Care, dress-up and more are in here. Tap the heart to close."
-        let openLine = "Tap the heart to care for \(name)."
+        let closeLine = "Care, dress-up and more are in here."
+        let openLine = "Tap the heart."
         let end = Date().addingTimeInterval(40)
         while Date() < end, cardText != closeLine, cardText != openLine { usleep(300_000) }
         if cardText == openLine {
@@ -148,7 +146,7 @@ final class TutorialUITests: XCTestCase {
         negativeTap("Tap the heart to close")
         tapEl("care-menu")
         // 3 Go out
-        waitText("Tap Go out to visit the town.")
+        waitText("Tap Go out.")
         shot("09_goout")
         tapEl("go-out")
         waitText("Shop, races, the park and more.", timeout: 20)
@@ -186,7 +184,7 @@ final class TutorialUITests: XCTestCase {
 
     // MARK: 3. kill and relaunch mid-tour
     func testKillAndRelaunchResumes() {
-        for (kill, resume) in [("care.heart", "Tap the heart to care for Bob."), ("cuddle.release", nil as String?), ("out.go", "Tap Go out to visit the town.")] {
+        for (kill, resume) in [("care.heart", "Tap the heart."), ("cuddle.release", nil as String?), ("out.go", "Tap Go out.")] {
             launch(fresh + ["-TutorialAuto", "1", "-TutorialStep", kill])
             XCTAssertTrue(el("tutorial-card").waitForExistence(timeout: 90), "no card at \(kill)")
             sleep(2)

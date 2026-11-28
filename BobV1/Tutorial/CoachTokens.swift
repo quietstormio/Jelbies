@@ -17,6 +17,8 @@ enum Coach {
     /// Space between the parts inside a card.
     static let spacing: CGFloat = 12
     static let minTap: CGFloat = 44
+    /// The icon disc in a header and in a row.
+    static let disc: CGFloat = 40
 
     // MARK: colour (solid: a coach card is content-layer UI over the game, never glass)
     static let fill = SK.cream
@@ -28,7 +30,6 @@ enum Coach {
 
     // MARK: type (all follow Dynamic Type through SK.font)
     static func title() -> Font { SK.font(22, .black) }
-    static func line() -> Font { SK.font(19, .heavy) }
     static func body() -> Font { SK.font(15, .bold) }
     static func caption() -> Font { SK.font(14, .bold) }
     static func button() -> Font { SK.font(17, .heavy) }
@@ -94,7 +95,7 @@ struct CoachButton: View {
     var body: some View {
         Button(action: action) {
             Text(title).font(Coach.button()).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
-                .padding(.horizontal, 22).frame(minHeight: Coach.minTap)
+                .padding(.horizontal, 18).frame(minHeight: Coach.minTap)
                 .background(Capsule().fill(Coach.accent))
                 .contentShape(Capsule())
         }
@@ -116,7 +117,7 @@ struct CoachSkipChip: View {
                 Text("Skip").font(Coach.chip())
                 Image(systemName: "forward.fill").font(.system(size: 10, weight: .bold)).accessibilityHidden(true)
             }
-            .foregroundStyle(Coach.ink).padding(.horizontal, 12).frame(minHeight: 32)
+            .foregroundStyle(Coach.ink).padding(.horizontal, 10).frame(minHeight: 32)
             .background(Capsule().fill(Color.white.opacity(0.95)))
             .overlay(Capsule().strokeBorder(Coach.muted.opacity(0.45), lineWidth: 1.2))
             .frame(minWidth: Coach.minTap, minHeight: Coach.minTap)
@@ -132,7 +133,7 @@ struct CoachDots: View {
     let current: Int          // 1-based
     let count: Int
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             ForEach(1...max(count, 1), id: \.self) { i in
                 let on = i == current
                 Circle().fill(on ? Coach.accent : Coach.fill).frame(width: 9, height: 9)

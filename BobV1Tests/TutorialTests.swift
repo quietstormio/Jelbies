@@ -73,7 +73,7 @@ final class TutorialTests: XCTestCase {
         let intro = Tutorial.homeSteps[1]
         XCTAssertEqual(intro.head("Lemon"), "This is your Jelmiko, Lemon.")
         XCTAssertEqual(intro.text, "To take care of them, you can:")
-        XCTAssertEqual(Tutorial.introRows.map(\.text), ["Feed them yummy food.", "Give them water.", "Cuddle them. Love makes them happy.", "Play with balls and toys.", "Let them sleep at night.", "Earn JellyCoins around town."])
+        XCTAssertEqual(Tutorial.introRows.map(\.text), ["Feed them.", "Give water.", "Cuddle them.", "Play with toys.", "Let them sleep.", "Earn JellyCoins."])
         let out = Tutorial.homeSteps.last!
         XCTAssertEqual([out.title, out.text].compactMap { $0 }.joined(separator: " "), "Shop, races, the park and more. Each one shows you how the first time.")
     }
@@ -135,6 +135,18 @@ final class TutorialTests: XCTestCase {
         tick2(false); XCTAssertEqual(u.step?.id, "care.heart", "closed: waits for the heart")
         tick2(true); XCTAssertEqual(u.step?.id, "care.menu")
         u.reset()
+    }
+
+    func testAStepWaitsOutOfSightWhileAnotherScreenHasTheGame() {
+        let (t, _) = TutorialDriver.make("pause")
+        t.jump(toID: "care.heart")
+        var w = TutorialWorld(); w.targets = ["care"]
+        t.tick(world: w); XCTAssertFalse(t.paused); XCTAssertNotNil(t.shownStep)
+        w.busy = true; t.tick(world: w); XCTAssertTrue(t.paused); XCTAssertNil(t.shownStep, "nothing drawn, nothing blocks a touch")
+        w.busy = false; w.sheetOpen = true; t.tick(world: w); XCTAssertNil(t.shownStep, "Settings has the game")
+        w.sheetOpen = false; w.townOpen = true; t.tick(world: w); XCTAssertNil(t.shownStep, "a home-room step does not show over the Go out screens")
+        t.jump(toID: "out.town"); t.tick(world: w); XCTAssertNotNil(t.shownStep, "but the Go out card does")
+        t.reset()
     }
 
     func testAControlThatNeverShowsMovesOnOrGoesBack() {
@@ -238,7 +250,7 @@ final class TutorialTests: XCTestCase {
         act(w); XCTAssertEqual(t.step?.id, "hungry.feed")
         w.targets = ["feed", "food"]
         act(w); XCTAssertEqual(t.step?.id, "hungry.food")
-        XCTAssertEqual(t.step?.text, "Tap a food.")
+        XCTAssertEqual(t.step?.title, "Tap a food.")
         w.trayOut = true
         act(w); XCTAssertFalse(t.active); XCTAssertTrue(d.bool(forKey: Tutorial.hungryKey))
     }
@@ -312,6 +324,13 @@ final class TutorialTests: XCTestCase {
     }
 
     // MARK: concentric
+
+    func testEveryCardLineIsATitleWithAtMostOneBodyLine() {
+        for s in Tutorial.homeSteps + Tutorial.hungrySteps + [Tutorial.hungryFood, Tutorial.hungryNoFood] where s.kind != .arrival {
+            XCTAssertNotNil(s.title, "\(s.id) has a title: one header type on every card")
+        }
+        XCTAssertEqual(Coach.disc, 40)
+    }
 
     func testConcentricRules() {
         XCTAssertEqual(Coach.innerRadius(), Coach.cardRadius - Coach.inset)

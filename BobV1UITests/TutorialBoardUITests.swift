@@ -21,10 +21,12 @@ final class TutorialBoardUITests: XCTestCase {
         default: return ("portrait", .portrait, [])
         }
     }
+    /// A game that has long finished its tutorial (these pictures are of the other cards, not of the tutorial resuming over them).
+    private let finished = ["-Jelbies.tutorial.state.v1", "done", "-Jelbies.tutorial.hungry.v1", "1", "-Jelbies.firstDayTour.done.v1", "1"]
     private func launch(_ args: [String]) -> String {
         let (name, o, extra) = cfg()
         app = XCUIApplication(); XCUIDevice.shared.orientation = o
-        app.launchArguments += ["-SkipIntro", "1", "-Mute", "1"] + args + extra
+        app.launchArguments += ["-SkipIntro", "1", "-Mute", "1"] + (args.contains("-NeedsLow") ? [] : finished) + args + extra
         app.launch()
         return name
     }
@@ -63,7 +65,7 @@ final class TutorialBoardUITests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 120), "no hungry reminder"); sleep(1); shot("\(n)_hungry_1_heart")
         centre(el("care-menu")).tap()
         let end = Date().addingTimeInterval(20)
-        while Date() < end, !(el("tutorial-card").exists && el("coach-text").exists && el("coach-text").label.hasPrefix("Tap Feed")) { usleep(400_000) }
+        while Date() < end, !(el("tutorial-card").exists && el("coach-title").exists && el("coach-title").label.hasPrefix("Tap Feed")) { usleep(400_000) }
         shot("\(n)_hungry_2_feed")
     }
 }

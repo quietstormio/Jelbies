@@ -1248,7 +1248,7 @@ struct GameScreen: View {
     static func installTutorial(_ care: GameCare) {
         TutorialTargets.shared.jelmiko = { [weak care] size in
             guard let care, let p = ThoughtBubbleView.project(care.headWorld - SIMD3(0, BlobShape.H * 0.5, 0), size: size, focus: care.focus.blend) else { return nil }
-            let d = min(size.width, size.height) * 0.42
+            let d = min(size.width, size.height) * 0.34
             let x = min(max(p.x - d / 2, 8), max(size.width - d - 8, 8)), y = min(max(p.y - d / 2, 8), max(size.height - d - 8, 8))          // (kept on screen: he may stand at an edge)
             return CGRect(x: x, y: y, width: d, height: d)
         }
@@ -1260,7 +1260,9 @@ struct GameScreen: View {
             w.hearts = !(care.touchPlay?.hearts.isEmpty ?? true)
             w.hungry = care.needs.wantedNeed == .hunger
             w.trayOut = care.trayOut
-            w.busy = TipContext.live(care).blocked || care.tripActive
+            let c = TipContext.live(care)
+            w.busy = c.race || c.show || c.volley || c.raceWait || c.cutscene || c.nightSkip || c.arranging || care.tripActive          // (not the tutorial's own hold, the meal or the close-up: the walkthrough uses those)
+            w.sheetOpen = !TipBook.shared.holds.isEmpty
             w.targets = TutorialTargets.shared.ids
             w.menuOpen = w.targets.contains { $0.hasPrefix("row-") || $0 == "feed" || $0 == "come" }          // the menu is open exactly when its rows are on screen
             return w
@@ -2000,7 +2002,7 @@ struct CancelPill: View {
     }
 }
 
-/// The first-time hint in focus mode: "Rub to pet · double-tap & hold to pick up · flick to throw". Shown for the first few visits only, fades after 4 s.
+/// The first-time hint in focus mode: "Rub to pet. Double tap and hold to lift. Flick to throw.". Shown for the first few visits only, fades after 4 s.
 struct FocusHint: View {
     static let key = "FocusHintSeen"
     @State private var shown = UserDefaults.standard.integer(forKey: FocusHint.key) < 3 || UIAccessibility.isVoiceOverRunning
@@ -2012,7 +2014,7 @@ struct FocusHint: View {
     /// With VoiceOver on, or "Longer hints" set, the hint stays until the first interaction instead of fading at 3.5 s.
     private var sticky: Bool { A11ySettings.shared.longerHints || UIAccessibility.isVoiceOverRunning }
     static var hintText: String {
-        UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelmiko to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
+        UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelmiko to pet, pat or toss" : "Rub to pet. Double tap and hold to lift. Flick to throw."
     }
     private var text: String { Self.hintText }
     /// True while a Bond is coming to the front in the close-up (GameCare+BestHug.swift): the hint is not posted (and does not count as a visit).

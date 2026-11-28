@@ -653,21 +653,10 @@ struct TrickRound: View {
         .accessibilityLabel("Skip").accessibilityIdentifier("rivals-skip")
     }
 
-    /// "Pick a move": the tutorial card's tokens (Tutorial/CoachTokens.swift: solid fill, ink, type, radius, shadow) in its own slot under the turn chips, so it stays off the performer. A tap puts it away.
+    /// "Pick a move": a CoachCard (Tutorial/CoachCard.swift): the same header (disc + title), body and card as every tip and tutorial step, in its own slot under the turn chips so it stays off the performer. A tap puts it away.
     private var tutorialCard: some View {
         Button { AudioHub.shared.uiTap(); show.dismissTrickTutorial() } label: {
-            HStack(spacing: 12 * sc) {
-                Image(systemName: "hand.tap.fill").font(.system(size: 20 * sc, weight: .heavy)).foregroundStyle(Coach.ink)
-                    .frame(width: 40 * sc, height: 40 * sc).background(Circle().fill(SK.honey))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Pick a move").font(Coach.line()).foregroundStyle(Coach.ink).fixedSize(horizontal: false, vertical: true)
-                    Text("More stars, more points.").font(Coach.caption()).foregroundStyle(Coach.muted).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 2)
-                Image(systemName: "arrow.down").font(.system(size: 22 * sc, weight: .black)).foregroundStyle(Coach.accent)
-            }
-            .padding(.horizontal, Coach.inset).padding(.vertical, 6).frame(maxWidth: .infinity).frame(minHeight: max(Coach.minTap, (compact ? 52 : 64) * sc))
-            .background(RoundedRectangle(cornerRadius: Coach.cardRadius, style: .continuous).fill(Coach.fill).shadow(color: Coach.shadow, radius: 10, y: 4))
+            CoachCard(symbol: "hand.tap.fill", title: "Pick a move", text: compact ? nil : "More stars, more points.", trailing: "arrow.down", identifier: "trick-tutorial-card")          // (a phone on its side has no room above the performer for the body line: the same card, one part fewer)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore).accessibilityLabel("Pick a move. More stars, more points.").accessibilityHint("Tap to hide").accessibilityAddTraits(.isButton)

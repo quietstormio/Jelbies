@@ -38,10 +38,10 @@ enum TutorialPlacement {
     }
 
     /// Where the card stands. `natural` is the card's MEASURED height at `width`; it is never taller than the room (the card scrolls inside then).
-    static func place(size: CGSize, safe: UIEdgeInsets, spot: CoachSpot?, place: TutorialStep.Place, natural: CGFloat, wide: Bool, avoid: CGPoint?, pinned: Bool = false, beside: Bool = false) -> Result {
+    static func place(size: CGSize, safe: UIEdgeInsets, spot: CoachSpot?, place: TutorialStep.Place, natural: CGFloat, wide: Bool, avoid: CGPoint?, pinned: Bool = false, beside: Bool = false, tight: Bool = false) -> Result {
         let landscape = size.width > size.height * 1.2
         let left = safe.left + Coach.inset, right = size.width - safe.right - Coach.inset
-        let topLim = safe.top + 58, botLim = size.height - max(safe.bottom, 8) - 12
+        let topLim = safe.top + (tight ? 8 : 58), botLim = size.height - max(safe.bottom, 8) - 12
         let fullRoom = max(botLim - topLim, 120)
         var w = wide ? min(Coach.wideWidth, right - left) : min(Coach.width(size), right - left)
         func clampX(_ x: CGFloat, _ w: CGFloat) -> CGFloat { min(max(x, left), max(right - w, left)) }
@@ -114,7 +114,7 @@ enum TutorialPlacement {
 final class TutorialWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let t = Tutorial.shared
-        guard !isHidden, let step = t.step else { return nil }
+        guard !isHidden, let step = t.shownStep else { return nil }
         let spot = TutorialTargets.shared.spot(for: step, size: bounds.size)
         guard TutorialPolicy.swallows(step, spot: spot, cardFrame: t.cardFrame, at: point) else { return nil }
         return super.hitTest(point, with: event) ?? self
@@ -148,12 +148,13 @@ struct TutorialOverlay: View {
     private let tutorial = Tutorial.shared
     private let targets = TutorialTargets.shared
     @State private var natural: CGFloat = 170
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
     private var motion: Bool { !(reduceMotionEnv || A11ySettings.shared.reduceMotion) }
 
     var body: some View {
         GeometryReader { geo in
-            if let step = tutorial.step {
+            if let step = tutorial.shownStep {
                 // the Jelmiko roams: his ring and the card beside it are re-read ten times a second
                 TimelineView(.periodic(from: .now, by: 0.1)) { _ in content(step, geo.size) }
             }
@@ -165,11 +166,10 @@ struct TutorialOverlay: View {
 
     private func card(_ step: TutorialStep, width: CGFloat, maxHeight: CGFloat?, pointer: (up: Bool, x: CGFloat)?, columns: Int, measuring: Bool = false) -> CoachCard {
         let n = nameOf()
-        let intro = step.kind == .intro
-        return CoachCard(title: step.head(n), subtitle: intro ? step.line(n) : nil, text: intro ? nil : step.line(n), rows: intro ? Tutorial.introRows : [], columns: columns,
-                         button: step.button, buttonID: measuring ? "" : "tutorial-button", onButton: { AudioHub.shared.uiTap(); tutorial.buttonTapped() },
+        return CoachCard(title: step.head(n), text: step.line(n), rows: step.kind == .intro ? Tutorial.introRows : [], columns: columns,
+                         button: step.button, buttonID: "tutorial-button", onButton: { AudioHub.shared.uiTap(); tutorial.buttonTapped() },
                          dots: tutorial.isHint ? nil : (step.chapter, tutorial.chapterCount), onSkip: { tutorial.skip() },
-                         pointer: pointer, width: width, maxHeight: maxHeight, identifier: "tutorial-card", centered: false, measuring: measuring)
+                         pointer: pointer, width: width, maxHeight: maxHeight, identifier: "tutorial-card", measuring: measuring)
     }
 
     @ViewBuilder private func content(_ step: TutorialStep, _ size: CGSize) -> some View {
@@ -177,21 +177,22 @@ struct TutorialOverlay: View {
         let landscape = size.width > size.height * 1.2
         let spot = targets.spot(for: step, size: size)
         let wide = step.kind == .intro && landscape
+        let cols = step.kind != .intro ? 1 : (dynamicTypeSize.isAccessibilitySize ? 1 : (wide ? 3 : 2))
         let baseW = wide ? min(Coach.wideWidth, size.width - safe.left - safe.right - 2 * Coach.inset) : Coach.width(size)
         let avoid = targets.jelmiko?(size).map { CGPoint(x: $0.midX, y: $0.midY) }
-        let r = TutorialPlacement.place(size: size, safe: safe, spot: wide ? nil : spot, place: step.place, natural: natural, wide: wide, avoid: step.target == "jelmiko" ? nil : avoid, pinned: step.pinned, beside: step.beside)
+        let r = TutorialPlacement.place(size: size, safe: safe, spot: wide ? nil : spot, place: step.place, natural: natural, wide: wide, avoid: step.target == "jelmiko" ? nil : avoid, pinned: step.pinned, beside: step.beside, tight: step.kind == .intro)
         ZStack(alignment: .topLeading) {
             if step.kind == .arrival {
                 Color.clear.overlay(alignment: .bottom) { CoachSkipChip { tutorial.skip() }.padding(.bottom, max(safe.bottom, 10) + 14) }
             } else {
                 if (step.kind == .spot || step.kind == .intro), let spot { CoachSpotlight(spot: spot, pulse: motion) }
-                card(step, width: r.frame.width, maxHeight: r.maxHeight, pointer: r.pointer, columns: wide ? 3 : 1)
+                card(step, width: r.frame.width, maxHeight: r.maxHeight, pointer: r.pointer, columns: cols)
                     .id(tutorial.serial)
                     .transition(.opacity)
                     .padding(.leading, r.frame.minX).padding(.top, r.frame.minY)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 // the card at its natural height, unseen: its height is what the placement above uses
-                card(step, width: baseW, maxHeight: nil, pointer: nil, columns: wide ? 3 : 1, measuring: true)
+                card(step, width: baseW, maxHeight: nil, pointer: nil, columns: cols, measuring: true)
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(0).allowsHitTesting(false).accessibilityHidden(true)
                     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in if abs(h - natural) > 0.5 { natural = h } }
@@ -203,7 +204,7 @@ struct TutorialOverlay: View {
         .onAppear { tutorial.cardFrame = step.kind == .arrival ? .zero : r.frame }
         .onChange(of: r.frame) { _, f in tutorial.cardFrame = step.kind == .arrival ? .zero : f }
         .onChange(of: tutorial.serial) { _, _ in
-            if UIAccessibility.isVoiceOverRunning, let t = step.line(nameOf()) { A11yAnnounce.say(t, priority: .normal, now: Date()) }
+            if UIAccessibility.isVoiceOverRunning, let t = step.head(nameOf()) { A11yAnnounce.say(t, priority: .normal, now: Date()) }
         }
     }
 }
