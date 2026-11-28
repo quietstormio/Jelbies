@@ -5,11 +5,12 @@
 //                a dance bounce, a giggle, a startle flinch or a curious tilt ride on top of whatever he is doing without a new script. Eased
 //                toward its wants; the dance writes it directly so the bounce lands exactly on the beat.
 //    EarsReactor dispatches detector events to the Jellies in the room with the locks (meal, close-up approach, bath, voice, training, race) and
-//                drives the dance from the beat: squash bounce + alternating sway + alternating arm waves per beat, and in 8-beat phrases a bounce
-//                phrase, a hop phrase (hop on beats 0 and 4), a big-sway phrase and a TWIRL phrase (one spin), all on existing moves (hop play,
-//                spin). Only a CONFIDENT beat (EarsDance.confidentBeat) is followed; with none (or a lost one) they sway and bob gently on their
-//                own slow clock and claim no tempo. Sleeping Jellies only stir unless it is very loud. Cooldowns are the detector's.
-//                The music-note thought bubble above each dancer is drawn by Needs/MusicBubbleView.swift (from `Ears.dancingIDs`).
+//                drives the dance. THE DANCE (ears-sway-r1) is ONE simple move: every awake Jelly walks to a row facing the camera (EarsRow: spaced well
+//                apart, on free floor; the one Music Ears exception to "no line-ups in Play"), turns to the front, and sways side to side on the beat
+//                (Audio/EarsSway.swift: a free-running clock steered by the tempo tracker, so the pose never pops) with a small bob. They all sway in step.
+//                With no beat (yet, or lost) the clock keeps going (it coasts), there is no separate "fallback" sway. Sleeping Jellies only stir unless
+//                it is very loud. Cooldowns are the detector's. The music-note thought bubble above each dancer is drawn by Needs/MusicBubbleView.swift
+//                (from `Ears.dancingIDs`). When the music stops they go back to normal life.
 //  Body, face and the walk are untouched: the pose channel is applied in `drivePose` next to the touch channel (`BlobBrain.ears`).
 //
 
@@ -48,33 +49,56 @@ extension BlobBrain {
 }
 
 nonisolated enum EarsDance {
-    /// Squash at the beat (1 - this), the sway amplitude (rad), the slight nod.
-    static let bounce: Float = 0.09
-    static let sway: Float = 0.10
-    static let nod: Float = 0.03
-    /// A hop every `hopEvery` beats, a spin every `spinEvery` (offset by half).
-    static let hopEvery = 8
-    static let spinEvery = 32
-    /// A beat is followed only when its periodicity ratio is at least this (EarBeat.strength; the DSP's own music score starts at 1.6).
-    static let confidentBeat: Float = 2.2
-    /// With no confident beat they sway and bob on this slow clock (seconds per sway), pretending nothing.
-    static let gentlePeriod: Double = 1.9
-    static let gentleSway: Float = 0.055
-    static let gentleBounce: Float = 0.03
-    /// Arm wave: elevation about `armBase` (rad) by `armSwing`, sweep, and the weight ramp (1/s).
-    static let armBase: Float = 0.75
-    static let armSwing: Float = 0.30
-    static let armRamp: Float = 4
-    /// 8-beat phrases cycle: 0 bounce, 1 hop (beats 0 and 4), 2 big sway, 3 twirl (beat 0).
-    static let phrases = 4
-    static func figure(of idx: Int) -> (phrase: Int, beat: Int) {
-        let p = Int((Double(idx) / 8).rounded(.down)); let b = idx - p * 8
-        return (((p % phrases) + phrases) % phrases, b)
-    }
-    /// They keep dancing this long after the music stopped.
+    /// The sway (rad of roll, one side to the other) and the small bob (squash at each extreme of the sway).
+    static let sway: Float = 0.09
+    static let bob: Float = 0.05
+    /// They keep dancing this long after the music stopped, the last `fade` seconds of it easing the sway out.
     static let tail: Double = 2.5
-    /// 0...1 bump that peaks on the beat (phase 0) and is 0 by the half beat.
-    static func bump(_ phase: Double) -> Float { let c = Float(cos(2 * Double.pi * phase)); return c > 0 ? c * c : 0 }
+    static let fade: Double = 0.8
+    /// The sway grows in over this many seconds once a Jelly stands in his place.
+    static let grow: Float = 0.8
+    /// A walk to the row that has not arrived after this long gives up (he sways where he stands); a turn likewise.
+    static let walkGiveUp: Float = 14
+    static let turnGiveUp: Float = 3
+}
+
+/// Where the Music Ears row stands: abreast on one line facing the camera, spaced well apart (never closer than `minGap`), on free floor (clear of
+/// the furniture, the sofa and the other solids), inside the visible floor. Pure placement; the reactor walks them there.
+enum EarsRow {
+    /// Centre-to-centre spacings tried (widest first) and the least any two may be apart.
+    static let spacings: [Float] = [1.6, 1.45, 1.3]
+    static let minGap: Float = 1.2
+    /// Row depths tried (z; the call spot is 2.4): the front of the room first.
+    static let depths: [Float] = [1.6, 1.2, 2.0, 0.8, 0.4]
+    /// How far the row may slide sideways to clear something.
+    static let slides: [Float] = [0, -0.4, 0.4, -0.8, 0.8, -1.2, 1.2]
+    static let bodyRadius: Float = 0.8
+
+    /// `n` spots, left to right; empty when nothing fits (they sway where they stand).
+    static func spots(count n: Int, free: (SIMD2<Float>) -> Bool, halfWidth: (Float) -> Float) -> [SIMD2<Float>] {
+        guard n > 0 else { return [] }
+        for z in depths {
+            let hw = halfWidth(z) - 0.7
+            for sp in (n == 1 ? [Float(0)] : spacings) {
+                for cx in slides {
+                    let xs = (0..<n).map { cx + (Float($0) - Float(n - 1) / 2) * sp }
+                    guard xs.allSatisfy({ abs($0) <= hw }) else { continue }
+                    let ps = xs.map { SIMD2<Float>($0, z) }
+                    if ps.allSatisfy(free) { return ps }
+                }
+            }
+        }
+        return []
+    }
+
+    /// Floor test and floor width as the game has them.
+    static func gameSpots(count n: Int, resolver: BlobBrain?) -> [SIMD2<Float>] {
+        spots(count: n, free: { p in
+            guard FreeFloor.isFree(p, radius: bodyRadius) else { return false }
+            if let r = resolver { return simd_distance(r.fixed(p), p) < 0.12 }          // (the floor rules would not push it: HUD rails, walls)
+            return true
+        }, halfWidth: { z in GameCamera.roamFloor?.halfWidth(at: z) ?? 2.6 })
+    }
 }
 
 /// Dispatches ear events to the room. Plain class, ticked from the stage (main thread); tests tick it with MotionRigs.
@@ -96,7 +120,17 @@ final class EarsReactor {
         var beat: EarBeat?
         var started: Double
         var endAt: Double?
-        var lastIndex = Int.min
+    }
+    /// One dancer's place in the row and how far along he is.
+    struct RowStep {
+        enum Phase { case walking, turning, swaying }
+        var spot: SIMD2<Float>?
+        var phase: Phase = .walking
+        var t: Float = 0
+        var lastAsk: Float = -10
+        var asks = 0
+        var gain: Float = 0
+        var turned = false
     }
     enum Anim: Equatable { case perk, giggle, startle(level: Float), curious, tilt, stir }
 
@@ -111,8 +145,9 @@ final class EarsReactor {
     private(set) var dance: Dance?
     /// Ears sets this while a dance that the mic HOLD started is running (the voice lock is the hold itself, not a reason to stop).
     var voiceExempt = false
-    /// Jellies whose arm override this reactor set (it eases it back out after the dance).
-    private var armed: Set<Int> = []
+    /// The sway clock all dancers share, and where each one stands in the row.
+    private(set) var sway = EarsSway()
+    private(set) var rows: [Int: RowStep] = [:]
     private var anims: [Int: (anim: Anim, t: Float)] = [:]
     private var hurrying: Set<Int> = []
     private var whistleComeAt: Double?
@@ -171,14 +206,18 @@ final class EarsReactor {
             comeEveryone(); note("double clap: everyone comes")
         case .musicStarted(let b):
             guard !locks.blocksBig else { return }
-            if dance == nil { dance = Dance(beat: b, started: now); onDance(true); note("dance on \(b.map { "\($0.bpm) bpm" } ?? "no beat")") }
+            if dance == nil { dance = Dance(beat: b, started: now); sway.reset(); onDance(true); note("dance on \(b.map { "\($0.bpm) bpm" } ?? "no beat")") }
             else { dance?.endAt = nil; dance?.beat = b ?? dance?.beat }
+            if let b { sway.hear(b, now: now) }
             for j in awake { j.brain.ears.dancing = true; j.brain.face(.joyArc, hold: 1.6); j.brain.blushBump(hold: 2.4, peak: 0.5) }          // the dance: "^^" eyes and a blush
             for j in asleep { start(.stir, j) }
+            placeRow(awake)
         case .musicBeat(let b):
             dance?.beat = b
+            if dance != nil { sway.hear(b, now: now) }
         case .musicBeatLost:
             dance?.beat = nil
+            sway.lost()
         case .musicStopped:
             if dance != nil, dance?.endAt == nil { dance?.endAt = now + EarsDance.tail; note("music stopped: dance ends in \(EarsDance.tail) s") }
         case .heard(.laugh):
@@ -210,12 +249,8 @@ final class EarsReactor {
         // the dance ends a little after the music, or at once when something takes the room (meal, bath ...)
         if let d = dance {
             if locks.blocksBig || (d.endAt.map { now >= $0 } ?? false) { endDance(jellies) }
-            else {
-                for j in jellies where j.brain.ears.dancing { armed.insert(j.id) }
-                driveDance(jellies, dt: dt, now: now)
-            }
+            else { driveDance(jellies, dt: dt, now: now) }
         }
-        releaseArms(jellies, dt: dt)
         if let t = whistleComeAt, now >= t {
             whistleComeAt = nil
             if !locks.blocksBig, let near = nearestToFront(jellies.filter { !$0.brain.isSleeping }) { come(near); note("whistle: \(near.id) comes") }
@@ -231,67 +266,68 @@ final class EarsReactor {
         }
     }
 
-    /// True when the heard beat is clear enough to dance ON it.
-    private func confident(_ b: EarBeat?) -> Bool { (b?.strength ?? 0) >= EarsDance.confidentBeat }
+    /// The row for the dancers (`awake` = the Jellies that dance now): their places, left to right by where they stand now.
+    private func placeRow(_ awake: [Jelly]) {
+        let dancers = awake.filter { !$0.brain.isNapping }
+        guard !dancers.isEmpty, dancers.contains(where: { rows[$0.id] == nil }) else { return }
+        let spots = EarsRow.gameSpots(count: dancers.count, resolver: dancers.first?.brain)
+        let order = dancers.sorted { GameCare.floorPos($0.brain, $0.sim).x < GameCare.floorPos($1.brain, $1.sim).x }
+        for (k, j) in order.enumerated() {
+            var st = RowStep()
+            st.spot = k < spots.count ? spots[k] : nil
+            if st.spot == nil { st.phase = .swaying; st.gain = 0 }          // (no room for a row: he sways where he stands)
+            rows[j.id] = st
+        }
+        note("row: \(spots.count) spots for \(dancers.count)")
+    }
 
     private func driveDance(_ jellies: [Jelly], dt: Float, now: Double) {
-        guard var d = dance else { return }
-        let follow = confident(d.beat)
-        var idx = d.lastIndex, ph = 0.0
-        if follow, let beat = d.beat { (ph, idx) = beat.phase(at: now) }
-        else { let u = (now - d.started) / EarsDance.gentlePeriod; idx = Int(u.rounded(.down)); ph = u - u.rounded(.down) }
-        let newBeat = idx != d.lastIndex
-        d.lastIndex = idx
-        dance = d
-        let b = EarsDance.bump(ph)
-        let (phrase, inPhrase) = EarsDance.figure(of: idx)
+        guard let d = dance else { return }
+        sway.tick(dt: Double(dt))
+        // the last `fade` seconds of the tail ease the sway out
+        let tailK = Float(d.endAt.map { min(1, max(0, ($0 - now) / EarsDance.fade)) } ?? 1)
         for j in jellies where j.brain.ears.dancing {
             let brain = j.brain
             if brain.isNapping || brain.reserved || anims[j.id] != nil { continue }
             // stay for the song: no wander legs or idle specials start while dancing
             brain.restTimer = max(brain.restTimer, 1.5)
             brain.idleState.cooldown = max(brain.idleState.cooldown, 1.5)
-            let amp = brain.amplitude
-            let side: Float = (idx & 1) == 0 ? 1 : -1
-            if follow {
-                // bouncing on the beat, a sway to the side of the beat (bigger in the sway phrase), the slight nod
-                let swayK: Float = phrase == 2 ? 1.5 : 1
-                let sway = EarsDance.sway * swayK * side * Float(sin(Double.pi * ph)) * amp
-                brain.ears.write(pitch: -EarsDance.nod * b * amp, roll: sway, squash: 1 - EarsDance.bounce * b * amp)
-                // arms wave in turn: one up on the even beats, the other on the odd, a bigger wave in the sway phrase
-                let w = cosf(Float.pi * Float(Double(idx) + ph)), big: Float = phrase == 2 ? 1.25 : 1
-                setArms(brain, el: [EarsDance.armBase + EarsDance.armSwing * big * w, EarsDance.armBase - EarsDance.armSwing * big * w], dt: dt)
-                if newBeat, case .none = brain.script, brain.idleState.kind == nil, brain.pending == nil, !brain.gait.isBusy {
-                    if phrase == 3, inPhrase == 0 { brain.startSpin(sim: j.sim); note("spin \(j.id) beat \(idx)") }
-                    else if phrase == 1, inPhrase == 0 || inPhrase == 4 { brain.startHopPlay(sim: j.sim, distance: 0.0001); note("hop \(j.id) beat \(idx)") }
-                }
-            } else {
-                // no tempo to claim: a slow sway and a soft knee-bob on our own clock, the arms swinging gently
-                let s = Float(sin(2 * Double.pi * (now - d.started) / (2 * EarsDance.gentlePeriod)))
-                let bob = Float(0.5 - 0.5 * cos(2 * Double.pi * ph))
-                brain.ears.write(pitch: 0, roll: EarsDance.gentleSway * s * amp, squash: 1 - EarsDance.gentleBounce * bob * amp)
-                setArms(brain, el: [EarsDance.armBase * 0.8 + 0.12 * s, EarsDance.armBase * 0.8 - 0.12 * s], dt: dt)
+            var st = rows[j.id] ?? { var r = RowStep(); r.phase = .swaying; return r }()
+            st.t += dt
+            let free: Bool = { if case .none = brain.script, brain.pending == nil, !brain.gait.isBusy { return true } else { return false } }()
+            switch st.phase {
+            case .walking:
+                brain.ears.clear()
+                guard let spot = st.spot else { st.phase = .swaying; break }
+                let here = GameCare.floorPos(brain, j.sim)
+                if simd_distance(here, spot) < 0.3 && free { st.phase = .turning; st.t = 0 }
+                else if free, st.t - st.lastAsk >= 1.0, st.asks < 12 { st.lastAsk = st.t; st.asks += 1; brain.requestNow(.goTo(spot)) }
+                else if st.t > EarsDance.walkGiveUp { st.phase = .swaying; st.spot = nil; note("row: \(j.id) gave up the walk") }
+            case .turning:
+                brain.ears.clear()
+                let off = abs(wrapAngle(brain.yaw - brain.faceCameraYaw()))
+                if !st.turned, free {
+                    st.turned = true
+                    if off > 0.3 { brain.startTurn(to: brain.faceCameraYaw(), sim: j.sim) } else { st.phase = .swaying }
+                } else if st.turned, free, off < 0.4 || st.t > EarsDance.turnGiveUp { st.phase = .swaying }
+                else if st.t > EarsDance.turnGiveUp + 2 { st.phase = .swaying }
+            case .swaying:
+                break
             }
-        }
-    }
-
-    /// The arm wave through the brain's idle arm override (the same channel the decor dances use), eased in; `releaseArms` eases it out.
-    private func setArms(_ brain: BlobBrain, el: [Float], dt: Float) {
-        brain.armDirW = min(1, brain.armDirW + EarsDance.armRamp * dt)
-        brain.armDirEl = el; brain.armDirSa = [0.12, 0.12]; brain.armDirOut = 0.06
-    }
-
-    private func releaseArms(_ jellies: [Jelly], dt: Float, all: Bool = false) {
-        guard !armed.isEmpty else { return }
-        for j in jellies where armed.contains(j.id) && (all || !j.brain.ears.dancing) {
-            j.brain.armDirW = max(0, j.brain.armDirW - EarsDance.armRamp * dt)
-            if j.brain.armDirW <= 0 { j.brain.armDirOut = 0; armed.remove(j.id) }
+            if st.phase == .swaying {
+                st.gain = min(1, st.gain + dt / EarsDance.grow)
+                let g = st.gain * tailK, amp = brain.amplitude
+                let sq = 1 - (1 - sway.squash(depth: EarsDance.bob)) * g
+                brain.ears.write(pitch: 0, roll: sway.roll(maxRoll: EarsDance.sway) * g * amp, squash: 1 - (1 - sq) * amp)
+            }
+            rows[j.id] = st
         }
     }
 
     private func endDance(_ jellies: [Jelly]) {
         dance = nil
-        for j in jellies { j.brain.ears.dancing = false; if anims[j.id] == nil { j.brain.ears.clear() } }          // (the arms ease out in `tick`)
+        rows.removeAll()
+        for j in jellies { j.brain.ears.dancing = false; if anims[j.id] == nil { j.brain.ears.clear() } }
         onDance(false)
         note("dance off")
     }
@@ -300,8 +336,6 @@ final class EarsReactor {
     func reset(_ jellies: [Jelly]) {
         if dance != nil { endDance(jellies) }
         for j in jellies { j.brain.ears.clear(); if hurrying.contains(j.id) { j.brain.hurry = false } }
-        for j in jellies where armed.contains(j.id) { j.brain.armDirW = 0; j.brain.armDirOut = 0 }
-        armed.removeAll()
         anims.removeAll(); hurrying.removeAll(); whistleComeAt = nil; startleHopped.removeAll(); startleTurned.removeAll()
     }
 

@@ -225,34 +225,100 @@ final class EarsReactorTests: XCTestCase {
 
     // MARK: the dance
 
-    func testDanceBounceLandsOnTheBeatAndEndsAfterTheMusic() {
-        let room = Room(count: 1); Self.keep.append(room)
+    /// The Music Ears dance (ears-sway-r1): they walk to a row facing the camera, spaced well apart, and sway on the beat with one smooth move.
+    func testDanceWalksToTheRowFacesFrontSwaysOnTheBeatAndEndsAfterTheMusic() {
+        let room = Room(count: 2); Self.keep.append(room)
         let bpm: Float = 120, anchor = room.now + 0.3
         room.handle(.musicStarted(EarBeat(bpm: bpm, anchor: anchor, strength: 3)))
         XCTAssertTrue(room.reactor.isDancing)
         XCTAssertEqual(room.dances, [true])
+        var rollStep: Float = 0, sqStep: Float = 0
+        var prev: [(r: Float, s: Float)] = room.rigs.map { _ in (0, 1) }
         var trace: [(t: Double, sq: Float)] = []
-        room.run(4.6) { trace.append((room.now, room.rigs[0].brain.ears.squash)) }
-        // local minima of the squash (the deepest bounce) sit on the beat grid, within one frame
+        room.run(16) {
+            for (i, r) in room.rigs.enumerated() {
+                let e = r.brain.ears
+                rollStep = max(rollStep, abs(e.roll - prev[i].r)); sqStep = max(sqStep, abs(e.squash - prev[i].s))
+                prev[i] = (e.roll, e.squash)
+            }
+            trace.append((room.now, room.rigs[0].brain.ears.squash))
+        }
+        // the row: both stand on their spots, well apart, facing the camera
+        let spots = room.reactor.rows.values.compactMap(\.spot)
+        XCTAssertEqual(spots.count, 2, "a row of two: \(room.reactor.log)")
+        for (i, r) in room.rigs.enumerated() {
+            let st = room.reactor.rows[i]
+            XCTAssertEqual(st?.phase, .swaying, "dancer \(i) in his place: \(room.reactor.log)")
+            if let sp = st?.spot { XCTAssertLessThan(simd_distance(GameCare.floorPos(r.brain, r.sim), sp), 0.45, "dancer \(i) stands on his spot") }
+            XCTAssertLessThan(abs(wrapAngle(r.brain.yaw - r.brain.faceCameraYaw())), 0.5, "dancer \(i) faces the camera")
+        }
+        let apart = simd_distance(GameCare.floorPos(room.rigs[0].brain, room.rigs[0].sim), GameCare.floorPos(room.rigs[1].brain, room.rigs[1].sim))
+        XCTAssertGreaterThanOrEqual(apart, EarsRow.minGap, "spaced well apart")
+        // one smooth move: no pop (the old dance flipped the sway side in one frame: 0.2 rad)
+        XCTAssertLessThan(rollStep, 0.012, "roll step per frame")
+        XCTAssertLessThan(sqStep, 0.008, "squash step per frame")
+        // the bob is lowest at the sway's extremes, which sit on the beat grid (every 2nd beat at 120 BPM: a side change per second)
         var minima: [Double] = []
-        for i in 1..<(trace.count - 1) where trace[i].sq < trace[i - 1].sq && trace[i].sq <= trace[i + 1].sq && trace[i].sq < 0.97 { minima.append(trace[i].t) }
-        XCTAssertGreaterThanOrEqual(minima.count, 7, "a bounce per beat over 4.6 s at 120 BPM: \(minima)")
+        for i in 1..<(trace.count - 1) where trace[i].t > room.now - 6 && trace[i].sq < trace[i - 1].sq && trace[i].sq <= trace[i + 1].sq && trace[i].sq < 0.97 { minima.append(trace[i].t) }
+        XCTAssertGreaterThanOrEqual(minima.count, 4, "a bob per side change: \(minima)")
         let period = 60.0 / Double(bpm)
         for m in minima {
             let off = ((m - anchor) / period).rounded() * period + anchor
-            XCTAssertEqual(m, off, accuracy: 1.0 / 60 + 1e-6, "bounce at \(m) is off the beat at \(off)")
+            XCTAssertEqual(m, off, accuracy: 0.05, "bob at \(m) is off the beat at \(off)")
         }
-        XCTAssertTrue(room.reactor.log.contains { $0.hasPrefix("hop 0 beat 8") }, "a hop on beat 8: \(room.reactor.log)")
-        // a fresh beat estimate re-aligns; the music stops: the dance tails off and clears the pose
-        room.handle(.musicBeat(EarBeat(bpm: 100, anchor: room.now, strength: 3)))
-        room.run(0.5)
+        XCTAssertFalse(room.reactor.log.contains { $0.hasPrefix("hop") || $0.hasPrefix("spin") }, "no hops or twirls: \(room.reactor.log)")
+        // the music stops: the dance tails off and clears the pose
         room.handle(.musicStopped)
+        room.run(0.5)
         XCTAssertTrue(room.reactor.isDancing, "still dancing through the tail")
         room.run(EarsDance.tail + 0.6)
         XCTAssertFalse(room.reactor.isDancing)
         XCTAssertEqual(room.dances, [true, false])
-        XCTAssertTrue(room.rigs[0].brain.ears.isNeutral, "pose back to neutral: \(room.rigs[0].brain.ears)")
-        XCTAssertFalse(room.rigs[0].brain.earsActive)
+        for r in room.rigs { XCTAssertTrue(r.brain.ears.isNeutral, "pose back to neutral: \(r.brain.ears)"); XCTAssertFalse(r.brain.earsActive) }
+        XCTAssertTrue(room.reactor.rows.isEmpty)
+    }
+
+    /// A wrong estimate (a half-beat flip), a new anchor, a new tempo and a lost beat never pop the sway.
+    func testSwayNeverPopsAtReanchorsTempoChangesOrALostBeat() {
+        let room = Room(count: 1); Self.keep.append(room)
+        room.handle(.musicStarted(EarBeat(bpm: 100, anchor: room.now, strength: 3)))
+        var rollStep: Float = 0, sqStep: Float = 0, rollMax: Float = 0
+        var prev: (r: Float, s: Float) = (0, 1)
+        func watch() {
+            let e = room.rigs[0].brain.ears
+            rollStep = max(rollStep, abs(e.roll - prev.r)); sqStep = max(sqStep, abs(e.squash - prev.s)); prev = (e.roll, e.squash); rollMax = max(rollMax, abs(e.roll))
+        }
+        room.run(8, each: watch)
+        let p = 0.6
+        room.handle(.musicBeat(EarBeat(bpm: 100, anchor: room.now + p / 2, strength: 3))); room.run(1, each: watch)          // one half-beat flip
+        room.handle(.musicBeat(EarBeat(bpm: 100, anchor: room.now, strength: 3))); room.run(1, each: watch)
+        room.handle(.musicBeat(EarBeat(bpm: 200, anchor: room.now, strength: 3))); room.run(1, each: watch)          // the octave
+        room.handle(.musicBeat(EarBeat(bpm: 130, anchor: room.now + 0.1, strength: 3))); room.run(1, each: watch)
+        room.handle(.musicBeatLost); room.run(4, each: watch)                                                           // lost: the sway goes on
+        let before = rollMax; rollMax = 0
+        room.run(3, each: watch)
+        XCTAssertGreaterThan(rollMax, 0.05, "still swaying with no beat (it coasts): was \(before)")
+        XCTAssertLessThan(rollStep, 0.012, "roll step per frame")
+        XCTAssertLessThan(sqStep, 0.008, "squash step per frame")
+        XCTAssertTrue(room.reactor.isDancing)
+    }
+
+    /// The row: spaced apart, on free floor, never overlapping the furniture.
+    func testTheRowIsSpacedWellApartAndOnFreeFloor() {
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
+        defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+        for n in 1...3 {
+            let ps = EarsRow.gameSpots(count: n, resolver: nil)
+            XCTAssertEqual(ps.count, n, "a row for \(n)")
+            for p in ps { XCTAssertTrue(FreeFloor.isFree(p, radius: EarsRow.bodyRadius), "\(p) is clear of the furniture") }
+            for i in 0..<ps.count { for j in (i + 1)..<max(ps.count, i + 1) { XCTAssertGreaterThanOrEqual(simd_distance(ps[i], ps[j]), EarsRow.minGap) } }
+            XCTAssertTrue(ps.allSatisfy { $0.y == ps[0].y }, "abreast")
+        }
+        // something in the way: the row slides or goes back, still apart
+        let blocked = EarsRow.spots(count: 3, free: { abs($0.x) > 0.9 || $0.y > 1.7 ? true : simd_length($0 - SIMD2(0, 1.6)) > 0.8 && abs($0.x) > 0.9 }, halfWidth: { _ in 3 })
+        XCTAssertEqual(blocked.count, 3)
+        for i in 0..<3 { for j in (i + 1)..<3 { XCTAssertGreaterThanOrEqual(simd_distance(blocked[i], blocked[j]), EarsRow.minGap) } }
+        XCTAssertTrue(EarsRow.spots(count: 3, free: { _ in false }, halfWidth: { _ in 3 }).isEmpty, "nothing fits: they stay where they stand")
     }
 
     func testAMealEndsTheDanceAtOnce() {

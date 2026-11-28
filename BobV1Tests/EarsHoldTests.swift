@@ -1,8 +1,8 @@
 //
 //  EarsHoldTests.swift
 //  Music Ears is hold-to-listen: the mic button held + music heard = every Jelbie dances (and shows the music-note bubble, `Ears.dancingIDs`);
-//  not owned = no dance; a command during the hold wins; releasing ends the dance after `EarsDance.tail`. Plus the choreography: a confident beat
-//  is followed (bounce, sway, arm wave, hop and twirl phrases), no confident beat = a gentle sway that claims no tempo.
+//  not owned = no dance; a command during the hold wins; releasing ends the dance after `EarsDance.tail`. Plus the choreography: ONE sway, with no beat
+//  (yet) a gentle one on its own clock that the beat then steers.
 //
 
 import XCTest
@@ -140,35 +140,25 @@ final class EarsHoldTests: XCTestCase {
 
     // MARK: the choreography
 
-    func testAConfidentBeatDancesOnTheBeatWithTheArmsWavingAHopAndATwirl() {
+    func testWithNoBeatYetTheySwayGentlyAndTheBeatThenSteersTheSameSway() {
         let room = EarsReactorTests.Room(count: 1); EarsReactorTests.keep.append(room)
-        room.handle(.musicStarted(EarBeat(bpm: 120, anchor: room.now + 0.2, strength: 3)))
-        var armMax: Float = 0, rollMax: Float = 0
-        room.run(14) { let b = room.rigs[0].brain; armMax = max(armMax, b.armDirW); rollMax = max(rollMax, abs(b.ears.roll)) }
-        XCTAssertGreaterThan(armMax, 0.9, "the arm wave is up")
-        XCTAssertGreaterThan(rollMax, 0.05, "side-to-side sways")
-        XCTAssertTrue(room.reactor.log.contains { $0.hasPrefix("hop 0 beat 8") }, "\(room.reactor.log)")
-        XCTAssertTrue(room.reactor.log.contains { $0.hasPrefix("spin 0 beat 24") }, "a twirl now and then: \(room.reactor.log)")
-        room.handle(.musicStopped)
-        room.run(EarsDance.tail + 1.2)
-        XCTAssertFalse(room.reactor.isDancing)
-        XCTAssertEqual(room.rigs[0].brain.armDirW, 0, "the arms come back down")
-    }
-
-    func testWithoutAConfidentBeatTheyOnlySwayGentlyAndClaimNoTempo() {
-        let room = EarsReactorTests.Room(count: 1); EarsReactorTests.keep.append(room)
-        room.handle(.musicStarted(EarBeat(bpm: 120, anchor: room.now, strength: 1.2)))       // a weak estimate
-        var sqMin: Float = 1, rollMax: Float = 0
-        room.run(15) { let b = room.rigs[0].brain; sqMin = min(sqMin, b.ears.squash); rollMax = max(rollMax, abs(b.ears.roll)) }
-        XCTAssertFalse(room.reactor.log.contains { $0.hasPrefix("hop") || $0.hasPrefix("spin") }, "no beat-locked moves: \(room.reactor.log)")
-        XCTAssertGreaterThan(sqMin, 0.95, "a soft bob, not the beat bounce")
-        XCTAssertLessThan(rollMax, 0.07)
-        XCTAssertGreaterThan(rollMax, 0.02, "but it does sway")
-        // the tracker loses a beat it had: back to the gentle sway
-        room.handle(.musicBeat(EarBeat(bpm: 120, anchor: room.now, strength: 3)))
-        room.run(1)
+        room.handle(.musicStarted(nil))
+        var rollMax: Float = 0, sqMin: Float = 1, step: Float = 0, prev: Float = 0
+        room.run(10) { let e = room.rigs[0].brain.ears; rollMax = max(rollMax, abs(e.roll)); sqMin = min(sqMin, e.squash); step = max(step, abs(e.roll - prev)); prev = e.roll }
+        XCTAssertGreaterThan(rollMax, 0.03, "it sways with no beat")
+        XCTAssertLessThan(rollMax, 0.07, "gently")
+        XCTAssertGreaterThan(sqMin, 0.95)
+        XCTAssertFalse(room.reactor.log.contains { $0.hasPrefix("hop") || $0.hasPrefix("spin") }, "\(room.reactor.log)")
+        // the beat comes: the same clock is steered (no jump), the sway grows into the beat
+        room.handle(.musicBeat(EarBeat(bpm: 100, anchor: room.now + 0.2, strength: 3)))
+        room.run(8) { let e = room.rigs[0].brain.ears; rollMax = max(rollMax, abs(e.roll)); step = max(step, abs(e.roll - prev)); prev = e.roll }
+        XCTAssertGreaterThan(rollMax, 0.075, "the full sway once the beat is known")
+        XCTAssertLessThan(step, 0.012, "no pop when the beat is found")
         room.handle(.musicBeatLost)
         room.run(0.2)
         XCTAssertNil(room.reactor.dance?.beat)
+        room.handle(.musicStopped)
+        room.run(EarsDance.tail + 1.2)
+        XCTAssertFalse(room.reactor.isDancing)
     }
 }

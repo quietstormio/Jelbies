@@ -24,11 +24,11 @@ nonisolated final class EarsDSP {
     /// Summary frame every `frameEvery` seconds (fallback mode writes classifier-like scores into it; the listener uses `rms` in both modes).
     var onFrame: ((EarsFrame) -> Void)?
     var frameEvery: Double = 0.25
-    var tempoEvery: Double = 0.5
+    var tempoEvery: Double = 0.25
     /// Onset envelope ratio (flux over its running mean) that counts as an onset.
     var onsetThreshold: Float = 3.0
     /// Periodicity ratio (autocorrelation peak / band mean) needed before a beat is reported.
-    var beatRatio: Float = 2.2
+    var beatRatio: Float = 1.8
     static let bpmRange: ClosedRange<Float> = 70...160
 
     private let setup: vDSP_DFT_Setup
@@ -40,6 +40,10 @@ nonisolated final class EarsDSP {
     private var framesForFrame = 0
     private var prevMag: [Float]
     private var fluxMean: Float = 0
+    private var fluxLowMean: Float = 0
+    private var envLow: [Float]                  // onset envelope of the bass (below ~250 Hz): the kick, which is where the beat is felt
+    /// Weight of the bass envelope in the beat PHASE search (hi-hats and backbeats alone can pull the phase half a beat off the kick).
+    var bassWeight: Float = 2.0
     private var ratioHist: [Float] = [0, 0, 0]
     private var flatHist: [Float] = [0, 0, 0]
     private var lastOnsetFrame = -1000
@@ -51,6 +55,16 @@ nonisolated final class EarsDSP {
     private var frameRmsN = 0
     private(set) var beat: EarBeat?
     private var beatRuns = 0
+    /// Stream time of the last good estimate. A failed estimate does not drop the beat at once: the last one is HELD for `beatHold` seconds (a short dip
+    /// in the music or a few weak windows must not flip the dancers between the beat and the no-beat fallback); only a longer miss loses it.
+    private var lastGood: Double = -1e9
+    var beatHold: Double = 4.0
+    /// A tempo that differs from the held one (or the first one) must repeat before it is taken: 3 estimates for another tempo, 8 for the octave
+    /// (70 <-> 140, the usual flip-flop of an autocorrelation), 2 for the first or while the lock is young (under 8 estimates). (Estimates come every `tempoEvery`.)
+    private var candBpm: Float = 0
+    private var candRuns = 0
+    /// Seconds of envelope needed before the first estimate (was 3.0: the beat took more than 3.5 s to come).
+    var minEnvelope: Double = 2.0
     private(set) var lastRatio: Float = 0
     /// Scratch
     private var re: [Float], im: [Float], outR: [Float], outI: [Float], power: [Float], windowed: [Float]
@@ -66,6 +80,7 @@ nonisolated final class EarsDSP {
         prevMag = [Float](repeating: 0, count: p / 2)
         let ringLen = Int(6.0 / (Double(p / 2) / sampleRate)) + 1
         env = [Float](repeating: 0, count: ringLen)
+        envLow = env
         re = [Float](repeating: 0, count: p / 2); im = re; outR = re; outI = re; power = re
         windowed = [Float](repeating: 0, count: p)
     }
@@ -113,13 +128,16 @@ nonisolated final class EarsDSP {
                 vDSP_DFT_Execute(setup, r.baseAddress!, i.baseAddress!, oR.baseAddress!, oI.baseAddress!)
             } }
         } }
-        var flux: Float = 0, logSum: Float = 0, powSum: Float = 0
+        var flux: Float = 0, fluxLow: Float = 0, logSum: Float = 0, powSum: Float = 0
+        let lowBins = max(2, Int(250.0 / (sampleRate / Double(n))))
         let eps: Float = 1e-9
         for k in 1..<half {
             let p = outR[k] * outR[k] + outI[k] * outI[k]
             power[k] = p
             let mag = p.squareRoot()
-            flux += max(0, mag - prevMag[k])
+            let fl = max(0, mag - prevMag[k])
+            flux += fl
+            if k <= lowBins { fluxLow += fl }
             prevMag[k] = mag
             logSum += logf(p + eps); powSum += p
         }
@@ -128,10 +146,13 @@ nonisolated final class EarsDSP {
         // onset envelope: flux over its slow running mean
         fluxMean = fluxMean == 0 ? flux : fluxMean + (flux - fluxMean) * Float(hopSeconds / 1.0)
         let ratio = flux / max(fluxMean, 1e-6)
+        fluxLowMean = fluxLowMean == 0 ? fluxLow : fluxLowMean + (fluxLow - fluxLowMean) * Float(hopSeconds / 1.0)
+        let ratioLow = fluxLow / max(fluxLowMean, 1e-6)
         ratioHist.removeFirst(); ratioHist.append(ratio)
         flatHist.removeFirst(); flatHist.append(flatness)
         // ring
         env[envHead] = min(ratio, 12)
+        envLow[envHead] = min(ratioLow, 12)
         envHead = (envHead + 1) % env.count
         envFill = min(envFill + 1, env.count)
         // peak picking on the previous frame
@@ -149,7 +170,7 @@ nonisolated final class EarsDSP {
 
     private func estimateTempo() {
         let t = frameTime(frames - 1)
-        guard envFill >= Int(3.0 / hopSeconds) else { return }
+        guard envFill >= Int(minEnvelope / hopSeconds) else { return }
         let len = envFill
         // unroll the ring, oldest first, mean removed, half-wave rectified
         var x = [Float](repeating: 0, count: len)
@@ -159,10 +180,19 @@ nonisolated final class EarsDSP {
         mean /= Float(len)
         var energy: Float = 0, peaks = 0, inPeak = false
         for i in 0..<len {
-            if x[i] >= onsetThreshold { if !inPeak { peaks += 1; inPeak = true } } else { inPeak = false }
+            if x[i] >= 2.0 { if !inPeak { peaks += 1; inPeak = true } } else { inPeak = false }
             x[i] = max(0, x[i] - mean); energy += x[i] * x[i]
         }
-        guard energy > 1e-6 else { lose(t); return }
+        guard energy > 1e-6 else { miss(t); return }
+        // the phase is searched on the envelope plus the bass envelope (mean removed, rectified)
+        var xp = x
+        do {
+            var lm: Float = 0
+            var xl = [Float](repeating: 0, count: len)
+            for i in 0..<len { let v = envLow[(start + i) % env.count]; xl[i] = v; lm += v }
+            lm /= Float(len)
+            for i in 0..<len { xp[i] += bassWeight * max(0, xl[i] - lm) }
+        }
         let span = Double(len) * hopSeconds
         let lagMin = Int(60.0 / Double(Self.bpmRange.upperBound) / hopSeconds)
         let lagMax = Int(60.0 / Double(Self.bpmRange.lowerBound) / hopSeconds) + 1
@@ -184,7 +214,7 @@ nonisolated final class EarsDSP {
         let bandMean = bandSum / Float(lagMax - lagMin + 1)
         let ratio = bandMean > 1e-9 ? ac[best] / bandMean : 0
         lastRatio = ratio
-        guard ratio >= beatRatio, ac[best] > 0 else { lose(t); return }
+        guard ratio >= beatRatio, ac[best] > 0 else { miss(t); return }
         // parabolic interpolation of the peak
         var lag = Float(best)
         if best > lagMin && best < lagMax {
@@ -197,32 +227,62 @@ nonisolated final class EarsDSP {
         bpm = min(max(bpm, Self.bpmRange.lowerBound), Self.bpmRange.upperBound)
         // a beat needs beats: at least 5 onsets in the window, and most of the grid's beats present (a few sparse claps are periodic to the
         // autocorrelation but they are not music)
-        guard peaks >= 5, Double(peaks) >= 0.6 * span / period else { lose(t); return }
+        guard peaks >= 4, Double(peaks) >= 0.5 * span / period else { miss(t); return }
         // beat phase: the offset (frames back from the newest frame) whose comb collects the most envelope
-        var bestOff = 0, bestComb: Float = -1
         let L = Double(lag)
         let combs = Int(Double(len) / L) - 1
+        func comb(_ off: Int) -> Float {
+            var s: Float = 0
+            for k in 0..<combs {
+                let idx = len - 1 - off - Int((Double(k) * L).rounded())
+                if idx >= 0 { s += xp[idx] }
+            }
+            return s
+        }
+        var bestOff = 0, bestComb: Float = -1
         if combs >= 2 {
             for off in 0..<Int(lag.rounded(.up)) {
-                var s: Float = 0
-                for k in 0..<combs {
-                    let idx = len - 1 - off - Int((Double(k) * L).rounded())
-                    if idx >= 0 { s += x[idx] }
-                }
+                let s = comb(off)
                 if s > bestComb { bestComb = s; bestOff = off }
             }
         }
-        let anchor = t - Double(bestOff) * hopSeconds
+        // tempo hysteresis (see `candRuns`)
+        let held = beat?.bpm
+        let steady = held.map { abs(bpm / $0 - 1) < 0.08 } ?? false
+        if !steady {
+            if candRuns > 0, abs(bpm / candBpm - 1) < 0.08 { candRuns += 1; candBpm = bpm } else { candBpm = bpm; candRuns = 1 }
+            var need = 2
+            if let h = held { need = beatRuns < 8 ? 2 : (abs(bpm / h - 2) < 0.16 || abs(bpm / h - 0.5) < 0.08) ? 8 : 3 }          // (a young lock is the first guess: it is replaced at once)
+            guard candRuns >= need else { return }
+        }
+        candRuns = 0
+        var anchor = t - Double(bestOff) * hopSeconds
+        // phase memory: a steady tempo keeps its grid. The fresh phase (the strongest comb) can jump by half a beat between a kick and a backbeat of
+        // equal strength; the old grid, carried forward, wins unless the new phase is clearly stronger, and a small drift is followed gently.
+        if let old = beat, steady, combs >= 2 {
+            let op = old.period
+            let ext = old.anchor + ((t - old.anchor) / op).rounded(.down) * op          // the old grid's newest beat at or before t
+            let extOff = min(max(Int(((t - ext) / hopSeconds).rounded()), 0), Int(lag.rounded(.up)) - 1)
+            var d = (anchor - ext) / op; d -= d.rounded()          // fresh minus carried, in beats, -0.5...0.5
+            if abs(d) <= 0.2 { anchor = ext + 0.3 * d * op }
+            else if comb(extOff) >= 0.6 * bestComb { anchor = ext }
+        }
+        lastGood = t
         beatRuns += 1
         var b = EarBeat(bpm: bpm, anchor: anchor, strength: ratio)
-        if let old = beat, abs(old.bpm - bpm) / old.bpm < 0.08 {
+        if let old = beat, steady {
             b.bpm = old.bpm + (bpm - old.bpm) * 0.5       // smooth a steady tempo (the anchor stays the fresh measurement: only its fraction matters)
         }
         beat = b
         onBeat?(beatRuns >= 2 ? b : nil, t)
     }
 
+    /// A failed estimate: the beat is held for `beatHold` seconds, then lost.
+    private func miss(_ t: Double) {
+        if t - lastGood >= beatHold { lose(t) }
+    }
     private func lose(_ t: Double) {
+        candRuns = 0
         if beat != nil || beatRuns > 0 { beat = nil; beatRuns = 0; onBeat?(nil, t) }
     }
 
